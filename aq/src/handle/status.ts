@@ -37,6 +37,11 @@ export async function status(argv: string[]): Promise<void> {
     }
   } else console.log("  (none)")
 
+  const inspect = path.join(train, "artifacts", "inspect.md")
+  console.log("inspect")
+  if (existsSync(inspect)) console.log("  artifacts/inspect.md")
+  else console.log("  (none)")
+
   const ev = path.join(train, "artifacts", "eval.json")
   console.log("eval")
   if (existsSync(ev)) {

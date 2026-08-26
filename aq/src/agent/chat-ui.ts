@@ -1053,11 +1053,12 @@ export async function startChatUi(train: string, resumeId?: string): Promise<voi
       armed = false
       pick = 0
       screen = null
-      const { cols } = size()
-      const width = Math.max(1, cols - 2)
-      const card = wrap(t, width).map((ln) => `${BOLD}${RAIL} ${ln}${RESET}`).join("\n")
-      playCue("message")
-      write(`\r\x1b[J${card}\n\n`)
+      const painted = renderMarkdown(t)
+        .split("\n")
+        .map((ln) => `${BOLD}${RAIL} ${ln}${RESET}`)
+        .join("\n")
+      playCue("click")
+      write(`\r\x1b[J${painted}\n\n`)
       menuRows = 0
       const images = pendingImages.splice(0)
       history.push({ role: "user", content: t, images: images.length ? images : undefined })
@@ -1082,6 +1083,19 @@ export async function startChatUi(train: string, resumeId?: string): Promise<voi
       tick()
       let timer: ReturnType<typeof setInterval> | null = setInterval(tick, 80)
       let pending = ""
+      let toolFrozen = false
+      const md = { fence: false, math: false }
+      const stopSpin = () => {
+        if (timer) {
+          clearInterval(timer)
+          timer = null
+        }
+      }
+      const flushPending = () => {
+        if (!pending) return
+        write(renderMarkdown(pending, md) + "\n")
+        pending = ""
+      }
       try {
         const reply = await runTurn(
           train,
@@ -1089,27 +1103,34 @@ export async function startChatUi(train: string, resumeId?: string): Promise<voi
           (chunk) => {
             if (!started) {
               started = true
-              if (timer) {
-                clearInterval(timer)
-                timer = null
-              }
-              if (lastTool) write(`\r${DIM}${toolLabel()}${RESET}\x1b[K\n`)
-              write(`\r\x1b[K`)
+              stopSpin()
+              if (lastTool && !toolFrozen) {
+                write(`\r${DIM}${toolLabel()}${RESET}\x1b[K\n`)
+                toolFrozen = true
+              } else write(`\r\x1b[K`)
             }
             pending += chunk
             const parts = pending.split("\n")
             pending = parts.pop() ?? ""
-            for (const line of parts) write(renderMarkdown(line) + "\n")
-            write(`\r\x1b[K${renderMarkdown(pending)}`)
+            for (const line of parts) write(renderMarkdown(line, md) + "\n")
           },
           (name) => {
+            stopSpin()
+            if (started) flushPending()
             started = false
-            pending = ""
+            md.fence = false
+            md.math = false
+            write(`\r\x1b[K`)
             if (name === lastTool) toolCount += 1
             else {
-              if (lastTool) write(`\r${DIM}${toolLabel()}${RESET}\x1b[K\n`)
+              if (lastTool && !toolFrozen) write(`${DIM}${toolLabel()}${RESET}\n`)
               lastTool = name
               toolCount = 1
+              toolFrozen = false
+            }
+            if (!done) {
+              timer = setInterval(tick, 80)
+              tick()
             }
           },
           async (command) => {
@@ -1140,11 +1161,10 @@ export async function startChatUi(train: string, resumeId?: string): Promise<voi
             return ok
           },
         )
-        if (timer) {
-          clearInterval(timer)
-          timer = null
-        }
+        stopSpin()
         if (!started) write(`\r\x1b[K`)
+        flushPending()
+        playCue("message")
         history.push({ role: "assistant", content: reply })
         commitUndo()
         saveChat(train, spec, history)

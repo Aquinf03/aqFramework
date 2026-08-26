@@ -1,0 +1,18 @@
+[
+  {
+    "role": "user",
+    "content": "write a algebra eqution"
+  },
+  {
+    "role": "assistant",
+    "content": "Solve this algebra equation:\n\n\\[\n3x + 5 = 20\n\\]"
+  },
+  {
+    "role": "user",
+    "content": "include calculas"
+  },
+  {
+    "role": "assistant",
+    "content": "Solve this equation using calculus:\n\n\\[\n\\frac{dy}{dx}=3x^2+4x-5\n\\]\n\nFind \\(y\\) by integrating both sides."
+  }
+]

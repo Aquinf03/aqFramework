@@ -1,0 +1,18 @@
+[
+  {
+    "role": "user",
+    "content": "write a calculas equation"
+  },
+  {
+    "role": "assistant",
+    "content": "Here’s a calculus equation:\n\n\\[\n\\frac{d}{dx}(x^3 + 2x^2 - 5x)=3x^2+4x-5\n\\]"
+  },
+  {
+    "role": "user",
+    "content": "write a python hellow world print"
+  },
+  {
+    "role": "assistant",
+    "content": "```python\nprint(\"Hello, World!\")\n```"
+  }
+]

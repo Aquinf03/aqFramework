@@ -87,26 +87,12 @@ def _ols(X: list[list[float]], y: list[float]) -> tuple[list[float], float]:
 
 def fit(csv_path: Path, target: str, metric: str) -> dict:
     feats, X, y_raw = load_xy(csv_path, target)
-    clf = _is_class(y_raw, metric)
-    if clf:
-        classes = sorted({str(v) for v in y_raw})
-        idx = {c: i for i, c in enumerate(classes)}
-        weights = []
-        biases = []
-        for k, _c in enumerate(classes):
-            yk = [1.0 if str(v) == _c else 0.0 for v in y_raw]
-            w, b = _ols(X, yk)
-            weights.append(w)
-            biases.append(b)
-        return {
-            "kind": "linear",
-            "task": "classification",
-            "features": feats,
-            "classes": classes,
-            "weights": weights,
-            "bias": biases,
-        }
-    y = [float(v) for v in y_raw]
+    y: list[float] = []
+    for v in y_raw:
+        n = _num(str(v))
+        if n is None:
+            raise SystemExit("linear expects a numeric target (regression). logistic is a later family.")
+        y.append(n)
     w, b = _ols(X, y)
     return {
         "kind": "linear",
@@ -117,13 +103,23 @@ def fit(csv_path: Path, target: str, metric: str) -> dict:
     }
 
 
-def predict_row(model: dict, row: list[float]) -> float | str:
-    if model["task"] == "classification":
-        scores = []
-        for w, b in zip(model["weights"], model["bias"]):
-            scores.append(sum(a * b_ for a, b_ in zip(w, row)) + b)
-        return model["classes"][max(range(len(scores)), key=lambda i: scores[i])]
-    return sum(a * b for a, b in zip(model["weights"], row)) + model["bias"]
+def write_inspect(train: Path, model: dict) -> str:
+    feats = model.get("features") or []
+    weights = model.get("weights") or []
+    bias = model.get("bias")
+    lines = ["# linear", "", f"intercept: {bias}", ""]
+    for f, w in zip(feats, weights):
+        lines.append(f"{f}: {w}")
+    lines.append("")
+    rel = "artifacts/inspect.md"
+    dest = train / rel
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text("\n".join(lines), encoding="utf-8")
+    return rel
+
+
+def predict_row(model: dict, row: list[float]) -> float:
+    return sum(a * b for a, b in zip(model["weights"], row)) + float(model["bias"])
 
 
 def predict(model: dict, X: list[list[float]]) -> list:

@@ -77,21 +77,22 @@ def do_train(train: Path) -> list[str]:
     named = dest / f"{n}.json"
     write_json(named, model)
     shutil.copy2(named, dest / "last.json")
-    rid = write_run(
-        train,
-        {
-            "artifacts": {
-                "checkpoint": "artifacts/checkpoints/" + named.name,
-                "checkpoint_last": "artifacts/checkpoints/last.json",
-            }
-        },
-    )
-    return [
+    arts = {
+        "checkpoint": "artifacts/checkpoints/" + named.name,
+        "checkpoint_last": "artifacts/checkpoints/last.json",
+    }
+    if str(model.get("kind")) == "linear" and hasattr(mod, "write_inspect"):
+        arts["inspect"] = mod.write_inspect(train, model)
+    rid = write_run(train, {"artifacts": arts})
+    lines = [
         "train",
         "  artifacts/checkpoints/" + named.name,
         "  artifacts/checkpoints/last.json",
         "  artifacts/runs/" + rid + ".json",
     ]
+    if arts.get("inspect"):
+        lines.append("  " + arts["inspect"])
+    return lines
 
 
 def score(metric: str, y_true: list, y_hat: list) -> float:
@@ -111,6 +112,12 @@ def score(metric: str, y_true: list, y_hat: list) -> float:
         return mse
     if metric == "rmse":
         return mse ** 0.5
+    if metric == "r2":
+        mean = sum(yt) / n
+        tot = sum((a - mean) ** 2 for a in yt)
+        if tot == 0:
+            return 1.0
+        return 1.0 - mse * n / tot
     raise SystemExit(f"unknown metric: {metric}")
 
 
