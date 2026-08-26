@@ -1,0 +1,12 @@
+family: tabular
+method: gp
+kernel: rbf
+lengthscale: 1
+signal: 1
+noise: 0.00001
+data:
+  path: data.csv
+  target: y
+eval:
+  metric: mse
+  min_score: 0.05

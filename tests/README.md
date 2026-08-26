@@ -10,3 +10,5 @@ Manual end-to-end trains. Not `aq eval` probes. Each folder is a train plus a RE
 - [decision-trees](decision-trees/) — CART splits
 - [random-forests](random-forests/) — bagged trees
 - [gradient-boosting](gradient-boosting/) — sequential residual trees
+- [gaussian-processes](gaussian-processes/) — RBF posterior mean
+
