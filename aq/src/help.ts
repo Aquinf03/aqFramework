@@ -1,4 +1,4 @@
-import { jobHelp } from "./job.js"
+import { jobHelp } from "./job/job.js"
 
 export function help(): string {
   return [

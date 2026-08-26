@@ -10,8 +10,8 @@ import json
 import sys
 from pathlib import Path
 
-from revision import hash_train
-from step import do_checkpoint, do_eval, do_train
+from protocol.revision import hash_train
+from engine.step import do_checkpoint, do_eval, do_train
 
 
 # Invocation only. Spec is recipe.yaml, never this file.
