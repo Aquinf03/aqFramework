@@ -1,0 +1,10 @@
+family: tabular
+method: elasticnet
+lambda: 0.3
+l1_ratio: 0.5
+data:
+  path: data.csv
+  target: y
+eval:
+  metric: mse
+  min_score: 1
