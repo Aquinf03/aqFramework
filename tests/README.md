@@ -7,3 +7,4 @@ Manual end-to-end trains. Not `aq eval` probes. Each folder is a train plus a RE
 - [ridge](ridge/) — linear + L2 penalty
 - [lasso](lasso/) — linear + L1, can zero weights
 - [elastic-net](elastic-net/) — L1 + L2 mix
+- [decision-trees](decision-trees/) — CART splits

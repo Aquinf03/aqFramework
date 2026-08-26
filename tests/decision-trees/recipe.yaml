@@ -1,0 +1,9 @@
+family: tabular
+method: tree
+depth: 2
+data:
+  path: data.csv
+  target: y
+eval:
+  metric: mse
+  min_score: 0.01
