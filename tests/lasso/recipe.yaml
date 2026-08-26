@@ -1,0 +1,9 @@
+family: tabular
+method: lasso
+lambda: 0.4
+data:
+  path: data.csv
+  target: y
+eval:
+  metric: mse
+  min_score: 1
