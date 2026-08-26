@@ -1,0 +1,91 @@
+# Local only. Not on the remote.
+docs/
+
+# Node
+node_modules/
+aq/dist/
+
+# Virtualenvs
+.venv/
+venv/
+env/
+ENV/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.pyd
+*.dylib
+.Python
+*.egg
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+*.manifest
+*.spec
+
+# Build / packaging
+build/
+dist/
+wheels/
+*.whl
+
+# Test / coverage / type / lint caches
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+nosetests.xml
+coverage.xml
+*.cover
+
+# Editors / OS
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Secrets and local env
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials.json
+secrets.json
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Local runs, models, checkpoints
+aquin_run/
+wandb/
+runs/
+mlruns/
+checkpoints/
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.bin
+*.onnx
+*.gguf
+
+# Hugging Face / caches
+.cache/
+hf_cache/
+
+# Nuitka / native compile leftovers
+*.build/
+*.dist/
+*.onefile-build/

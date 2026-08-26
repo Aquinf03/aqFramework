@@ -1,0 +1,11 @@
+# Kernel spec. aq does not override this.
+
+family: tabular          # tabular | llm | ...
+method: linear           # linear | boosting | lora | ...
+# llm + lora: data.path is .jsonl or csv, data.text (or target) is the text field
+data:
+  path: data.csv         # your file. not bundled.
+  target: label
+eval:
+  metric: accuracy
+  min_score: null        # number, or null; aq eval reports pass/fail when set

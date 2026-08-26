@@ -1,0 +1,75 @@
+"""recipe.yaml is the kernel spec. Nothing else is."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+
+def parse_recipe(path: Path) -> dict:
+    text = path.read_text(encoding="utf-8")
+    root: dict = {}
+    section: str | None = None
+    for line in text.splitlines():
+        stripped = line.split("#", 1)[0].rstrip()
+        if not stripped.strip():
+            continue
+        if stripped[0] not in " \t":
+            if stripped.endswith(":"):
+                key = stripped[:-1].strip()
+                root[key] = {}
+                section = key
+            elif ":" in stripped:
+                k, v = stripped.split(":", 1)
+                root[k.strip()] = _scalar(v)
+                section = None
+            continue
+        if section is None:
+            continue
+        key = stripped.strip()
+        if ":" not in key:
+            continue
+        k, v = key.split(":", 1)
+        if not isinstance(root[section], dict):
+            root[section] = {}
+        root[section][k.strip()] = _scalar(v)
+    return root
+
+
+def _scalar(v: str):
+    s = v.strip()
+    if s in ("null", "None", "~", ""):
+        return None
+    if s in ("true", "yes"):
+        return True
+    if s in ("false", "no"):
+        return False
+    try:
+        if "." in s:
+            return float(s)
+        return int(s)
+    except ValueError:
+        return s.strip("'\"" )
+
+
+def load_recipe(train: Path) -> dict:
+    recipe = train / "recipe.yaml"
+    if not recipe.is_file():
+        raise SystemExit(f"not a train (need recipe.yaml): {train}")
+    rec = parse_recipe(recipe)
+    if not rec.get("family"):
+        raise SystemExit("recipe.yaml must set family")
+    method = rec.get("method")
+    if not method:
+        raise SystemExit("recipe.yaml must set method")
+    data = rec.get("data")
+    if not isinstance(data, dict) or not data.get("path"):
+        raise SystemExit("recipe.yaml must set data.path")
+    if method == "lora":
+        if not (data.get("text") or data.get("target")):
+            raise SystemExit("recipe.yaml must set data.text (or data.target) for lora")
+    elif not data.get("target"):
+        raise SystemExit("recipe.yaml must set data.target")
+    ev = rec.get("eval")
+    if not isinstance(ev, dict) or not ev.get("metric"):
+        raise SystemExit("recipe.yaml must set eval.metric")
+    return rec

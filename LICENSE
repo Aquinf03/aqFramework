@@ -1,0 +1,169 @@
+AQUIN FRAMEWORK PROPRIETARY SOFTWARE LICENSE
+
+Copyright (c) 2025-present Aquin Labs Private Limited. All Rights Reserved.
+
+Canonical license URL: https://aquin.app/license
+
+IMPORTANT: READ THIS LICENSE CAREFULLY BEFORE INSTALLING, DOWNLOADING, COPYING,
+OR USING THIS SOFTWARE. BY DOING ANY OF THE FOREGOING, YOU AGREE TO BE BOUND BY
+THE TERMS OF THIS LICENSE. IF YOU DO NOT AGREE, DO NOT INSTALL OR USE THIS SOFTWARE.
+
+────────────────────────────────────────────────────────────────────────────────
+1. DEFINITIONS
+────────────────────────────────────────────────────────────────────────────────
+
+"Software" means the Aquin framework, including all compiled modules, bytecode,
+extension files, configuration files, documentation, and any other files
+distributed as part of the aquin package or any derivative thereof.
+
+"Licensor" means Aquin Labs Private Limited, a company incorporated under the
+laws of India.
+
+"Licensee" means the individual or entity that has obtained a valid API key
+from Licensor and uses the Software in accordance with this License.
+
+"API Key" means the unique authentication credential issued by Licensor to
+Licensee that is required to activate and operate the Software.
+
+────────────────────────────────────────────────────────────────────────────────
+2. GRANT OF LICENSE
+────────────────────────────────────────────────────────────────────────────────
+
+Subject to the terms and conditions of this License and provided that Licensee
+holds a valid, active API Key issued by Licensor, Licensor grants Licensee a
+limited, non-exclusive, non-transferable, non-sublicensable, revocable license
+to install and use the Software solely for Licensee's own internal purposes.
+
+This license does not include any right to:
+
+  (a) use the Software without a valid API Key;
+  (b) use the Software for the benefit of any third party as a service bureau,
+      time-sharing arrangement, or otherwise;
+  (c) copy, reproduce, or duplicate the Software beyond what is strictly
+      necessary for a single installation;
+  (d) modify, adapt, translate, or create derivative works of the Software;
+  (e) reverse engineer, disassemble, decompile, decode, decrypt, or otherwise
+      attempt to derive the source code, algorithms, structure, or ideas
+      underlying the Software, in whole or in part;
+  (f) remove, alter, obscure, or circumvent any proprietary notices, labels,
+      license enforcement mechanisms, or technical protection measures in or
+      on the Software;
+  (g) distribute, sell, resell, sublicense, rent, lease, lend, transfer, or
+      otherwise make the Software available to any third party;
+  (h) use the Software to build a competing product or service.
+
+────────────────────────────────────────────────────────────────────────────────
+3. API KEY AND LICENSE VALIDATION
+────────────────────────────────────────────────────────────────────────────────
+
+The Software requires a valid API Key to operate. The API Key is personal to
+the Licensee and may not be shared, transferred, or disclosed to any third party.
+
+Licensor may revoke any API Key at any time, with or without cause, by
+disabling the key in Aquin Cloud. Upon revocation, all rights granted under
+this License terminate immediately and Licensee must cease all use of the
+Software.
+
+Licensor reserves the right to audit API Key usage for compliance with this
+License.
+
+────────────────────────────────────────────────────────────────────────────────
+4. OWNERSHIP AND INTELLECTUAL PROPERTY
+────────────────────────────────────────────────────────────────────────────────
+
+The Software is proprietary to Licensor and is protected by copyright law,
+trade secret law, and other applicable intellectual property laws and treaties
+worldwide. Licensor retains all right, title, and interest in and to the
+Software, including all intellectual property rights therein.
+
+No title or ownership of the Software is transferred to Licensee. Licensee
+acquires only the limited right to use the Software as expressly set forth
+in Section 2 above.
+
+────────────────────────────────────────────────────────────────────────────────
+5. CONFIDENTIALITY
+────────────────────────────────────────────────────────────────────────────────
+
+The Software and its structure, organization, and code constitute valuable
+trade secrets of Licensor. Licensee agrees to maintain the confidentiality
+of the Software and not to disclose it to any third party without Licensor's
+prior written consent.
+
+────────────────────────────────────────────────────────────────────────────────
+6. TERM AND TERMINATION
+────────────────────────────────────────────────────────────────────────────────
+
+This License is effective until terminated. It will terminate automatically,
+without notice from Licensor, if:
+
+  (a) Licensee breaches any term of this License;
+  (b) Licensee's API Key is revoked;
+  (c) Licensee attempts to circumvent any license enforcement mechanism.
+
+Upon termination, Licensee must immediately cease all use of the Software and
+destroy all copies in its possession or control.
+
+────────────────────────────────────────────────────────────────────────────────
+7. DISCLAIMER OF WARRANTIES
+────────────────────────────────────────────────────────────────────────────────
+
+THE SOFTWARE IS PROVIDED "AS IS" WITHOUT WARRANTY OF ANY KIND. TO THE MAXIMUM
+EXTENT PERMITTED BY APPLICABLE LAW, LICENSOR EXPRESSLY DISCLAIMS ALL WARRANTIES,
+WHETHER EXPRESS, IMPLIED, STATUTORY, OR OTHERWISE, INCLUDING WITHOUT LIMITATION
+ANY IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE,
+TITLE, AND NON-INFRINGEMENT.
+
+LICENSOR DOES NOT WARRANT THAT THE SOFTWARE WILL BE UNINTERRUPTED, ERROR-FREE,
+OR FREE OF HARMFUL COMPONENTS, OR THAT ANY DEFECTS WILL BE CORRECTED.
+
+────────────────────────────────────────────────────────────────────────────────
+8. LIMITATION OF LIABILITY
+────────────────────────────────────────────────────────────────────────────────
+
+TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, IN NO EVENT SHALL LICENSOR,
+ITS DIRECTORS, EMPLOYEES, AGENTS, OR AFFILIATES BE LIABLE FOR ANY INDIRECT,
+INCIDENTAL, SPECIAL, CONSEQUENTIAL, PUNITIVE, OR EXEMPLARY DAMAGES WHATSOEVER,
+INCLUDING WITHOUT LIMITATION DAMAGES FOR LOSS OF PROFITS, REVENUE, DATA,
+BUSINESS, GOODWILL, OR OTHER INTANGIBLE LOSSES, ARISING OUT OF OR IN CONNECTION
+WITH THIS LICENSE OR THE USE OR INABILITY TO USE THE SOFTWARE, EVEN IF LICENSOR
+HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
+
+IN NO EVENT SHALL LICENSOR'S TOTAL AGGREGATE LIABILITY TO LICENSEE UNDER THIS
+LICENSE EXCEED THE AMOUNT ACTUALLY PAID BY LICENSEE TO LICENSOR IN THE TWELVE
+MONTHS PRECEDING THE CLAIM.
+
+────────────────────────────────────────────────────────────────────────────────
+9. GOVERNING LAW AND DISPUTE RESOLUTION
+────────────────────────────────────────────────────────────────────────────────
+
+This License shall be governed by and construed in accordance with the laws of
+India, without regard to its conflict of law principles. Any dispute arising
+out of or in connection with this License shall be subject to the exclusive
+jurisdiction of the competent courts of India.
+
+────────────────────────────────────────────────────────────────────────────────
+10. GENERAL
+────────────────────────────────────────────────────────────────────────────────
+
+This License constitutes the entire agreement between Licensor and Licensee
+with respect to the Software and supersedes all prior or contemporaneous
+understandings, negotiations, or agreements, whether written or oral, relating
+to the Software.
+
+If any provision of this License is held to be invalid or unenforceable, the
+remaining provisions shall continue in full force and effect.
+
+Licensor's failure to enforce any provision of this License shall not constitute
+a waiver of Licensor's rights to enforce such provision in the future.
+
+────────────────────────────────────────────────────────────────────────────────
+CONTACT
+────────────────────────────────────────────────────────────────────────────────
+
+For licensing inquiries, permissions, or to report violations:
+
+  Aquin Labs Private Limited
+  aquin@aquin.app
+  ash@aquin.app
+  https://aquin.app
+  aquinlabs.com

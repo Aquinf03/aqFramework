@@ -1,0 +1,1 @@
+Fork this train to ../variant. In that fork only, set method to boosting in recipe.yaml. Train the fork. Do not change this train's recipe.yaml.

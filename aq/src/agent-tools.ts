@@ -1,0 +1,527 @@
+/** Builtin agent tools. Train tools stay files in tools/. */
+
+import { spawnSync } from "node:child_process"
+import path from "node:path"
+import { fileURLToPath } from "node:url"
+import { memoryDigest, readMemory, searchMemory, writeMemory } from "./memory.js"
+import { formatCards, searchTools, toolsDigest } from "./registry.js"
+import { find as findPaths, glob as globPaths, grep as grepFiles, ls, readPath } from "./explore.js"
+import { cpAt, editFileAt, mkdirAt, mvAt, rmAt, writeFileAt } from "./files.js"
+import { searchSkills, skillsDigest } from "./skill.js"
+import { activateSkill, callMcpTool, extraTools, runSkillCode } from "./skill-runtime.js"
+import { isTrain } from "./schema.js"
+import { runToolCaptured } from "./tool.js"
+import { enqueueJob, waitForPid } from "./job.js"
+import { agentLog, cancelAgent, formatAgents, startAgent } from "./spawn.js"
+import { webFetch, webSearch } from "./web.js"
+
+export type AgentToolDef = {
+  name: string
+  description: string
+  parameters: {
+    type: "object"
+    properties: Record<string, { type: string; description?: string }>
+    required?: string[]
+  }
+}
+
+function nativeAqTools(): AgentToolDef[] {
+  const verbs: [string, string][] = [
+    ["init", "Create or fill a train skeleton here (or in args dir). No separate SDK: the folder is the API."],
+    ["help", "CLI help text."],
+    ["status", "Jobs, last run, eval, schedule logs."],
+    ["train", "Fit. Writes artifacts/checkpoints/last.json."],
+    ["eval", "Score evals/. Humans own the gate."],
+    ["checkpoint", "List or keep a checkpoint."],
+    ["data", "Hash recipe data.path. Extra args after data."],
+    ["job", "Run, list, log, cancel jobs."],
+    ["fork", "Copy this train; skip jobs/ and artifacts/. args is dest."],
+    ["checkout", "Restore a run tree. args is id and optional dest."],
+    ["diff", "Compare run records."],
+    ["schedule", "Sweeps, cron, resume-on-fail."],
+    ["stage", "Nested trains."],
+    ["provider", "List or set model providers."],
+  ]
+  return verbs.map(([verb, description]) => ({
+    name: `aq_${verb}`,
+    description: `${description} Native aq ${verb}. Same as \`aq ${verb}\`.`,
+    parameters: {
+      type: "object" as const,
+      properties: {
+        args: { type: "string", description: `extra argv after '${verb}', space-separated` },
+      },
+    },
+  }))
+}
+
+export const AGENT_TOOLS: AgentToolDef[] = [
+  {
+    name: "memory_search",
+    description: "Search memory/ notes by keywords.",
+    parameters: {
+      type: "object",
+      properties: { query: { type: "string", description: "keywords" } },
+      required: ["query"],
+    },
+  },
+  {
+    name: "memory_read",
+    description: "Read one memory note by name.",
+    parameters: {
+      type: "object",
+      properties: { name: { type: "string", description: "note stem" } },
+      required: ["name"],
+    },
+  },
+  {
+    name: "memory_write",
+    description: "Write a durable memory note (markdown). One topic per name.",
+    parameters: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "stem like run-notes" },
+        body: { type: "string", description: "markdown body" },
+      },
+      required: ["name", "body"],
+    },
+  },
+  {
+    name: "tools_search",
+    description: "Search builtins, tools/, aq commands, and skills.",
+    parameters: {
+      type: "object",
+      properties: { query: { type: "string", description: "keywords" } },
+      required: ["query"],
+    },
+  },
+  {
+    name: "ls",
+    description: "List a directory in the train. Default is .",
+    parameters: {
+      type: "object",
+      properties: { path: { type: "string", description: "relative dir, default ." } },
+    },
+  },
+  {
+    name: "find",
+    description: "Find files and dirs in the train by name, substring, or glob (* and **).",
+    parameters: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "name, substring, or glob" },
+        path: { type: "string", description: "relative root to search, default ." },
+      },
+      required: ["query"],
+    },
+  },
+  {
+    name: "glob",
+    description: "Find paths by glob (*.ts, **/*.yaml). Names only, not file contents.",
+    parameters: {
+      type: "object",
+      properties: {
+        pattern: { type: "string", description: "glob pattern" },
+        path: { type: "string", description: "relative root, default ." },
+      },
+      required: ["pattern"],
+    },
+  },
+  {
+    name: "grep",
+    description: "Search file contents in the train. Optional glob to limit files.",
+    parameters: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "text or regex" },
+        path: { type: "string", description: "relative root, default ." },
+        glob: { type: "string", description: "optional file glob like *.ts" },
+      },
+      required: ["query"],
+    },
+  },
+  {
+    name: "read",
+    description: "Read a file in the train. If path is a directory, lists it.",
+    parameters: {
+      type: "object",
+      properties: { path: { type: "string", description: "relative path" } },
+      required: ["path"],
+    },
+  },
+  {
+    name: "write",
+    description: "Create or overwrite a file in the train. Makes parent dirs. Use for tools/, skills/, methods/, recipe, train.ts, anything in this folder.",
+    parameters: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "relative path" },
+        content: { type: "string", description: "full file contents" },
+      },
+      required: ["path", "content"],
+    },
+  },
+  {
+    name: "edit",
+    description: "Replace text in a file. old must be unique unless all is true.",
+    parameters: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "relative path" },
+        old: { type: "string", description: "exact text to find" },
+        new: { type: "string", description: "replacement" },
+        all: { type: "boolean", description: "replace every match" },
+      },
+      required: ["path", "old", "new"],
+    },
+  },
+  {
+    name: "mkdir",
+    description: "Create a directory in the train (and parents).",
+    parameters: {
+      type: "object",
+      properties: { path: { type: "string", description: "relative dir" } },
+      required: ["path"],
+    },
+  },
+  {
+    name: "mv",
+    description: "Move or rename a file or folder inside the train.",
+    parameters: {
+      type: "object",
+      properties: {
+        from: { type: "string", description: "existing path" },
+        to: { type: "string", description: "new path or destination dir" },
+      },
+      required: ["from", "to"],
+    },
+  },
+  {
+    name: "cp",
+    description: "Copy a file inside the train.",
+    parameters: {
+      type: "object",
+      properties: {
+        from: { type: "string", description: "existing file" },
+        to: { type: "string", description: "new path or destination dir" },
+      },
+      required: ["from", "to"],
+    },
+  },
+  {
+    name: "rm",
+    description: "Delete a file or folder in the train. Not jobs/ or artifacts/.",
+    parameters: {
+      type: "object",
+      properties: { path: { type: "string", description: "relative path" } },
+      required: ["path"],
+    },
+  },
+  {
+    name: "web_search",
+    description:
+      "Search the public web. OpenAI, Anthropic, and Grok use their built-in search (same API key). Ollama uses a key-free fallback. Then web_fetch a URL if you need the page.",
+    parameters: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "search query" },
+        count: { type: "number", description: "how many results, default 5, max 8" },
+      },
+      required: ["query"],
+    },
+  },
+  {
+    name: "web_fetch",
+    description: "Fetch a public http(s) URL and return readable text. HTML is stripped. Use after web_search or when the user gives a link.",
+    parameters: {
+      type: "object",
+      properties: { url: { type: "string", description: "http or https URL" } },
+      required: ["url"],
+    },
+  },
+  {
+    name: "skill_load",
+    description:
+      "Activate skills/<name>. Loads markdown, starts MCP servers from mcp.json, and registers mcp_* tools for the rest of this session.",
+    parameters: {
+      type: "object",
+      properties: { name: { type: "string" } },
+      required: ["name"],
+    },
+  },
+  {
+    name: "skill_run",
+    description: "Run the code in a skill (skills/<name>/run.py|ts|js|sh or skills/<name>.py|ts|js|sh).",
+    parameters: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "skill name" },
+        args: { type: "string", description: "optional argv, space-separated" },
+      },
+      required: ["name"],
+    },
+  },
+  {
+    name: "run",
+    description:
+      "Run a shell command in the train. Human must approve. Set detach true for servers/watchers so they live in jobs/ and survive this prompt dying.",
+    parameters: {
+      type: "object",
+      properties: {
+        command: { type: "string", description: "the full command" },
+        detach: {
+          type: "boolean",
+          description: "true for long-running: job in jobs/, log file, survives disconnect",
+        },
+      },
+      required: ["command"],
+    },
+  },
+  {
+    name: "aq",
+    description:
+      "Run any aq CLI verb in this train. Prefer the native aq_* tools when you know the verb. args is space-separated, no pipes.",
+    parameters: {
+      type: "object",
+      properties: { args: { type: "string", description: "e.g. status  or  eval smoke" } },
+      required: ["args"],
+    },
+  },
+  ...nativeAqTools(),
+  {
+    name: "spawn",
+    description:
+      "Start a worker aq agent on this train. It runs in the background as a job (artifacts/agents/<id>/). Use spawn_list and spawn_log to follow.",
+    parameters: {
+      type: "object",
+      properties: {
+        prompt: { type: "string", description: "what the worker should do" },
+        name: { type: "string", description: "optional short name" },
+      },
+      required: ["prompt"],
+    },
+  },
+  {
+    name: "spawn_list",
+    description: "List worker agents on this train.",
+    parameters: { type: "object", properties: {} },
+  },
+  {
+    name: "spawn_log",
+    description: "Show a worker agent's log and status.",
+    parameters: {
+      type: "object",
+      properties: { id: { type: "string", description: "agent id" } },
+      required: ["id"],
+    },
+  },
+  {
+    name: "spawn_cancel",
+    description: "Stop a worker agent.",
+    parameters: {
+      type: "object",
+      properties: { id: { type: "string", description: "agent id" } },
+      required: ["id"],
+    },
+  },
+  {
+    name: "tool",
+    description: "Run tools/<name> in this train. Same as aq tool.",
+    parameters: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "filename stem in tools/" },
+        args: { type: "string", description: "optional extra argv, space-separated" },
+      },
+      required: ["name"],
+    },
+  },
+  {
+    name: "skills_search",
+    description: "Search skills/ by name or first line. Empty query lists them.",
+    parameters: {
+      type: "object",
+      properties: { query: { type: "string", description: "keywords, or empty to list" } },
+    },
+  },
+]
+
+const ALLOW = new Set([
+  "help",
+  "init",
+  "status",
+  "train",
+  "eval",
+  "checkpoint",
+  "data",
+  "job",
+  "fork",
+  "checkout",
+  "diff",
+  "tool",
+  "schedule",
+  "stage",
+  "provider",
+  "spawn",
+])
+
+function aqBin(): string {
+  return path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "bin", "aq")
+}
+
+function jsonArg(args: Record<string, unknown>, key: string): string {
+  const v = args[key]
+  if (typeof v !== "string") throw new Error(`need ${key}`)
+  return v
+}
+
+export function contextBlock(train: string): string {
+  return ["", memoryDigest(train), skillsDigest(train), toolsDigest(train)].filter(Boolean).join("\n")
+}
+
+export function toolsForTrain(train: string): AgentToolDef[] {
+  return [...AGENT_TOOLS, ...extraTools(train)]
+}
+
+export async function runAgentTool(train: string, name: string, rawArgs: string): Promise<string> {
+  const mcp = await callMcpTool(train, name, rawArgs)
+  if (mcp != null) return mcp
+  let args: Record<string, unknown> = {}
+  if (rawArgs.trim()) {
+    try {
+      args = JSON.parse(rawArgs) as Record<string, unknown>
+    } catch {
+      throw new Error("bad tool args json")
+    }
+  }
+  if (name === "memory_search") {
+    const hits = searchMemory(train, jsonArg(args, "query"))
+    return hits.length ? hits.map((h) => `${h.name}: ${h.snippet}`).join("\n") : "no memory hits"
+  }
+  if (name === "memory_read") return readMemory(train, jsonArg(args, "name"))
+  if (name === "memory_write") {
+    const n = writeMemory(train, jsonArg(args, "name"), jsonArg(args, "body"))
+    return `wrote memory/${n}.md`
+  }
+  if (name === "tools_search") return formatCards(searchTools(train, jsonArg(args, "query")))
+  if (name === "ls") {
+    const p = typeof args.path === "string" && args.path.trim() ? args.path : "."
+    return ls(train, p)
+  }
+  if (name === "find") {
+    const root = typeof args.path === "string" && args.path.trim() ? args.path : "."
+    return findPaths(train, jsonArg(args, "query"), root)
+  }
+  if (name === "glob") {
+    const root = typeof args.path === "string" && args.path.trim() ? args.path : "."
+    return globPaths(train, jsonArg(args, "pattern"), root)
+  }
+  if (name === "grep") {
+    const root = typeof args.path === "string" && args.path.trim() ? args.path : "."
+    const g = typeof args.glob === "string" ? args.glob : ""
+    return grepFiles(train, jsonArg(args, "query"), root, g)
+  }
+  if (name === "read") return readPath(train, jsonArg(args, "path"))
+  if (name === "write") return writeFileAt(train, jsonArg(args, "path"), jsonArg(args, "content"))
+  if (name === "edit") {
+    const all = args.all === true
+    return editFileAt(train, jsonArg(args, "path"), jsonArg(args, "old"), jsonArg(args, "new"), all)
+  }
+  if (name === "mkdir") return mkdirAt(train, jsonArg(args, "path"))
+  if (name === "mv") return mvAt(train, jsonArg(args, "from"), jsonArg(args, "to"))
+  if (name === "cp") return cpAt(train, jsonArg(args, "from"), jsonArg(args, "to"))
+  if (name === "rm") return rmAt(train, jsonArg(args, "path"))
+  if (name === "web_search") {
+    const n = typeof args.count === "number" ? args.count : Number(args.count)
+    return webSearch(jsonArg(args, "query"), Number.isFinite(n) ? n : 5)
+  }
+  if (name === "web_fetch") return webFetch(jsonArg(args, "url"))
+  if (name === "skill_load") return activateSkill(train, jsonArg(args, "name"))
+  if (name === "skill_run") {
+    const extra = typeof args.args === "string" ? args.args.trim().split(/\s+/).filter(Boolean) : []
+    return runSkillCode(train, jsonArg(args, "name"), extra)
+  }
+  if (name === "skills_search") {
+    const q = typeof args.query === "string" ? args.query : ""
+    const hits = searchSkills(train, q)
+    return hits.length ? hits.map((h) => `${h.name}: ${h.blurb}`).join("\n") : "no skills"
+  }
+  if (name === "tool") {
+    const extra = typeof args.args === "string" ? args.args.trim().split(/\s+/).filter(Boolean) : []
+    return runToolCaptured(train, jsonArg(args, "name"), extra)
+  }
+  if (name === "spawn") {
+    const spec = await startAgent(train, jsonArg(args, "prompt"), {
+      name: typeof args.name === "string" ? args.name : undefined,
+    })
+    return `spawned ${spec.id}  ${spec.status}  ${spec.name}\njob ${spec.jobId}`
+  }
+  if (name === "spawn_list") return formatAgents(train)
+  if (name === "spawn_log") return agentLog(train, jsonArg(args, "id"))
+  if (name === "spawn_cancel") {
+    const spec = await cancelAgent(train, jsonArg(args, "id"))
+    return `canceled ${spec.id}  ${spec.status}`
+  }
+  if (name === "aq" || name.startsWith("aq_")) {
+    const extra = typeof args.args === "string" ? args.args.trim().split(/\s+/).filter(Boolean) : []
+    const parts = name === "aq" ? extra : [name.slice(3), ...extra]
+    return runAq(train, parts)
+  }
+  throw new Error(`unknown tool ${name}`)
+}
+
+function runAq(train: string, parts: string[]): string {
+  const head = parts[0]
+  if (!head || !ALLOW.has(head)) throw new Error(`blocked aq ${head ?? "(empty)"}`)
+  if (head !== "init" && head !== "help" && !isTrain(train)) throw new Error("cwd is not a train")
+  const r = spawnSync(aqBin(), parts, {
+    cwd: train,
+    encoding: "utf8",
+    timeout: 120_000,
+    env: { ...process.env, AQ_QUIET: "1" },
+  })
+  const out = `${r.stdout ?? ""}${r.stderr ?? ""}`.trim()
+  if (r.status !== 0) throw new Error(out || `aq ${head} exit ${r.status}`)
+  return out || "ok"
+}
+
+export function parseRunCommand(rawArgs: string): { command: string; detach: boolean } {
+  let args: Record<string, unknown> = {}
+  try {
+    args = JSON.parse(rawArgs || "{}") as Record<string, unknown>
+  } catch {
+    throw new Error("bad tool args json")
+  }
+  const cmd = typeof args.command === "string" ? args.command : typeof args.args === "string" ? args.args : ""
+  const out = cmd.trim()
+  if (!out) throw new Error("need command")
+  const detach = args.detach === true || args.background === true || args.keep === true
+  return { command: out, detach }
+}
+
+export async function runDetached(train: string, command: string): Promise<string> {
+  if (!isTrain(train)) throw new Error("cwd is not a train; cannot detach")
+  const id = await enqueueJob(train, ["sh", "-c", command])
+  const spec = await waitForPid(train, id)
+  const lines = [
+    `job ${id}`,
+    `status ${spec.status}`,
+    spec.pid != null ? `pid ${spec.pid}` : "",
+    `log jobs/${id}/log`,
+    "survives this prompt. aq job log " + id,
+    "stop: aq job cancel " + id,
+  ]
+  return lines.filter(Boolean).join("\n")
+}
+
+export function runShell(train: string, command: string): string {
+  const r = spawnSync("sh", ["-c", command], {
+    cwd: train,
+    encoding: "utf8",
+    timeout: 120_000,
+    env: { ...process.env, AQ_QUIET: "1" },
+  })
+  let out = `${r.stdout ?? ""}${r.stderr ?? ""}`.trim()
+  if (out.length > 16_000) out = out.slice(0, 16_000) + "\n…"
+  if (r.status !== 0) throw new Error(out || `exit ${r.status}`)
+  return out || "ok"
+}
