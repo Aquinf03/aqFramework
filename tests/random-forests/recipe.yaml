@@ -1,0 +1,12 @@
+family: tabular
+method: forest
+trees: 20
+depth: 3
+mtry: 2
+seed: 1
+data:
+  path: data.csv
+  target: y
+eval:
+  metric: mse
+  min_score: 1

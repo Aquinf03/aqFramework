@@ -11,14 +11,15 @@ def _mean(xs: list[float]) -> float:
     return sum(xs) / len(xs) if xs else 0.0
 
 
-def _best_split(X: list[list[float]], y: list[float]) -> tuple[int, float] | None:
+def _best_split(X: list[list[float]], y: list[float], allowed: list[int] | None = None) -> tuple[int, float] | None:
     n = len(X)
     if n < 4:
         return None
     p = len(X[0])
+    js = allowed if allowed is not None else list(range(p))
     best = None
     best_sse = None
-    for j in range(p):
+    for j in js:
         vals = sorted({row[j] for row in X})
         if len(vals) < 2:
             continue
@@ -36,10 +37,20 @@ def _best_split(X: list[list[float]], y: list[float]) -> tuple[int, float] | Non
     return best
 
 
-def _build(X: list[list[float]], y: list[float], depth: int) -> dict:
+def _build(
+    X: list[list[float]],
+    y: list[float],
+    depth: int,
+    rng=None,
+    mtry: int | None = None,
+) -> dict:
     if depth <= 0 or len(X) < 2:
         return {"leaf": _mean(y)}
-    split = _best_split(X, y)
+    p = len(X[0])
+    allowed = None
+    if rng is not None and mtry is not None and 0 < mtry < p:
+        allowed = rng.sample(range(p), mtry)
+    split = _best_split(X, y, allowed)
     if split is None:
         return {"leaf": _mean(y)}
     j, thr = split
@@ -57,8 +68,8 @@ def _build(X: list[list[float]], y: list[float], depth: int) -> dict:
     return {
         "feat": j,
         "thr": thr,
-        "left": _build([X[i] for i in left_i], [y[i] for i in left_i], depth - 1),
-        "right": _build([X[i] for i in right_i], [y[i] for i in right_i], depth - 1),
+        "left": _build([X[i] for i in left_i], [y[i] for i in left_i], depth - 1, rng, mtry),
+        "right": _build([X[i] for i in right_i], [y[i] for i in right_i], depth - 1, rng, mtry),
     }
 
 

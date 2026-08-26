@@ -8,3 +8,4 @@ Manual end-to-end trains. Not `aq eval` probes. Each folder is a train plus a RE
 - [lasso](lasso/) — linear + L1, can zero weights
 - [elastic-net](elastic-net/) — L1 + L2 mix
 - [decision-trees](decision-trees/) — CART splits
+- [random-forests](random-forests/) — bagged trees
