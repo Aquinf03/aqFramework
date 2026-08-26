@@ -1,0 +1,11 @@
+family: tabular
+method: boosting
+trees: 30
+depth: 1
+lr: 0.3
+data:
+  path: data.csv
+  target: y
+eval:
+  metric: mse
+  min_score: 1

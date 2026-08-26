@@ -9,3 +9,4 @@ Manual end-to-end trains. Not `aq eval` probes. Each folder is a train plus a RE
 - [elastic-net](elastic-net/) — L1 + L2 mix
 - [decision-trees](decision-trees/) — CART splits
 - [random-forests](random-forests/) — bagged trees
+- [gradient-boosting](gradient-boosting/) — sequential residual trees

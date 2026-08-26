@@ -1,131 +1,107 @@
-"""Gradient boosting of shallow trees. Stdlib only. Tabular method next to linear."""
+"""Gradient boosting of shallow trees. Stdlib. Fit residuals in sequence."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from methods.linear import _is_class, load_xy
+from methods.linear import _num, load_xy
+from methods.tree import _build, _fmt, _walk
 
 
-def _mean(xs: list[float]) -> float:
-    return sum(xs) / len(xs) if xs else 0.0
+def _opt(rec: dict, key: str, default):
+    v = rec.get(key)
+    if v is None:
+        nested = rec.get("boosting")
+        if isinstance(nested, dict):
+            v = nested.get(key)
+    return default if v is None else v
 
 
-def _best_stump(X: list[list[float]], res: list[float]) -> dict | None:
-    n = len(X)
-    if n < 4:
-        return None
-    p = len(X[0])
-    best = None
-    best_sse = None
-    for j in range(p):
-        vals = sorted({row[j] for row in X})
-        if len(vals) < 2:
-            continue
-        for k in range(len(vals) - 1):
-            thr = 0.5 * (vals[k] + vals[k + 1])
-            left = [res[i] for i in range(n) if X[i][j] <= thr]
-            right = [res[i] for i in range(n) if X[i][j] > thr]
-            if len(left) < 2 or len(right) < 2:
-                continue
-            lm, rm = _mean(left), _mean(right)
-            sse = sum((r - lm) ** 2 for r in left) + sum((r - rm) ** 2 for r in right)
-            if best_sse is None or sse < best_sse:
-                best_sse = sse
-                best = {"feat": j, "thr": thr, "left": {"leaf": lm}, "right": {"leaf": rm}}
-    return best
-
-
-def _leaf(res: list[float]) -> dict:
-    return {"leaf": _mean(res)}
-
-
-def _split_idx(X: list[list[float]], feat: int, thr: float) -> tuple[list[int], list[int]]:
-    left, right = [], []
-    for i, row in enumerate(X):
-        (left if row[feat] <= thr else right).append(i)
-    return left, right
-
-
-def _build_tree(X: list[list[float]], res: list[float], depth: int) -> dict:
-    if depth <= 0 or len(X) < 4:
-        return _leaf(res)
-    stump = _best_stump(X, res)
-    if stump is None:
-        return _leaf(res)
-    li, ri = _split_idx(X, stump["feat"], stump["thr"])
-    Xl = [X[i] for i in li]
-    Xr = [X[i] for i in ri]
-    rl = [res[i] for i in li]
-    rr = [res[i] for i in ri]
-    return {
-        "feat": stump["feat"],
-        "thr": stump["thr"],
-        "left": _build_tree(Xl, rl, depth - 1),
-        "right": _build_tree(Xr, rr, depth - 1),
-    }
-
-
-def _tree_pred(node: dict, row: list[float]) -> float:
+def _count(node: dict, acc: list[int]) -> None:
     if "leaf" in node:
-        return float(node["leaf"])
-    if row[node["feat"]] <= node["thr"]:
-        return _tree_pred(node["left"], row)
-    return _tree_pred(node["right"], row)
+        return
+    acc[node["feat"]] += 1
+    _count(node["left"], acc)
+    _count(node["right"], acc)
 
 
-def _boost(X: list[list[float]], y: list[float], trees: int, depth: int, lr: float) -> dict:
-    init = _mean(y)
+def fit(src: Path, rec: dict) -> dict:
+    data = rec.get("data") or {}
+    target = str(data.get("target") or "")
+    n_trees = int(_opt(rec, "trees", 20))
+    depth = int(_opt(rec, "depth", 1))
+    lr = float(_opt(rec, "lr", 0.3))
+    if n_trees < 1:
+        raise SystemExit("boosting trees must be >= 1")
+    if depth < 1:
+        raise SystemExit("boosting depth must be >= 1")
+    if lr <= 0:
+        raise SystemExit("boosting lr must be > 0")
+    feats, X, y_raw = load_xy(src, target)
+    y: list[float] = []
+    for v in y_raw:
+        n = _num(str(v))
+        if n is None:
+            raise SystemExit("boosting expects a numeric target")
+        y.append(n)
+    init = sum(y) / len(y)
     pred = [init] * len(X)
     fitted = []
-    for _ in range(trees):
+    for _ in range(n_trees):
         res = [y[i] - pred[i] for i in range(len(X))]
-        tree = _build_tree(X, res, depth)
+        tree = _build(X, res, depth)
         fitted.append(tree)
         for i, row in enumerate(X):
-            pred[i] += lr * _tree_pred(tree, row)
-    return {"init": init, "trees": fitted, "lr": lr}
-
-
-def _score_boost(part: dict, row: list[float]) -> float:
-    s = float(part["init"])
-    lr = float(part["lr"])
-    for t in part["trees"]:
-        s += lr * _tree_pred(t, row)
-    return s
-
-
-def fit(csv_path: Path, target: str, metric: str) -> dict:
-    feats, X, y_raw = load_xy(csv_path, target)
-    trees, depth, lr = 20, 2, 0.1
-    if _is_class(y_raw, metric):
-        classes = sorted({str(v) for v in y_raw})
-        parts = []
-        for c in classes:
-            yk = [1.0 if str(v) == c else 0.0 for v in y_raw]
-            parts.append(_boost(X, yk, trees, depth, lr))
-        return {
-            "kind": "boosting",
-            "task": "classification",
-            "features": feats,
-            "classes": classes,
-            "parts": parts,
-        }
-    y = [float(v) for v in y_raw]
-    part = _boost(X, y, trees, depth, lr)
+            pred[i] += lr * _walk(tree, row)
     return {
         "kind": "boosting",
         "task": "regression",
         "features": feats,
-        **part,
+        "trees": n_trees,
+        "depth": depth,
+        "lr": lr,
+        "init": init,
+        "boost": fitted,
     }
 
 
-def predict_row(model: dict, row: list[float]) -> float | str:
-    if model["task"] == "classification":
-        scores = [_score_boost(p, row) for p in model["parts"]]
-        return model["classes"][max(range(len(scores)), key=lambda i: scores[i])]
-    return _score_boost(model, row)
+def write_inspect(train: Path, model: dict) -> str:
+    feats = model.get("features") or []
+    trees = model.get("boost") or []
+    counts = [0] * len(feats)
+    for t in trees:
+        _count(t, counts)
+    lines = [
+        "# boosting",
+        "",
+        f"trees: {model.get('trees')}",
+        f"depth: {model.get('depth')}",
+        f"lr: {model.get('lr')}",
+        f"init: {model.get('init')}",
+        "",
+        "splits used:",
+    ]
+    for f, c in zip(feats, counts):
+        lines.append(f"  {f}: {c}")
+    lines.append("")
+    show = min(3, len(trees))
+    for i in range(show):
+        lines.append(f"round {i + 1}")
+        lines.extend(_fmt(trees[i], feats, "  "))
+        lines.append("")
+    rel = "artifacts/inspect.md"
+    dest = train / rel
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text("\n".join(lines), encoding="utf-8")
+    return rel
+
+
+def predict_row(model: dict, row: list[float]) -> float:
+    s = float(model["init"])
+    lr = float(model["lr"])
+    for t in model["boost"]:
+        s += lr * _walk(t, row)
+    return s
 
 
 def predict(model: dict, X: list[list[float]]) -> list:
