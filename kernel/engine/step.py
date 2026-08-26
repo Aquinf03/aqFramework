@@ -81,7 +81,7 @@ def do_train(train: Path) -> list[str]:
         "checkpoint": "artifacts/checkpoints/" + named.name,
         "checkpoint_last": "artifacts/checkpoints/last.json",
     }
-    if str(model.get("kind")) == "linear" and hasattr(mod, "write_inspect"):
+    if hasattr(mod, "write_inspect"):
         arts["inspect"] = mod.write_inspect(train, model)
     rid = write_run(train, {"artifacts": arts})
     lines = [

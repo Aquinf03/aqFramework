@@ -1,0 +1,8 @@
+family: tabular
+method: logistic
+data:
+  path: data.csv
+  target: y
+eval:
+  metric: accuracy
+  min_score: 1
