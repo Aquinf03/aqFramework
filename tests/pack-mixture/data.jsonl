@@ -1,0 +1,8 @@
+{"source": "web", "text": "the cat sat on the mat."}
+{"text": "the dog ran in the sun.", "source": "web"}
+{"source": "web", "text": "a man saw a car."}
+{"source": "web", "text": "the cat sat on the mat."}
+{"source": "code", "text": "def add(a, b): return a + b"}
+{"source": "code", "text": "def mul(x, y): return x * y"}
+{"source": "code", "text": "def inc(n): return n + 1"}
+{"source": "code", "text": "def dec(n): return n - 1"}

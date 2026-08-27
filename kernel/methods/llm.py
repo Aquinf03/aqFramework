@@ -8,6 +8,7 @@ from pathlib import Path
 
 from methods import tok as tokenize
 from protocol.tokenizer import dump as dump_tokenizer
+from methods.linear import _rows
 from methods.transformer import (
     Var,
     add_const,
@@ -39,6 +40,26 @@ def _opt(rec: dict, key: str, default):
         if isinstance(nested, dict):
             v = nested.get(key)
     return default if v is None else v
+
+
+def _docs(src: Path, rec: dict) -> tuple[list[str], list[str], dict]:
+    data = rec.get("data") or {}
+    field = str(data.get("text") or data.get("target") or "text")
+    src_key = str(data.get("source") or "source")
+    mix = rec.get("mixture") if isinstance(rec.get("mixture"), dict) else {}
+    weights = {str(k): float(v) for k, v in mix.items() if v is not None}
+    rows = _rows(src)
+    texts: list[str] = []
+    sources: list[str] = []
+    for r in rows:
+        t = str(r.get(field) or "").strip()
+        if not t:
+            continue
+        texts.append(t)
+        sources.append(str(r.get(src_key) or "default"))
+    if not texts:
+        raise SystemExit("llm: no texts")
+    return texts, sources, weights
 
 
 def _size(rec: dict) -> str:
@@ -226,7 +247,17 @@ def _kl(p: list[float], q: list[float]) -> float:
     return sum(pi * (math.log(max(pi, 1e-12)) - math.log(max(qi, 1e-12))) for pi, qi in zip(p, q))
 
 
-def _train_core(texts: list[str], rec: dict, size: str, layers=None, d=None, dff=None, ctx=None) -> dict:
+def _train_core(
+    texts: list[str],
+    rec: dict,
+    size: str,
+    layers=None,
+    d=None,
+    dff=None,
+    ctx=None,
+    sources: list[str] | None = None,
+    weights: dict | None = None,
+) -> dict:
     preset = PRESET[size]
     d = int(d if d is not None else _opt(rec, "d_model", preset["d_model"]))
     dff = int(dff if dff is not None else _opt(rec, "d_ff", preset["d_ff"]))
@@ -237,7 +268,10 @@ def _train_core(texts: list[str], rec: dict, size: str, layers=None, d=None, dff
     merges = int(_opt(rec, "merges", 24))
     seed = [int(_opt(rec, "seed", 1))]
     tok_spec = tokenize.train(texts, rec)
-    windows = tokenize.pack(texts, tok_spec, ctx)
+    seed_i = int(_opt(rec, "seed", 1))
+    windows, pack_stats = tokenize.pack_ex(
+        texts, tok_spec, ctx, sources, weights or None, seed_i
+    )
     vsz = tokenize.vocab_size(tok_spec)
     tok = Var(_rand(vsz, d, 0.2, seed))
     blks = [_init_block(d, dff, seed) for _ in range(layers)]
@@ -273,17 +307,23 @@ def _train_core(texts: list[str], rec: dict, size: str, layers=None, d=None, dff
         "wout": wout.data,
         "blocks": [_pack(b) for b in blks],
         "n_windows": len(windows),
-        "n_tokens": sum(len(w) for w in windows),
+        "n_tokens": pack_stats["tokens"],
+        "pack": pack_stats.get("pack"),
+        "mixture": pack_stats.get("mixture"),
+        "packed_tokens": pack_stats.get("packed_tokens"),
+        "pack_docs": pack_stats.get("docs"),
+        "pack_seed": pack_stats.get("seed"),
         "windows": windows,
     }
 
 
-def _distill(texts: list[str], rec: dict) -> dict:
-    teacher = _train_core(texts, rec, "llm")
-    student = _train_core(texts, rec, "slm")
+def _distill(texts: list[str], rec: dict, sources=None, weights=None) -> dict:
+    teacher = _train_core(texts, rec, "llm", sources=sources, weights=weights)
+    student = _train_core(texts, rec, "slm", sources=sources, weights=weights)
     tok_spec = teacher["tokenizer"]
     ctx = int(student["context"])
-    windows = tokenize.pack(texts, tok_spec, ctx)
+    seed_i = int(_opt(rec, "seed", 1))
+    windows, _ = tokenize.pack_ex(texts, tok_spec, ctx, sources, weights, seed_i)
     t_tok, t_blks, t_wout = _load_float(teacher)
     d, dff, layers = student["d_model"], student["d_ff"], student["layers"]
     seed = [int(_opt(rec, "seed", 1)) + 7]
@@ -343,14 +383,12 @@ def _distill(texts: list[str], rec: dict) -> dict:
 
 
 def fit(src: Path, rec: dict) -> dict:
-    data = rec.get("data") or {}
-    field = str(data.get("text") or data.get("target") or "text")
-    texts = _texts_field(src, field)
+    texts, sources, weights = _docs(src, rec)
     if _opt(rec, "distill", False):
-        model = _distill(texts, rec)
+        model = _distill(texts, rec, sources, weights)
     else:
         size = _size(rec)
-        model = _train_core(texts, rec, size)
+        model = _train_core(texts, rec, size, sources=sources, weights=weights)
         model.pop("windows", None)
     bits = _opt(rec, "quant", None)
     if bits is not None and bits is not False:
@@ -394,7 +432,19 @@ def write_inspect(train: Path, model: dict) -> str:
         f"tokenizer_sha256: {digest}",
         f"train_loss: {model.get('train_loss')}",
         f"windows: {model.get('n_windows')}",
+        f"pack: {model.get('pack') or 'eos'}",
+        f"docs: {model.get('pack_docs')}",
     ]
+    mix = model.get("mixture") or {}
+    if mix:
+        lines.append("mixture:")
+        for k, v in mix.items():
+            lines.append(f"  {k}: {v}")
+    packed = model.get("packed_tokens") or {}
+    if packed:
+        lines.append("packed_tokens:")
+        for k, v in packed.items():
+            lines.append(f"  {k}: {v}")
     if model.get("quant"):
         lines.append(f"quant: {model.get('quant')}")
     if model.get("prune") is not None:
@@ -439,12 +489,13 @@ def _paged_pages(n_tok: int, page: int) -> int:
 
 
 def evaluate(model: dict, src: Path, rec: dict) -> tuple[float, int]:
-    data = rec.get("data") or {}
-    field = str(data.get("text") or data.get("target") or "text")
-    texts = _texts_field(src, field)
+    texts, sources, weights = _docs(src, rec)
+    if model.get("mixture"):
+        weights = model["mixture"]
     tok_spec = model["tokenizer"]
     ctx = int(model.get("context") or 24)
-    windows = tokenize.pack(texts, tok_spec, ctx)
+    seed_i = int(model.get("pack_seed") or _opt(rec, "seed", 1))
+    windows, _ = tokenize.pack_ex(texts, tok_spec, ctx, sources, weights, seed_i)
     tok, blks, wout = _load_float(model)
     total = 0.0
     n = 0

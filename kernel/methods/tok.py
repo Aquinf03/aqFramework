@@ -266,15 +266,9 @@ def encode(text: str, tok: dict) -> list[int]:
     return _encode_bpe(text, tok)
 
 
-def pack(texts: list[str], tok: dict, ctx: int) -> list[list[int]]:
-    stream: list[int] = []
-    for t in texts:
-        ids = encode(t, tok)
-        if not ids:
-            continue
-        stream.extend(ids)
+def _windows(stream: list[int], ctx: int) -> list[list[int]]:
     if len(stream) < 2:
-        raise SystemExit("tokenizer pack: not enough tokens")
+        raise SystemExit("pack: not enough tokens")
     ctx = max(2, int(ctx))
     windows: list[list[int]] = []
     for i in range(0, len(stream) - 1, ctx):
@@ -283,7 +277,87 @@ def pack(texts: list[str], tok: dict, ctx: int) -> list[list[int]]:
             continue
         windows.append(chunk)
     if not windows:
-        raise SystemExit("tokenizer pack: no windows")
+        raise SystemExit("pack: no windows")
+    return windows
+
+
+def pack_ex(
+    texts: list[str],
+    tok: dict,
+    ctx: int,
+    sources: list[str] | None = None,
+    weights: dict | None = None,
+    seed: int = 1,
+) -> tuple[list[list[int]], dict]:
+    """Concat docs with the tokenizer EOS already on each doc. Fill context windows.
+
+    If weights is set, docs are drawn by source mixture (one epoch).
+    """
+    import random
+    from collections import defaultdict, deque
+
+    if not texts:
+        raise SystemExit("pack: empty texts")
+    srcs = sources if sources is not None else ["default"] * len(texts)
+    if len(srcs) != len(texts):
+        raise SystemExit("pack: sources length must match texts")
+    by: dict[str, deque[str]] = defaultdict(deque)
+    for s, t in zip(srcs, texts):
+        if t:
+            by[str(s)].append(t)
+    if not by:
+        raise SystemExit("pack: empty texts")
+    wraw = {str(k): float(v) for k, v in (weights or {}).items() if float(v) > 0}
+    order: list[tuple[str, str]] = []
+    if wraw:
+        rng = random.Random(int(seed))
+        left = {k: deque(v) for k, v in by.items()}
+        while any(left.values()):
+            keys = [k for k, q in left.items() if q]
+            ww = [wraw.get(k, 0.0) for k in keys]
+            if sum(ww) <= 0:
+                keys = [k for k, q in left.items() if q]
+                ww = [1.0] * len(keys)
+            s = rng.choices(keys, ww)[0]
+            order.append((s, left[s].popleft()))
+    else:
+        order = list(zip(srcs, texts))
+    stream: list[int] = []
+    tok_by: dict[str, int] = defaultdict(int)
+    n_docs = 0
+    for s, t in order:
+        ids = encode(t, tok)
+        if not ids:
+            continue
+        stream.extend(ids)
+        tok_by[s] += len(ids)
+        n_docs += 1
+    windows = _windows(stream, ctx)
+    mix = dict(wraw) if wraw else {k: 1.0 / len(by) for k in by}
+    z = sum(mix.values()) or 1.0
+    mix = {k: mix[k] / z for k in sorted(mix)}
+    stats = {
+        "pack": "eos",
+        "context": max(2, int(ctx)),
+        "docs": n_docs,
+        "windows": len(windows),
+        "tokens": len(stream),
+        "mixture": mix,
+        "packed_tokens": dict(sorted(tok_by.items())),
+        "seed": int(seed),
+    }
+    return windows, stats
+
+
+def pack(
+    texts: list[str],
+    tok: dict,
+    ctx: int,
+    sources: list[str] | None = None,
+    weights: dict | None = None,
+    seed: int = 1,
+) -> list[list[int]]:
+    windows, _ = pack_ex(texts, tok, ctx, sources, weights, seed)
     return windows
 
 
