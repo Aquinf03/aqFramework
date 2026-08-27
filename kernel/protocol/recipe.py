@@ -69,7 +69,7 @@ def load_recipe(train: Path) -> dict:
             raise SystemExit("recipe.yaml must set data.text (or data.target) for lora")
     elif method == "llm":
         obj = str(rec.get("objective") or "next-token").lower().replace("_", "-")
-        if obj in ("sft", "supervised", "supervised-finetune"):
+        if obj in ("sft", "supervised", "supervised-finetune", "full-ft", "full-finetune", "full-fine-tune"):
             if not (
                 data.get("prompt")
                 or data.get("instruction")

@@ -83,7 +83,13 @@ def _sft_pairs(src: Path, rec: dict) -> list[tuple[str, str]]:
     return pairs
 
 
-def _sft_example(prompt: str, completion: str, tok_spec: dict, ctx: int) -> tuple[list[int], list[tuple[int, int]]]:
+def _sft_example(
+    prompt: str,
+    completion: str,
+    tok_spec: dict,
+    ctx: int,
+    loss_on: str = "completion",
+) -> tuple[list[int], list[tuple[int, int]]]:
     eos = tokenize.special_id(tok_spec, "eos")
     p_ids = tokenize.encode(prompt, tok_spec)
     if p_ids and p_ids[-1] == eos:
@@ -97,9 +103,11 @@ def _sft_example(prompt: str, completion: str, tok_spec: dict, ctx: int) -> tupl
         drop = len(seq) - ctx
         seq = seq[drop:]
         p_len = max(p_len - drop, 0)
-    pairs = [(i, seq[i + 1]) for i in range(len(seq) - 1) if i + 1 >= p_len]
+    pairs = [(i, seq[i + 1]) for i in range(len(seq) - 1)]
+    if loss_on != "all":
+        pairs = [(i, g) for i, g in pairs if i + 1 >= p_len]
     if not pairs:
-        raise SystemExit("sft: no completion tokens in context")
+        raise SystemExit("sft: no tokens to train in context")
     return seq, pairs
 
 
@@ -852,6 +860,7 @@ def _train_sft(
     parent: dict,
     parent_rel: str | None,
     parent_sha: str | None,
+    loss_on: str = "completion",
 ) -> dict:
     pairs_txt = _sft_pairs(src, rec)
     tok_spec = parent.get("tokenizer")
@@ -863,7 +872,7 @@ def _train_sft(
     ctx = int(_opt(rec, "context", parent.get("context") or PRESET[size]["context"]))
     steps = int(_opt(rec, "steps", 40))
     lr = float(_opt(rec, "lr", 0.05))
-    examples = [_sft_example(p, c, tok_spec, ctx) for p, c in pairs_txt]
+    examples = [_sft_example(p, c, tok_spec, ctx, loss_on) for p, c in pairs_txt]
     tok = Var([row[:] for row in parent["tok"]])
     wout = Var([row[:] for row in parent["wout"]])
     blks = _blocks_from(parent, layers)
@@ -891,9 +900,9 @@ def _train_sft(
         "kind": "llm",
         "class": size,
         "arch": "decoder",
-        "objective": "sft",
+        "objective": "full-ft" if loss_on == "all" else "sft",
         "causal": True,
-        "loss_on": "completion",
+        "loss_on": loss_on,
         "n_pairs": len(examples),
         "d_model": d,
         "d_ff": dff,
@@ -930,6 +939,10 @@ def fit(src: Path, rec: dict) -> dict:
         if parent is None:
             raise SystemExit("sft needs init.checkpoint")
         return _train_sft(src, rec, size, parent, parent_rel, parent_sha)
+    if obj in ("full-ft", "full-finetune", "full-fine-tune"):
+        if parent is None:
+            raise SystemExit("full fine-tune needs init.checkpoint")
+        return _train_sft(src, rec, size, parent, parent_rel, parent_sha, "all")
     texts, sources, weights = _docs(src, rec)
     if _opt(rec, "distill", False):
         model = _distill(texts, rec, sources, weights)
@@ -1098,23 +1111,24 @@ def _ce_seq(logits: list[list[float]], tgt: list[int]) -> tuple[float, int]:
 
 def evaluate(model: dict, src: Path, rec: dict) -> tuple[float, int]:
     obj = str(model.get("objective") or "next-token")
-    if obj == "sft":
+    if obj in ("sft", "full-ft"):
         tok_spec = model["tokenizer"]
         ctx = int(model.get("context") or 24)
         names = ["wq", "wk", "wv", "wo", "w1", "w2"]
         tokv = Var(model["tok"])
         blks = [{k: Var([row[:] for row in pack[k]]) for k in names} for pack in model["blocks"]]
         wout = Var(model["wout"])
+        loss_on = str(model.get("loss_on") or "completion")
         total = 0.0
         n = 0
         for p, c in _sft_pairs(src, rec):
-            seq, pairs = _sft_example(p, c, tok_spec, ctx)
+            seq, pairs = _sft_example(p, c, tok_spec, ctx, loss_on)
             logits = _decode(seq[:-1], tokv, blks, wout)
             t, k = _ce_pairs(logits.data, pairs)
             total += t
             n += k
         if n == 0:
-            raise SystemExit("sft eval: no completion tokens")
+            raise SystemExit("sft eval: no tokens")
         return total / n, n
     texts, sources, weights = _docs(src, rec)
     if model.get("mixture"):
