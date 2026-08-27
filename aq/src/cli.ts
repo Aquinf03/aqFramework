@@ -18,6 +18,7 @@ import { chatCmd } from "./agent/chat.js"
 import { providerCmd } from "./agent/provider.js"
 import { doctorCmd } from "./agent/doctor.js"
 import { spawnCmd } from "./agent/spawn.js"
+import { loginCmd, logoutCmd, switchCmd } from "./handle/login.js"
 
 async function main(): Promise<void> {
   const argv = process.argv.slice(2)
@@ -112,6 +113,21 @@ async function main(): Promise<void> {
 
   if (cmd === "spawn") {
     await spawnCmd(argv.slice(1))
+    return
+  }
+
+  if (cmd === "login") {
+    await loginCmd(argv.slice(1))
+    return
+  }
+
+  if (cmd === "logout") {
+    await logoutCmd(argv.slice(1))
+    return
+  }
+
+  if (cmd === "switch") {
+    await switchCmd(argv.slice(1))
     return
   }
 
