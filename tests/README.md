@@ -22,4 +22,5 @@ Manual end-to-end trains. Not `aq eval` probes. Each folder is a train plus a RE
 - [continued-pretrain](continued-pretrain/) — warm-start from a parent checkpoint
 - [sft](sft/) — supervised fine-tune (loss on completion)
 - [full-ft](full-ft/) — full fine-tune (loss on all tokens)
+- [lora](lora/) — LoRA (frozen parent, rank adapters)
 

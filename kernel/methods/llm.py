@@ -923,6 +923,90 @@ def _train_sft(
     }
 
 
+def _decode_lora(ids: list[int], tok: Var, blks: list[dict], wout: Var, A: Var, B: Var, ab: float) -> Var:
+    h = _hidden(ids, tok, blks)
+    return add(matmul(h, wout), scale(matmul(matmul(h, A), B), ab))
+
+
+def _train_lora(
+    src: Path,
+    rec: dict,
+    size: str,
+    parent: dict,
+    parent_rel: str | None,
+    parent_sha: str | None,
+) -> dict:
+    pairs_txt = _sft_pairs(src, rec)
+    tok_spec = parent.get("tokenizer")
+    if not isinstance(tok_spec, dict):
+        raise SystemExit("lora parent has no tokenizer")
+    d = int(parent.get("d_model") or PRESET[size]["d_model"])
+    layers = int(parent.get("layers") or PRESET[size]["layers"])
+    ctx = int(_opt(rec, "context", parent.get("context") or PRESET[size]["context"]))
+    steps = int(_opt(rec, "steps", 40))
+    lr = float(_opt(rec, "lr", 0.05))
+    rank = int(_opt(rec, "rank", 4))
+    alpha = float(_opt(rec, "alpha", 8))
+    if rank < 1:
+        raise SystemExit("lora rank must be >= 1")
+    ab = alpha / rank
+    examples = [_sft_example(p, c, tok_spec, ctx, "completion") for p, c in pairs_txt]
+    tok = Var([row[:] for row in parent["tok"]])
+    wout = Var([row[:] for row in parent["wout"]])
+    blks = _blocks_from(parent, layers)
+    seed = [int(_opt(rec, "seed", 1))]
+    vsz = tokenize.vocab_size(tok_spec)
+    A = Var(_rand(d, rank, 0.02, seed))
+    B = Var([[0.0] * vsz for _ in range(rank)])
+    adapters = [A, B]
+    last = 0.0
+    n_pred = 0
+    for _ in range(steps):
+        total = 0.0
+        n_pred = 0
+        for seq, pairs in examples:
+            logits = _decode_lora(seq[:-1], tok, blks, wout, A, B, ab)
+            adj = [(i, g) for i, g in pairs if i < len(seq) - 1]
+            if not adj:
+                continue
+            loss = nll_at(logits, adj)
+            backward(loss)
+            sgd(adapters, lr)
+            total += loss.data[0][0]
+            n_pred += len(adj)
+        last = total / max(len(examples), 1)
+    return {
+        "kind": "llm",
+        "class": size,
+        "arch": "decoder",
+        "objective": "lora",
+        "causal": True,
+        "loss_on": "completion",
+        "frozen": True,
+        "rank": rank,
+        "alpha": alpha,
+        "n_pairs": len(examples),
+        "d_model": d,
+        "d_ff": parent.get("d_ff"),
+        "layers": layers,
+        "heads": 1,
+        "context": ctx,
+        "train_loss": last,
+        "vocab": vsz,
+        "tokenizer": tok_spec,
+        "tokenizer_sha256": tokenize.sha256(tok_spec),
+        "tok": tok.data,
+        "wout": wout.data,
+        "lora_A": A.data,
+        "lora_B": B.data,
+        "blocks": [_pack(b) for b in blks],
+        "n_windows": len(examples),
+        "n_pred": n_pred,
+        "parent": parent_rel,
+        "parent_sha256": parent_sha,
+    }
+
+
 def fit(src: Path, rec: dict) -> dict:
     obj = str(_opt(rec, "objective", "next-token")).lower().replace("_", "-")
     size = _size(rec)
@@ -943,6 +1027,10 @@ def fit(src: Path, rec: dict) -> dict:
         if parent is None:
             raise SystemExit("full fine-tune needs init.checkpoint")
         return _train_sft(src, rec, size, parent, parent_rel, parent_sha, "all")
+    if obj == "lora":
+        if parent is None:
+            raise SystemExit("lora needs init.checkpoint")
+        return _train_lora(src, rec, size, parent, parent_rel, parent_sha)
     texts, sources, weights = _docs(src, rec)
     if _opt(rec, "distill", False):
         model = _distill(texts, rec, sources, weights)
@@ -1018,6 +1106,10 @@ def write_inspect(train: Path, model: dict) -> str:
         lines.append(f"loss_on: {model.get('loss_on')}")
     if model.get("n_pairs") is not None:
         lines.append(f"n_pairs: {model.get('n_pairs')}")
+    if model.get("rank") is not None:
+        lines.append(f"rank: {model.get('rank')}")
+        lines.append(f"alpha: {model.get('alpha')}")
+        lines.append(f"frozen: {str(bool(model.get('frozen'))).lower()}")
     if model.get("mask_rate") is not None:
         lines.append(f"mask_rate: {model.get('mask_rate')}")
     lines += [
@@ -1111,7 +1203,7 @@ def _ce_seq(logits: list[list[float]], tgt: list[int]) -> tuple[float, int]:
 
 def evaluate(model: dict, src: Path, rec: dict) -> tuple[float, int]:
     obj = str(model.get("objective") or "next-token")
-    if obj in ("sft", "full-ft"):
+    if obj in ("sft", "full-ft", "lora"):
         tok_spec = model["tokenizer"]
         ctx = int(model.get("context") or 24)
         names = ["wq", "wk", "wv", "wo", "w1", "w2"]
@@ -1121,9 +1213,20 @@ def evaluate(model: dict, src: Path, rec: dict) -> tuple[float, int]:
         loss_on = str(model.get("loss_on") or "completion")
         total = 0.0
         n = 0
+        A = B = None
+        ab = 1.0
+        if obj == "lora":
+            A = Var(model["lora_A"])
+            B = Var(model["lora_B"])
+            rank = int(model.get("rank") or 1)
+            alpha = float(model.get("alpha") or rank)
+            ab = alpha / rank
         for p, c in _sft_pairs(src, rec):
             seq, pairs = _sft_example(p, c, tok_spec, ctx, loss_on)
-            logits = _decode(seq[:-1], tokv, blks, wout)
+            if obj == "lora" and A is not None and B is not None:
+                logits = _decode_lora(seq[:-1], tokv, blks, wout, A, B, ab)
+            else:
+                logits = _decode(seq[:-1], tokv, blks, wout)
             t, k = _ce_pairs(logits.data, pairs)
             total += t
             n += k
