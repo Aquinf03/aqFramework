@@ -18,4 +18,5 @@ Manual end-to-end trains. Not `aq eval` probes. Each folder is a train plus a RE
 - [ar-pretrain](ar-pretrain/) — next-token / causal LM
 - [masked-pretrain](masked-pretrain/) — MLM and span corruption
 - [mtp-pretrain](mtp-pretrain/) — multi-token prediction (t+1, t+2)
+- [fim-pretrain](fim-pretrain/) — fill-in-the-middle (prefix / suffix / middle)
 

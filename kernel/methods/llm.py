@@ -386,6 +386,91 @@ def _train_core(
     }
 
 
+def _fim_layout(ids: list[int], seed: int, pre: int, suf: int, mid: int, eos: int) -> list[int]:
+    import random
+
+    core = ids[:-1] if ids and ids[-1] == eos else list(ids)
+    if len(core) < 4:
+        return [pre] + core + [eos]
+    rng = random.Random(seed + len(ids) + (sum(ids) % 10007))
+    a = rng.randint(1, len(core) - 2)
+    b = rng.randint(a + 1, len(core) - 1)
+    prefix, middle, suffix = core[:a], core[a:b], core[b:]
+    return [pre] + prefix + [suf] + suffix + [mid] + middle + [eos]
+
+
+def _fim_windows(texts: list[str], tok_spec: dict, ctx: int, seed: int) -> list[list[int]]:
+    pre = tokenize.special_id(tok_spec, "prefix")
+    suf = tokenize.special_id(tok_spec, "suffix")
+    mid = tokenize.special_id(tok_spec, "middle")
+    eos = tokenize.special_id(tok_spec, "eos")
+    stream: list[int] = []
+    for t in texts:
+        ids = tokenize.encode(t, tok_spec)
+        if not ids:
+            continue
+        stream.extend(_fim_layout(ids, seed, pre, suf, mid, eos))
+    return tokenize._windows(stream, ctx)
+
+
+def _train_fim(texts: list[str], rec: dict, size: str, sources=None, weights=None) -> dict:
+    preset = PRESET[size]
+    d = int(_opt(rec, "d_model", preset["d_model"]))
+    dff = int(_opt(rec, "d_ff", preset["d_ff"]))
+    layers = int(_opt(rec, "layers", preset["layers"]))
+    ctx = int(_opt(rec, "context", preset["context"]))
+    steps = int(_opt(rec, "steps", 40))
+    lr = float(_opt(rec, "lr", 0.05))
+    seed = [int(_opt(rec, "seed", 1))]
+    tok_spec = tokenize.train(texts, rec)
+    seed_i = int(_opt(rec, "seed", 1))
+    windows = _fim_windows(texts, tok_spec, ctx, seed_i)
+    vsz = tokenize.vocab_size(tok_spec)
+    tok = Var(_rand(vsz, d, 0.2, seed))
+    blks = [_init_block(d, dff, seed) for _ in range(layers)]
+    wout = Var(_rand(d, vsz, 0.2, seed))
+    params = [tok, wout]
+    for blk in blks:
+        params.extend(blk.values())
+    last = 0.0
+    for _ in range(steps):
+        total = 0.0
+        for ids in windows:
+            logits = _decode(ids[:-1], tok, blks, wout)
+            loss = nll(logits, ids[1:])
+            backward(loss)
+            sgd(params, lr)
+            total += loss.data[0][0]
+        last = total / len(windows)
+    n_pred = sum(max(len(w) - 1, 0) for w in windows)
+    return {
+        "kind": "llm",
+        "class": size,
+        "arch": "decoder",
+        "objective": "fim",
+        "causal": True,
+        "fim_order": "psm",
+        "d_model": d,
+        "d_ff": dff,
+        "layers": layers,
+        "heads": 1,
+        "context": ctx,
+        "train_loss": last,
+        "vocab": vsz,
+        "tokenizer": tok_spec,
+        "tokenizer_sha256": tokenize.sha256(tok_spec),
+        "tok": tok.data,
+        "wout": wout.data,
+        "blocks": [_pack(b) for b in blks],
+        "n_windows": len(windows),
+        "n_tokens": sum(len(w) for w in windows),
+        "pack": "fim-psm",
+        "pack_docs": len(texts),
+        "pack_seed": seed_i,
+        "n_pred": n_pred,
+    }
+
+
 def _distill(texts: list[str], rec: dict, sources=None, weights=None) -> dict:
     teacher = _train_core(texts, rec, "llm", sources=sources, weights=weights)
     student = _train_core(texts, rec, "slm", sources=sources, weights=weights)
@@ -682,6 +767,8 @@ def fit(src: Path, rec: dict) -> dict:
         model = _train_span(texts, rec, size, sources, weights)
     elif obj in ("mtp", "multi-token", "multi-token-prediction"):
         model = _train_mtp(texts, rec, size, sources, weights)
+    elif obj in ("fim", "fill-in-the-middle", "fill-in-middle"):
+        model = _train_fim(texts, rec, size, sources, weights)
     else:
         model = _train_core(texts, rec, size, sources=sources, weights=weights)
         model.pop("windows", None)
@@ -723,6 +810,8 @@ def write_inspect(train: Path, model: dict) -> str:
     ]
     if model.get("n_predict") is not None:
         lines.append(f"n_predict: {model.get('n_predict')}")
+    if model.get("fim_order"):
+        lines.append(f"fim_order: {model.get('fim_order')}")
     if model.get("mask_rate") is not None:
         lines.append(f"mask_rate: {model.get('mask_rate')}")
     lines += [
@@ -823,6 +912,8 @@ def evaluate(model: dict, src: Path, rec: dict) -> tuple[float, int]:
     seed_i = int(model.get("pack_seed") or _opt(rec, "seed", 1))
     windows, _ = tokenize.pack_ex(texts, tok_spec, ctx, sources, weights, seed_i)
     obj = str(model.get("objective") or "next-token")
+    if obj == "fim":
+        windows = _fim_windows(texts, tok_spec, ctx, seed_i)
     if obj == "mlm":
         names = ["wq", "wk", "wv", "wo", "w1", "w2"]
         tokv = Var(model["tok"])
