@@ -1,0 +1,15 @@
+family: sequence
+method: transformer
+arch: decoder
+d_model: 8
+d_ff: 16
+steps: 80
+lr: 0.08
+seq: 12
+seed: 1
+data:
+  path: data.jsonl
+  text: text
+eval:
+  metric: loss
+  min_score: 0.8

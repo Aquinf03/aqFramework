@@ -1,0 +1,16 @@
+family: sequence
+method: transformer
+arch: encoder-decoder
+d_model: 8
+d_ff: 16
+steps: 100
+lr: 0.08
+seq: 4
+seed: 1
+data:
+  path: data.jsonl
+  src: src
+  tgt: tgt
+eval:
+  metric: accuracy
+  min_score: 0.8

@@ -67,6 +67,19 @@ def load_recipe(train: Path) -> dict:
     if method == "lora":
         if not (data.get("text") or data.get("target")):
             raise SystemExit("recipe.yaml must set data.text (or data.target) for lora")
+    elif method == "transformer":
+        arch = str(rec.get("arch") or "decoder").replace("_", "-")
+        if arch == "decoder":
+            if not (data.get("text") or data.get("target")):
+                raise SystemExit("recipe.yaml must set data.text (or data.target) for transformer decoder")
+        elif arch == "encoder":
+            if not data.get("text") or not data.get("target"):
+                raise SystemExit("recipe.yaml must set data.text and data.target for transformer encoder")
+        elif arch in ("encoder-decoder", "encoder_decoder"):
+            if not data.get("src") or not data.get("tgt"):
+                raise SystemExit("recipe.yaml must set data.src and data.tgt for encoder-decoder")
+        else:
+            raise SystemExit("transformer arch must be encoder, decoder, or encoder-decoder")
     elif not data.get("target"):
         raise SystemExit("recipe.yaml must set data.target")
     ev = rec.get("eval")
