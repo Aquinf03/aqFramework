@@ -20,6 +20,7 @@ from methods.transformer import (
     nll,
     nll_at,
     sgd,
+    scale,
     cross_attn,
     _causal_mask,
     _init_block,
@@ -74,12 +75,16 @@ def _size(rec: dict) -> str:
     return s
 
 
-def _decode(ids: list[int], tok: Var, blks: list[dict], wout: Var) -> Var:
+def _hidden(ids: list[int], tok: Var, blks: list[dict]) -> Var:
     x = add_const(embed(ids, tok), _pos(len(ids), len(tok.data[0])))
     mask = _causal_mask(len(ids))
     for blk in blks:
         x = block(x, blk, mask)
-    return matmul(x, wout)
+    return x
+
+
+def _decode(ids: list[int], tok: Var, blks: list[dict], wout: Var) -> Var:
+    return matmul(_hidden(ids, tok, blks), wout)
 
 
 def _encode_tokens(ids: list[int], tok: Var, blks: list[dict], wout: Var) -> Var:
@@ -188,14 +193,17 @@ def _mats(model: dict) -> tuple:
     return tok, blks, wout
 
 
-def _decode_float(ids: list[int], tok, blks, wout) -> list[list[float]]:
+def _hidden_float(ids: list[int], tok, blks) -> list[list[float]]:
     d = len(tok[0])
     x = [tok[i][:] for i in ids]
-    pos = _pos(len(ids), d)
-    x = _add(x, pos)
+    x = _add(x, _pos(len(ids), d))
     for blk in blks:
         x, _, _ = _blk_float(x, blk)
-    return _mm(x, wout)
+    return x
+
+
+def _decode_float(ids: list[int], tok, blks, wout) -> list[list[float]]:
+    return _mm(_hidden_float(ids, tok, blks), wout)
 
 
 def _nll_ids(ids: list[int], tok, blks, wout) -> tuple[float, int]:
@@ -443,6 +451,86 @@ def _distill(texts: list[str], rec: dict, sources=None, weights=None) -> dict:
     return out
 
 
+def _train_mtp(texts: list[str], rec: dict, size: str, sources=None, weights=None) -> dict:
+    preset = PRESET[size]
+    d = int(_opt(rec, "d_model", preset["d_model"]))
+    dff = int(_opt(rec, "d_ff", preset["d_ff"]))
+    layers = int(_opt(rec, "layers", preset["layers"]))
+    ctx = int(_opt(rec, "context", preset["context"]))
+    steps = int(_opt(rec, "steps", 40))
+    lr = float(_opt(rec, "lr", 0.05))
+    n_p = int(_opt(rec, "n_predict", 2))
+    if n_p < 2:
+        raise SystemExit("mtp n_predict must be >= 2")
+    seed = [int(_opt(rec, "seed", 1))]
+    tok_spec = tokenize.train(texts, rec)
+    windows, pack_stats = tokenize.pack_ex(
+        texts, tok_spec, ctx, sources, weights or None, int(_opt(rec, "seed", 1))
+    )
+    vsz = tokenize.vocab_size(tok_spec)
+    tok = Var(_rand(vsz, d, 0.2, seed))
+    blks = [_init_block(d, dff, seed) for _ in range(layers)]
+    wouts = [Var(_rand(d, vsz, 0.2, seed)) for _ in range(n_p)]
+    params = [tok, *wouts]
+    for blk in blks:
+        params.extend(blk.values())
+    last = 0.0
+    n_pred = 0
+    for _ in range(steps):
+        total = 0.0
+        n_pred = 0
+        for ids in windows:
+            if len(ids) < n_p + 1:
+                continue
+            h = _hidden(ids, tok, blks)
+            loss = None
+            n_here = 0
+            for k in range(1, n_p + 1):
+                pairs = [(i, ids[i + k]) for i in range(len(ids) - k)]
+                if not pairs:
+                    continue
+                part = nll_at(matmul(h, wouts[k - 1]), pairs)
+                loss = part if loss is None else add(loss, part)
+                n_here += len(pairs)
+            if loss is None:
+                continue
+            loss = scale(loss, 1.0 / n_p)
+            backward(loss)
+            sgd(params, lr)
+            total += loss.data[0][0]
+            n_pred += n_here
+        last = total / max(len(windows), 1)
+    return {
+        "kind": "llm",
+        "class": size,
+        "arch": "decoder",
+        "objective": "mtp",
+        "causal": True,
+        "n_predict": n_p,
+        "d_model": d,
+        "d_ff": dff,
+        "layers": layers,
+        "heads": 1,
+        "context": ctx,
+        "train_loss": last,
+        "vocab": vsz,
+        "tokenizer": tok_spec,
+        "tokenizer_sha256": tokenize.sha256(tok_spec),
+        "tok": tok.data,
+        "wout": wouts[0].data,
+        "wouts": [w.data for w in wouts],
+        "blocks": [_pack(b) for b in blks],
+        "n_windows": len(windows),
+        "n_tokens": pack_stats["tokens"],
+        "pack": pack_stats.get("pack"),
+        "mixture": pack_stats.get("mixture"),
+        "packed_tokens": pack_stats.get("packed_tokens"),
+        "pack_docs": pack_stats.get("docs"),
+        "pack_seed": pack_stats.get("seed"),
+        "n_pred": n_pred,
+    }
+
+
 def _train_mlm(texts: list[str], rec: dict, size: str, sources=None, weights=None) -> dict:
     preset = PRESET[size]
     d = int(_opt(rec, "d_model", preset["d_model"]))
@@ -592,6 +680,8 @@ def fit(src: Path, rec: dict) -> dict:
         model = _train_mlm(texts, rec, size, sources, weights)
     elif obj in ("span", "span-corruption"):
         model = _train_span(texts, rec, size, sources, weights)
+    elif obj in ("mtp", "multi-token", "multi-token-prediction"):
+        model = _train_mtp(texts, rec, size, sources, weights)
     else:
         model = _train_core(texts, rec, size, sources=sources, weights=weights)
         model.pop("windows", None)
@@ -631,6 +721,8 @@ def write_inspect(train: Path, model: dict) -> str:
         f"causal: {str(bool(model.get('causal', True))).lower()}",
         f"n_pred: {model.get('n_pred')}",
     ]
+    if model.get("n_predict") is not None:
+        lines.append(f"n_predict: {model.get('n_predict')}")
     if model.get("mask_rate") is not None:
         lines.append(f"mask_rate: {model.get('mask_rate')}")
     lines += [
@@ -748,6 +840,32 @@ def evaluate(model: dict, src: Path, rec: dict) -> tuple[float, int]:
             n += k
         if n == 0:
             raise SystemExit("mlm eval: no masks")
+        return total / n, n
+    if obj == "mtp":
+        names = ["wq", "wk", "wv", "wo", "w1", "w2"]
+        tokm = model["tok"]
+        blks = [{k: pack[k] for k in names} for pack in model["blocks"]]
+        wouts = model.get("wouts") or [model["wout"]]
+        n_p = int(model.get("n_predict") or len(wouts))
+        h = None
+        total = 0.0
+        n = 0
+        for ids in windows:
+            if len(ids) < 2:
+                continue
+            h = _hidden_float(ids, tokm, blks)
+            for k in range(1, n_p + 1):
+                logits = _mm(h, wouts[k - 1])
+                for i in range(len(ids) - k):
+                    gold = ids[i + k]
+                    row = logits[i]
+                    mx = max(row)
+                    ex = [math.exp(x - mx) for x in row]
+                    z = sum(ex) or 1.0
+                    total += -math.log(max(ex[gold] / z, 1e-12))
+                    n += 1
+        if n == 0:
+            raise SystemExit("mtp eval: no tokens")
         return total / n, n
     if obj == "span":
         names = ["wq", "wk", "wv", "wo", "w1", "w2"]

@@ -17,4 +17,5 @@ Manual end-to-end trains. Not `aq eval` probes. Each folder is a train plus a RE
 - [pack-mixture](pack-mixture/) — pack, mixture weights, context windows
 - [ar-pretrain](ar-pretrain/) — next-token / causal LM
 - [masked-pretrain](masked-pretrain/) — MLM and span corruption
+- [mtp-pretrain](mtp-pretrain/) — multi-token prediction (t+1, t+2)
 
