@@ -1,14 +1,13 @@
 family: llm
 method: llm
 size: slm
-formats: true
-steps: 40
+steps: 20
 lr: 0.08
-merges: 24
+merges: 16
 seed: 1
 data:
   path: data.jsonl
   text: text
 eval:
   metric: loss
-  min_score: 3.2
+  min_score: 6

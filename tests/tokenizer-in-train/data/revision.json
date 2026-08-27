@@ -1,0 +1,9 @@
+{
+  "path": "data.jsonl",
+  "hash": "sha256:bd3ad6a7cd328f19b06be6a0abafae6479654dccaa1774783986642cb87b7c91",
+  "bytes": 267,
+  "files": 1,
+  "snapshot": null,
+  "tokenizer": "sha256:5d8c60a96bd80e6c755e938ca531f7532493b67fae6282ebe05f94325904fd30",
+  "tokenizer_path": "artifacts/tokenizer.json"
+}

@@ -12,6 +12,8 @@ from methods.linear import load_xy
 from protocol.method import call_fit, load_method
 from protocol.recipe import load_recipe
 from protocol.record import update_last_run, write_run
+from protocol.tokenizer import check as check_tokenizer
+from protocol.tokenizer import pin as pin_tokenizer
 
 LOWER = {"mse", "rmse", "mae", "loss"}
 
@@ -72,6 +74,7 @@ def do_train(train: Path) -> list[str]:
     if not isinstance(model, dict):
         raise SystemExit("fit() must return a dict")
     model.setdefault("kind", str(method))
+    tok_hash = pin_tokenizer(train, model)
     dest = ckpt_dir(train)
     n = 1 + sum(1 for p in dest.glob("*.json") if p.name != "last.json")
     named = dest / f"{n}.json"
@@ -81,6 +84,9 @@ def do_train(train: Path) -> list[str]:
         "checkpoint": "artifacts/checkpoints/" + named.name,
         "checkpoint_last": "artifacts/checkpoints/last.json",
     }
+    if tok_hash:
+        arts["tokenizer"] = "artifacts/tokenizer.json"
+        arts["tokenizer_sha256"] = tok_hash
     if hasattr(mod, "write_inspect"):
         arts["inspect"] = mod.write_inspect(train, model)
     rid = write_run(train, {"artifacts": arts})
@@ -92,6 +98,9 @@ def do_train(train: Path) -> list[str]:
     ]
     if arts.get("inspect"):
         lines.append("  " + arts["inspect"])
+    if arts.get("tokenizer"):
+        lines.append("  " + arts["tokenizer"])
+        lines.append("  tokenizer sha256:" + str(arts.get("tokenizer_sha256")))
     return lines
 
 
@@ -154,6 +163,9 @@ def do_eval(train: Path, ckpt_name: str | None, probe: str | None = None) -> lis
     if not ckpt.is_file():
         raise SystemExit(f"no checkpoint: {ckpt.name}")
     model = json.loads(ckpt.read_text(encoding="utf-8"))
+    pinned = check_tokenizer(train, model)
+    if pinned is not None:
+        model["tokenizer"] = pinned
     files = probe_files(train, probe)
     if not files:
         files = [data_file(train, rec)]

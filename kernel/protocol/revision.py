@@ -94,8 +94,16 @@ def hash_train(train: Path, snapshot: bool = False) -> list[str]:
         "files": nfiles,
         "snapshot": snap_rel,
     }
+    tok = train / "artifacts" / "tokenizer.json"
+    if tok.is_file():
+        td, _ = hash_file(tok)
+        rec["tokenizer"] = "sha256:" + td
+        rec["tokenizer_path"] = "artifacts/tokenizer.json"
     (data_dir / "revision.json").write_text(json.dumps(rec, indent=2) + "\n", encoding="utf-8")
     lines = ["hash", "  " + hid, "  " + rel]
     if snap_rel:
         lines.append("  " + snap_rel)
+    if tok.is_file():
+        lines.append("  tokenizer sha256:" + rec["tokenizer"].split(":", 1)[-1])
+        lines.append("  artifacts/tokenizer.json")
     return lines

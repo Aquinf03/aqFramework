@@ -12,14 +12,5 @@ Manual end-to-end trains. Not `aq eval` probes. Each folder is a train plus a RE
 - [gradient-boosting](gradient-boosting/) — sequential residual trees
 - [gaussian-processes](gaussian-processes/) — RBF posterior mean
 - [transformers](transformers/) — encoder, decoder, encoder-decoder (kernel-owned)
-- [llms](llms/) — decoder LM slot: BPE + packed context + next-token
-- [slms](slms/) — smaller decoder (`size: slm`)
-- [edge](edge/) — TinyML-scale decoder (`size: edge`)
-- [distilled](distilled/) — teacher → student
-- [quantized](quantized/) — int8
-- [weight-formats](weight-formats/) — q8 / GPTQ-lite / AWQ-lite / EXL2-lite / GGUF-lite
-- [pruned](pruned/) — magnitude prune
-- [speculative](speculative/) — draft + verify
-- [paged-kv](paged-kv/) — paged KV
-- [size-deploy](size-deploy/) — index of those knobs
+- [tokenizer-in-train](tokenizer-in-train/) — tokenizer file hashed like weights; eval loads that file
 

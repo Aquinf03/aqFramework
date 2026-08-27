@@ -7,6 +7,7 @@ import math
 from pathlib import Path
 
 from methods import bpe
+from protocol.tokenizer import dump as dump_tokenizer
 from methods.transformer import (
     Var,
     add_const,
@@ -374,7 +375,7 @@ def write_inspect(train: Path, model: dict) -> str:
     digest = str(model.get("tokenizer_sha256") or bpe.sha256(tok))
     tdir = train / "artifacts"
     tdir.mkdir(parents=True, exist_ok=True)
-    (tdir / "tokenizer.json").write_text(json.dumps(tok, indent=2) + "\n", encoding="utf-8")
+    dump_tokenizer(train, tok)
     extra = []
     if model.get("formats"):
         extra = _write_formats(train, model)
