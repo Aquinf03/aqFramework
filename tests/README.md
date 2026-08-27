@@ -15,4 +15,5 @@ Manual end-to-end trains. Not `aq eval` probes. Each folder is a train plus a RE
 - [tokenizer-in-train](tokenizer-in-train/) — tokenizer file hashed like weights; eval loads that file
 - [tokenizer-algorithms](tokenizer-algorithms/) — byte, BPE, WordPiece, Unigram
 - [pack-mixture](pack-mixture/) — pack, mixture weights, context windows
+- [ar-pretrain](ar-pretrain/) — next-token / causal LM
 

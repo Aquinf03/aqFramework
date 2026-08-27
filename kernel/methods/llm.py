@@ -289,10 +289,13 @@ def _train_core(
             sgd(params, lr)
             total += loss.data[0][0]
         last = total / len(windows)
+    n_pred = sum(max(len(w) - 1, 0) for w in windows)
     return {
         "kind": "llm",
         "class": size,
         "arch": "decoder",
+        "objective": "next-token",
+        "causal": True,
         "d_model": d,
         "d_ff": dff,
         "layers": layers,
@@ -313,6 +316,7 @@ def _train_core(
         "packed_tokens": pack_stats.get("packed_tokens"),
         "pack_docs": pack_stats.get("docs"),
         "pack_seed": pack_stats.get("seed"),
+        "n_pred": n_pred,
         "windows": windows,
     }
 
@@ -422,6 +426,9 @@ def write_inspect(train: Path, model: dict) -> str:
         "",
         f"class: {model.get('class')}",
         "arch: decoder",
+        f"objective: {model.get('objective') or 'next-token'}",
+        f"causal: {str(bool(model.get('causal', True))).lower()}",
+        f"n_pred: {model.get('n_pred')}",
         f"layers: {model.get('layers')}",
         f"heads: {model.get('heads')}",
         f"d_model: {model.get('d_model')}",
