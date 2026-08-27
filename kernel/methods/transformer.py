@@ -270,6 +270,35 @@ def nll(logits: Var, targets: list[int]) -> Var:
     return loss
 
 
+def nll_at(logits: Var, pairs: list[tuple[int, int]]) -> Var:
+    n = len(logits.data[0])
+    t = len(pairs)
+    if t < 1:
+        raise SystemExit("nll_at: no positions")
+    ps: list[list[float]] = []
+    acc = 0.0
+    for i, gold in pairs:
+        mx = max(logits.data[i])
+        ex = [math.exp(logits.data[i][j] - mx) for j in range(n)]
+        z = sum(ex) or 1.0
+        p = [e / z for e in ex]
+        ps.append(p)
+        acc -= math.log(max(p[gold], 1e-12))
+    acc /= t
+    loss = Var([[acc]])
+
+    def back() -> None:
+        _ensure(logits)
+        g = loss.grad[0][0] / t
+        for k, (i, gold) in enumerate(pairs):
+            for j in range(n):
+                logits.grad[i][j] += g * (ps[k][j] - (1.0 if j == gold else 0.0))
+
+    loss._back = back
+    loss._kids = (logits,)
+    return loss
+
+
 def _causal_mask(t: int) -> list[list[float]]:
     m = _zeros(t, t)
     for i in range(t):

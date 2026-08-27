@@ -10,6 +10,8 @@ from collections import Counter
 BOS = "<b>"
 EOS = "<e>"
 UNK = "<u>"
+MASK = "<m>"
+SENT = "<x>"
 
 
 def _merge_once(seq: list[str], a: str, b: str, n: str) -> list[str]:
@@ -30,7 +32,7 @@ def train_bpe(texts: list[str], merges: int) -> dict:
     if not corpus:
         raise SystemExit("tokenizer: empty texts")
     alphabet = sorted({c for seq in corpus for c in seq if c != EOS})
-    itos = [BOS, EOS, UNK] + alphabet
+    itos = [BOS, EOS, UNK, MASK, SENT] + alphabet
     stoi = {t: i for i, t in enumerate(itos)}
     pair_merges: list[list[str]] = []
     n_merges = max(0, int(merges))
@@ -64,7 +66,7 @@ def _encode_bpe(text: str, tok: dict) -> list[int]:
 
 
 def train_byte(_texts: list[str], **_k) -> dict:
-    return {"kind": "byte", "bos": 0, "eos": 1, "byte_off": 2}
+    return {"kind": "byte", "bos": 0, "eos": 1, "byte_off": 2, "mask": 258, "span": 259}
 
 
 def _encode_byte(text: str, tok: dict) -> list[int]:
@@ -76,8 +78,21 @@ def _encode_byte(text: str, tok: dict) -> list[int]:
 def vocab_size(tok: dict) -> int:
     k = str(tok.get("kind") or "bpe")
     if k == "byte":
-        return int(tok.get("byte_off") or 2) + 256
+        return int(tok.get("span") or 259) + 1
     return len(tok.get("itos") or [])
+
+
+def special_id(tok: dict, name: str) -> int:
+    k = str(tok.get("kind") or "bpe")
+    if k == "byte":
+        defaults = {"bos": 0, "eos": 1, "mask": 258, "span": 259}
+        return int(tok.get(name, defaults.get(name, 0)))
+    names = {"bos": BOS, "eos": EOS, "unk": UNK, "mask": MASK, "span": SENT}
+    piece = names.get(name, name)
+    itos = tok.get("itos") or []
+    if piece in itos:
+        return itos.index(piece)
+    return 0
 
 
 def train_wordpiece(texts: list[str], merges: int) -> dict:
@@ -91,7 +106,7 @@ def train_wordpiece(texts: list[str], merges: int) -> dict:
     if not words:
         raise SystemExit("wordpiece: empty texts")
     alphabet = sorted({p for seq in words for p in seq})
-    itos = [BOS, EOS, UNK] + alphabet
+    itos = [BOS, EOS, UNK, MASK, SENT] + alphabet
     stoi = {t: i for i, t in enumerate(itos)}
     pair_merges: list[list[str]] = []
     n_merges = max(0, int(merges))
@@ -167,7 +182,7 @@ def train_unigram(texts: list[str], vocab: int) -> dict:
         counts.update(c for c in t if c.isspace())
     for c in chars:
         counts[c] += 1
-    pieces = [BOS, EOS, UNK] + chars
+    pieces = [BOS, EOS, UNK, MASK, SENT] + chars
     extras = [p for p, n in counts.most_common() if p not in pieces and n >= 2]
     want = max(len(pieces) + 1, int(vocab))
     for p in extras:

@@ -16,4 +16,5 @@ Manual end-to-end trains. Not `aq eval` probes. Each folder is a train plus a RE
 - [tokenizer-algorithms](tokenizer-algorithms/) — byte, BPE, WordPiece, Unigram
 - [pack-mixture](pack-mixture/) — pack, mixture weights, context windows
 - [ar-pretrain](ar-pretrain/) — next-token / causal LM
+- [masked-pretrain](masked-pretrain/) — MLM and span corruption
 

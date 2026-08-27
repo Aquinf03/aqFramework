@@ -1,0 +1,17 @@
+family: llm
+method: llm
+size: slm
+objective: mlm
+mask_rate: 0.3
+tokenizer: bpe
+merges: 16
+context: 16
+steps: 30
+lr: 0.08
+seed: 1
+data:
+  path: data.jsonl
+  text: text
+eval:
+  metric: loss
+  min_score: 5

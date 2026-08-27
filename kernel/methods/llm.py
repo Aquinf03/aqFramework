@@ -11,13 +11,16 @@ from protocol.tokenizer import dump as dump_tokenizer
 from methods.linear import _rows
 from methods.transformer import (
     Var,
+    add,
     add_const,
     backward,
     block,
     embed,
     matmul,
     nll,
+    nll_at,
     sgd,
+    cross_attn,
     _causal_mask,
     _init_block,
     _pack,
@@ -77,6 +80,60 @@ def _decode(ids: list[int], tok: Var, blks: list[dict], wout: Var) -> Var:
     for blk in blks:
         x = block(x, blk, mask)
     return matmul(x, wout)
+
+
+def _encode_tokens(ids: list[int], tok: Var, blks: list[dict], wout: Var) -> Var:
+    x = add_const(embed(ids, tok), _pos(len(ids), len(tok.data[0])))
+    for blk in blks:
+        x = block(x, blk, None)
+    return matmul(x, wout)
+
+
+def _mask_pairs(ids: list[int], rate: float, seed: int, mid: int) -> tuple[list[int], list[tuple[int, int]]]:
+    import random
+
+    n = len(ids)
+    cand = list(range(max(n - 1, 1)))
+    rng = random.Random(seed + n + sum(ids))
+    k = max(1, int(len(cand) * rate))
+    k = min(k, len(cand))
+    pos = sorted(rng.sample(cand, k))
+    masked = ids[:]
+    pairs = []
+    for i in pos:
+        pairs.append((i, ids[i]))
+        masked[i] = mid
+    return masked, pairs
+
+
+def _span_corrupt(ids: list[int], seed: int, sid: int, bos: int, eos: int) -> tuple[list[int], list[int], list[int]]:
+    import random
+
+    rng = random.Random(seed + len(ids))
+    core = ids[:-1] if len(ids) > 1 else ids
+    if len(core) < 2:
+        enc = [sid] + ([eos] if ids[-1:] == [eos] else [])
+        tgt = core + [eos]
+        return enc, [bos], tgt
+    start = rng.randint(0, max(len(core) - 2, 0))
+    sl = min(2, len(core) - start)
+    span = core[start : start + sl]
+    enc = core[:start] + [sid] + core[start + sl :]
+    if ids and ids[-1] == eos:
+        enc = enc + [eos]
+    tin = [bos] + span
+    tgt = span + [eos]
+    return enc, tin, tgt
+
+
+def _ed_tokens(src: list[int], tgt_in: list[int], tok: Var, enc: list[dict], dec: list[dict], xq, xk, xv, xo, wout: Var) -> Var:
+    e = add_const(embed(src, tok), _pos(len(src), len(tok.data[0])))
+    for blk in enc:
+        e = block(e, blk, None)
+    y = add_const(embed(tgt_in, tok), _pos(len(tgt_in), len(tok.data[0])))
+    y = block(y, dec[0], _causal_mask(len(tgt_in)))
+    y = add(y, cross_attn(y, e, xq, xk, xv, xo))
+    return matmul(y, wout)
 
 
 def _mm(a: list[list[float]], b: list[list[float]]) -> list[list[float]]:
@@ -386,12 +443,156 @@ def _distill(texts: list[str], rec: dict, sources=None, weights=None) -> dict:
     return out
 
 
+def _train_mlm(texts: list[str], rec: dict, size: str, sources=None, weights=None) -> dict:
+    preset = PRESET[size]
+    d = int(_opt(rec, "d_model", preset["d_model"]))
+    dff = int(_opt(rec, "d_ff", preset["d_ff"]))
+    layers = int(_opt(rec, "layers", preset["layers"]))
+    ctx = int(_opt(rec, "context", preset["context"]))
+    steps = int(_opt(rec, "steps", 40))
+    lr = float(_opt(rec, "lr", 0.05))
+    seed = [int(_opt(rec, "seed", 1))]
+    rate = float(_opt(rec, "mask_rate", 0.3))
+    tok_spec = tokenize.train(texts, rec)
+    windows, pack_stats = tokenize.pack_ex(
+        texts, tok_spec, ctx, sources, weights or None, int(_opt(rec, "seed", 1))
+    )
+    vsz = tokenize.vocab_size(tok_spec)
+    mid = tokenize.special_id(tok_spec, "mask")
+    tok = Var(_rand(vsz, d, 0.2, seed))
+    blks = [_init_block(d, dff, seed) for _ in range(layers)]
+    wout = Var(_rand(d, vsz, 0.2, seed))
+    params = [tok, wout]
+    for blk in blks:
+        params.extend(blk.values())
+    last = 0.0
+    n_pred = 0
+    for _ in range(steps):
+        total = 0.0
+        n_pred = 0
+        for ids in windows:
+            masked, pairs = _mask_pairs(ids, rate, int(_opt(rec, "seed", 1)), mid)
+            logits = _encode_tokens(masked, tok, blks, wout)
+            loss = nll_at(logits, pairs)
+            backward(loss)
+            sgd(params, lr)
+            total += loss.data[0][0]
+            n_pred += len(pairs)
+        last = total / len(windows)
+    return {
+        "kind": "llm",
+        "class": size,
+        "arch": "encoder",
+        "objective": "mlm",
+        "causal": False,
+        "mask_rate": rate,
+        "d_model": d,
+        "d_ff": dff,
+        "layers": layers,
+        "heads": 1,
+        "context": ctx,
+        "train_loss": last,
+        "vocab": vsz,
+        "tokenizer": tok_spec,
+        "tokenizer_sha256": tokenize.sha256(tok_spec),
+        "tok": tok.data,
+        "wout": wout.data,
+        "blocks": [_pack(b) for b in blks],
+        "n_windows": len(windows),
+        "n_tokens": pack_stats["tokens"],
+        "pack": pack_stats.get("pack"),
+        "mixture": pack_stats.get("mixture"),
+        "packed_tokens": pack_stats.get("packed_tokens"),
+        "pack_docs": pack_stats.get("docs"),
+        "pack_seed": pack_stats.get("seed"),
+        "n_pred": n_pred,
+    }
+
+
+def _train_span(texts: list[str], rec: dict, size: str, sources=None, weights=None) -> dict:
+    preset = PRESET[size]
+    d = int(_opt(rec, "d_model", preset["d_model"]))
+    dff = int(_opt(rec, "d_ff", preset["d_ff"]))
+    ctx = int(_opt(rec, "context", preset["context"]))
+    steps = int(_opt(rec, "steps", 40))
+    lr = float(_opt(rec, "lr", 0.05))
+    seed = [int(_opt(rec, "seed", 1))]
+    tok_spec = tokenize.train(texts, rec)
+    windows, pack_stats = tokenize.pack_ex(
+        texts, tok_spec, ctx, sources, weights or None, int(_opt(rec, "seed", 1))
+    )
+    vsz = tokenize.vocab_size(tok_spec)
+    sid = tokenize.special_id(tok_spec, "span")
+    bos = tokenize.special_id(tok_spec, "bos")
+    eos = tokenize.special_id(tok_spec, "eos")
+    tok = Var(_rand(vsz, d, 0.2, seed))
+    enc = [_init_block(d, dff, seed)]
+    dec = [_init_block(d, dff, seed)]
+    xq = Var(_rand(d, d, 0.2, seed))
+    xk = Var(_rand(d, d, 0.2, seed))
+    xv = Var(_rand(d, d, 0.2, seed))
+    xo = Var(_rand(d, d, 0.2, seed))
+    wout = Var(_rand(d, vsz, 0.2, seed))
+    params = [tok, wout, xq, xk, xv, xo, *enc[0].values(), *dec[0].values()]
+    last = 0.0
+    n_pred = 0
+    for _ in range(steps):
+        total = 0.0
+        n_pred = 0
+        for ids in windows:
+            enc_in, tin, tgt = _span_corrupt(ids, int(_opt(rec, "seed", 1)), sid, bos, eos)
+            logits = _ed_tokens(enc_in, tin, tok, enc, dec, xq, xk, xv, xo, wout)
+            loss = nll(logits, tgt)
+            backward(loss)
+            sgd(params, lr)
+            total += loss.data[0][0]
+            n_pred += len(tgt)
+        last = total / len(windows)
+    return {
+        "kind": "llm",
+        "class": size,
+        "arch": "encoder-decoder",
+        "objective": "span",
+        "causal": False,
+        "d_model": d,
+        "d_ff": dff,
+        "layers": 1,
+        "heads": 1,
+        "context": ctx,
+        "train_loss": last,
+        "vocab": vsz,
+        "tokenizer": tok_spec,
+        "tokenizer_sha256": tokenize.sha256(tok_spec),
+        "tok": tok.data,
+        "wout": wout.data,
+        "enc": [_pack(b) for b in enc],
+        "dec": [_pack(b) for b in dec],
+        "xq": xq.data,
+        "xk": xk.data,
+        "xv": xv.data,
+        "xo": xo.data,
+        "n_windows": len(windows),
+        "n_tokens": pack_stats["tokens"],
+        "pack": pack_stats.get("pack"),
+        "mixture": pack_stats.get("mixture"),
+        "packed_tokens": pack_stats.get("packed_tokens"),
+        "pack_docs": pack_stats.get("docs"),
+        "pack_seed": pack_stats.get("seed"),
+        "n_pred": n_pred,
+    }
+
+
 def fit(src: Path, rec: dict) -> dict:
     texts, sources, weights = _docs(src, rec)
+    obj = str(_opt(rec, "objective", "next-token")).lower().replace("_", "-")
+    size = _size(rec)
     if _opt(rec, "distill", False):
         model = _distill(texts, rec, sources, weights)
+    elif obj in ("mlm", "masked", "masked-lm"):
+        model = _train_mlm(texts, rec, size, sources, weights)
+    elif obj in ("span", "span-corruption"):
+        model = _train_span(texts, rec, size, sources, weights)
     else:
-        size = _size(rec)
         model = _train_core(texts, rec, size, sources=sources, weights=weights)
         model.pop("windows", None)
     bits = _opt(rec, "quant", None)
@@ -425,10 +626,14 @@ def write_inspect(train: Path, model: dict) -> str:
         "# llm",
         "",
         f"class: {model.get('class')}",
-        "arch: decoder",
+        f"arch: {model.get('arch') or 'decoder'}",
         f"objective: {model.get('objective') or 'next-token'}",
         f"causal: {str(bool(model.get('causal', True))).lower()}",
         f"n_pred: {model.get('n_pred')}",
+    ]
+    if model.get("mask_rate") is not None:
+        lines.append(f"mask_rate: {model.get('mask_rate')}")
+    lines += [
         f"layers: {model.get('layers')}",
         f"heads: {model.get('heads')}",
         f"d_model: {model.get('d_model')}",
@@ -495,6 +700,28 @@ def _paged_pages(n_tok: int, page: int) -> int:
     return (max(n_tok, 1) + page - 1) // page
 
 
+def _ce_pairs(logits: list[list[float]], pairs: list[tuple[int, int]]) -> tuple[float, int]:
+    total = 0.0
+    for i, gold in pairs:
+        row = logits[i]
+        mx = max(row)
+        ex = [math.exp(x - mx) for x in row]
+        z = sum(ex) or 1.0
+        total += -math.log(max(ex[gold] / z, 1e-12))
+    return total, len(pairs)
+
+
+def _ce_seq(logits: list[list[float]], tgt: list[int]) -> tuple[float, int]:
+    total = 0.0
+    for i, gold in enumerate(tgt):
+        row = logits[i]
+        mx = max(row)
+        ex = [math.exp(x - mx) for x in row]
+        z = sum(ex) or 1.0
+        total += -math.log(max(ex[gold] / z, 1e-12))
+    return total, len(tgt)
+
+
 def evaluate(model: dict, src: Path, rec: dict) -> tuple[float, int]:
     texts, sources, weights = _docs(src, rec)
     if model.get("mixture"):
@@ -503,6 +730,46 @@ def evaluate(model: dict, src: Path, rec: dict) -> tuple[float, int]:
     ctx = int(model.get("context") or 24)
     seed_i = int(model.get("pack_seed") or _opt(rec, "seed", 1))
     windows, _ = tokenize.pack_ex(texts, tok_spec, ctx, sources, weights, seed_i)
+    obj = str(model.get("objective") or "next-token")
+    if obj == "mlm":
+        names = ["wq", "wk", "wv", "wo", "w1", "w2"]
+        tokv = Var(model["tok"])
+        blks = [{k: Var([row[:] for row in pack[k]]) for k in names} for pack in model["blocks"]]
+        wout = Var(model["wout"])
+        mid = tokenize.special_id(tok_spec, "mask")
+        rate = float(model.get("mask_rate") or 0.3)
+        total = 0.0
+        n = 0
+        for ids in windows:
+            masked, pairs = _mask_pairs(ids, rate, seed_i, mid)
+            logits = _encode_tokens(masked, tokv, blks, wout)
+            t, k = _ce_pairs(logits.data, pairs)
+            total += t
+            n += k
+        if n == 0:
+            raise SystemExit("mlm eval: no masks")
+        return total / n, n
+    if obj == "span":
+        names = ["wq", "wk", "wv", "wo", "w1", "w2"]
+        tokv = Var(model["tok"])
+        enc = [{k: Var([row[:] for row in pack[k]]) for k in names} for pack in model["enc"]]
+        dec = [{k: Var([row[:] for row in pack[k]]) for k in names} for pack in model["dec"]]
+        xq, xk, xv, xo = Var(model["xq"]), Var(model["xk"]), Var(model["xv"]), Var(model["xo"])
+        wout = Var(model["wout"])
+        sid = tokenize.special_id(tok_spec, "span")
+        bos = tokenize.special_id(tok_spec, "bos")
+        eos = tokenize.special_id(tok_spec, "eos")
+        total = 0.0
+        n = 0
+        for ids in windows:
+            enc_in, tin, tgt = _span_corrupt(ids, seed_i, sid, bos, eos)
+            logits = _ed_tokens(enc_in, tin, tokv, enc, dec, xq, xk, xv, xo, wout)
+            t, k = _ce_seq(logits.data, tgt)
+            total += t
+            n += k
+        if n == 0:
+            raise SystemExit("span eval: no tokens")
+        return total / n, n
     tok, blks, wout = _load_float(model)
     total = 0.0
     n = 0
