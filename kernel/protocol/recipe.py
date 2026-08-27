@@ -67,6 +67,9 @@ def load_recipe(train: Path) -> dict:
     if method == "lora":
         if not (data.get("text") or data.get("target")):
             raise SystemExit("recipe.yaml must set data.text (or data.target) for lora")
+    elif method == "llm":
+        if not (data.get("text") or data.get("target")):
+            raise SystemExit("recipe.yaml must set data.text (or data.target) for llm")
     elif method == "transformer":
         arch = str(rec.get("arch") or "decoder").replace("_", "-")
         if arch == "decoder":

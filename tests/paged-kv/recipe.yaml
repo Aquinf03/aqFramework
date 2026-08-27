@@ -1,0 +1,15 @@
+family: llm
+method: llm
+size: slm
+paged_kv: true
+page_size: 4
+steps: 80
+lr: 0.08
+merges: 24
+seed: 1
+data:
+  path: data.jsonl
+  text: text
+eval:
+  metric: loss
+  min_score: 3.5

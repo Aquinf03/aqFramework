@@ -1,0 +1,17 @@
+family: llm
+method: llm
+size: llm
+d_model: 16
+d_ff: 32
+layers: 2
+context: 24
+merges: 24
+steps: 80
+lr: 0.08
+seed: 1
+data:
+  path: data.jsonl
+  text: text
+eval:
+  metric: loss
+  min_score: 2.5
