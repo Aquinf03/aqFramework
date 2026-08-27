@@ -77,6 +77,7 @@ def load_recipe(train: Path) -> dict:
             "full-finetune",
             "full-fine-tune",
             "lora",
+            "qlora",
         ):
             if not (
                 data.get("prompt")

@@ -935,6 +935,7 @@ def _train_lora(
     parent: dict,
     parent_rel: str | None,
     parent_sha: str | None,
+    bits: int | None = None,
 ) -> dict:
     pairs_txt = _sft_pairs(src, rec)
     tok_spec = parent.get("tokenizer")
@@ -951,9 +952,19 @@ def _train_lora(
         raise SystemExit("lora rank must be >= 1")
     ab = alpha / rank
     examples = [_sft_example(p, c, tok_spec, ctx, "completion") for p, c in pairs_txt]
-    tok = Var([row[:] for row in parent["tok"]])
-    wout = Var([row[:] for row in parent["wout"]])
-    blks = _blocks_from(parent, layers)
+    qmeta = None
+    base = parent
+    if bits:
+        q = _quant_model(
+            {"tok": parent["tok"], "wout": parent["wout"], "blocks": parent["blocks"]},
+            bits,
+        )
+        tok_f, blks_f, wout_f = _load_float(q)
+        base = {**parent, "tok": tok_f, "wout": wout_f, "blocks": blks_f}
+        qmeta = {"quant": q["quant"], "tok_q": q["tok_q"], "wout_q": q["wout_q"], "blocks_q": q["blocks_q"]}
+    tok = Var([row[:] for row in base["tok"]])
+    wout = Var([row[:] for row in base["wout"]])
+    blks = _blocks_from(base, layers)
     seed = [int(_opt(rec, "seed", 1))]
     vsz = tokenize.vocab_size(tok_spec)
     A = Var(_rand(d, rank, 0.02, seed))
@@ -975,11 +986,11 @@ def _train_lora(
             total += loss.data[0][0]
             n_pred += len(adj)
         last = total / max(len(examples), 1)
-    return {
+    out = {
         "kind": "llm",
         "class": size,
         "arch": "decoder",
-        "objective": "lora",
+        "objective": "qlora" if bits else "lora",
         "causal": True,
         "loss_on": "completion",
         "frozen": True,
@@ -1005,6 +1016,11 @@ def _train_lora(
         "parent": parent_rel,
         "parent_sha256": parent_sha,
     }
+    if bits:
+        out["quant"] = f"int{bits}"
+        if qmeta:
+            out.update(qmeta)
+    return out
 
 
 def fit(src: Path, rec: dict) -> dict:
@@ -1031,6 +1047,11 @@ def fit(src: Path, rec: dict) -> dict:
         if parent is None:
             raise SystemExit("lora needs init.checkpoint")
         return _train_lora(src, rec, size, parent, parent_rel, parent_sha)
+    if obj == "qlora":
+        if parent is None:
+            raise SystemExit("qlora needs init.checkpoint")
+        bits = int(_opt(rec, "bits", 4))
+        return _train_lora(src, rec, size, parent, parent_rel, parent_sha, bits)
     texts, sources, weights = _docs(src, rec)
     if _opt(rec, "distill", False):
         model = _distill(texts, rec, sources, weights)
@@ -1203,7 +1224,7 @@ def _ce_seq(logits: list[list[float]], tgt: list[int]) -> tuple[float, int]:
 
 def evaluate(model: dict, src: Path, rec: dict) -> tuple[float, int]:
     obj = str(model.get("objective") or "next-token")
-    if obj in ("sft", "full-ft", "lora"):
+    if obj in ("sft", "full-ft", "lora", "qlora"):
         tok_spec = model["tokenizer"]
         ctx = int(model.get("context") or 24)
         names = ["wq", "wk", "wv", "wo", "w1", "w2"]
@@ -1215,7 +1236,7 @@ def evaluate(model: dict, src: Path, rec: dict) -> tuple[float, int]:
         n = 0
         A = B = None
         ab = 1.0
-        if obj == "lora":
+        if obj in ("lora", "qlora"):
             A = Var(model["lora_A"])
             B = Var(model["lora_B"])
             rank = int(model.get("rank") or 1)
@@ -1223,7 +1244,7 @@ def evaluate(model: dict, src: Path, rec: dict) -> tuple[float, int]:
             ab = alpha / rank
         for p, c in _sft_pairs(src, rec):
             seq, pairs = _sft_example(p, c, tok_spec, ctx, loss_on)
-            if obj == "lora" and A is not None and B is not None:
+            if obj in ("lora", "qlora") and A is not None and B is not None:
                 logits = _decode_lora(seq[:-1], tokv, blks, wout, A, B, ab)
             else:
                 logits = _decode(seq[:-1], tokv, blks, wout)
