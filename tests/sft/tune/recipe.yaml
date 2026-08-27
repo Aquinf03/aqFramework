@@ -1,0 +1,16 @@
+family: llm
+method: llm
+size: slm
+objective: sft
+init:
+  checkpoint: ../base/artifacts/checkpoints/last.json
+steps: 40
+lr: 0.05
+seed: 1
+data:
+  path: data.jsonl
+  prompt: prompt
+  completion: completion
+eval:
+  metric: loss
+  min_score: 4

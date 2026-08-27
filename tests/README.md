@@ -20,4 +20,5 @@ Manual end-to-end trains. Not `aq eval` probes. Each folder is a train plus a RE
 - [mtp-pretrain](mtp-pretrain/) — multi-token prediction (t+1, t+2)
 - [fim-pretrain](fim-pretrain/) — fill-in-the-middle (prefix / suffix / middle)
 - [continued-pretrain](continued-pretrain/) — warm-start from a parent checkpoint
+- [sft](sft/) — supervised fine-tune (loss on completion)
 

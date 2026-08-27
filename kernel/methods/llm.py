@@ -67,6 +67,42 @@ def _docs(src: Path, rec: dict) -> tuple[list[str], list[str], dict]:
     return texts, sources, weights
 
 
+def _sft_pairs(src: Path, rec: dict) -> list[tuple[str, str]]:
+    data = rec.get("data") or {}
+    pf = str(data.get("prompt") or data.get("instruction") or "prompt")
+    cf = str(data.get("completion") or data.get("output") or "completion")
+    rows = _rows(src)
+    pairs: list[tuple[str, str]] = []
+    for r in rows:
+        p = str(r.get(pf) or "").strip()
+        c = str(r.get(cf) or "").strip()
+        if p and c:
+            pairs.append((p, c))
+    if not pairs:
+        raise SystemExit("sft: no prompt/completion rows")
+    return pairs
+
+
+def _sft_example(prompt: str, completion: str, tok_spec: dict, ctx: int) -> tuple[list[int], list[tuple[int, int]]]:
+    eos = tokenize.special_id(tok_spec, "eos")
+    p_ids = tokenize.encode(prompt, tok_spec)
+    if p_ids and p_ids[-1] == eos:
+        p_ids = p_ids[:-1]
+    c_ids = tokenize.encode(completion, tok_spec)
+    if not c_ids:
+        raise SystemExit("sft: empty completion tokens")
+    seq = p_ids + c_ids
+    p_len = len(p_ids)
+    if len(seq) > ctx:
+        drop = len(seq) - ctx
+        seq = seq[drop:]
+        p_len = max(p_len - drop, 0)
+    pairs = [(i, seq[i + 1]) for i in range(len(seq) - 1) if i + 1 >= p_len]
+    if not pairs:
+        raise SystemExit("sft: no completion tokens in context")
+    return seq, pairs
+
+
 def _size(rec: dict) -> str:
     s = str(_opt(rec, "size", "llm")).lower()
     if s in ("tiny", "tinyml", "edge"):
@@ -809,8 +845,76 @@ def _train_span(texts: list[str], rec: dict, size: str, sources=None, weights=No
     }
 
 
+def _train_sft(
+    src: Path,
+    rec: dict,
+    size: str,
+    parent: dict,
+    parent_rel: str | None,
+    parent_sha: str | None,
+) -> dict:
+    pairs_txt = _sft_pairs(src, rec)
+    tok_spec = parent.get("tokenizer")
+    if not isinstance(tok_spec, dict):
+        raise SystemExit("sft parent has no tokenizer")
+    d = int(parent.get("d_model") or PRESET[size]["d_model"])
+    dff = int(parent.get("d_ff") or PRESET[size]["d_ff"])
+    layers = int(parent.get("layers") or PRESET[size]["layers"])
+    ctx = int(_opt(rec, "context", parent.get("context") or PRESET[size]["context"]))
+    steps = int(_opt(rec, "steps", 40))
+    lr = float(_opt(rec, "lr", 0.05))
+    examples = [_sft_example(p, c, tok_spec, ctx) for p, c in pairs_txt]
+    tok = Var([row[:] for row in parent["tok"]])
+    wout = Var([row[:] for row in parent["wout"]])
+    blks = _blocks_from(parent, layers)
+    params = [tok, wout]
+    for blk in blks:
+        params.extend(blk.values())
+    last = 0.0
+    n_pred = 0
+    for _ in range(steps):
+        total = 0.0
+        n_pred = 0
+        for seq, pairs in examples:
+            logits = _decode(seq[:-1], tok, blks, wout)
+            # logits[i] predicts seq[i+1]; pairs use indices into full seq
+            adj = [(i, g) for i, g in pairs if i < len(seq) - 1]
+            if not adj:
+                continue
+            loss = nll_at(logits, adj)
+            backward(loss)
+            sgd(params, lr)
+            total += loss.data[0][0]
+            n_pred += len(adj)
+        last = total / max(len(examples), 1)
+    return {
+        "kind": "llm",
+        "class": size,
+        "arch": "decoder",
+        "objective": "sft",
+        "causal": True,
+        "loss_on": "completion",
+        "n_pairs": len(examples),
+        "d_model": d,
+        "d_ff": dff,
+        "layers": layers,
+        "heads": 1,
+        "context": ctx,
+        "train_loss": last,
+        "vocab": tokenize.vocab_size(tok_spec),
+        "tokenizer": tok_spec,
+        "tokenizer_sha256": tokenize.sha256(tok_spec),
+        "tok": tok.data,
+        "wout": wout.data,
+        "blocks": [_pack(b) for b in blks],
+        "n_windows": len(examples),
+        "n_pred": n_pred,
+        "parent": parent_rel,
+        "parent_sha256": parent_sha,
+    }
+
+
 def fit(src: Path, rec: dict) -> dict:
-    texts, sources, weights = _docs(src, rec)
     obj = str(_opt(rec, "objective", "next-token")).lower().replace("_", "-")
     size = _size(rec)
     ckpt = _ckpt_path(src, rec)
@@ -822,6 +926,11 @@ def fit(src: Path, rec: dict) -> dict:
         init = rec.get("init") if isinstance(rec.get("init"), dict) else {}
         parent_rel = str(init.get("checkpoint") or rec.get("from_ckpt"))
         parent_sha, _ = hash_file(ckpt)
+    if obj in ("sft", "supervised", "supervised-finetune"):
+        if parent is None:
+            raise SystemExit("sft needs init.checkpoint")
+        return _train_sft(src, rec, size, parent, parent_rel, parent_sha)
+    texts, sources, weights = _docs(src, rec)
     if _opt(rec, "distill", False):
         model = _distill(texts, rec, sources, weights)
     elif obj in ("mlm", "masked", "masked-lm"):
@@ -892,6 +1001,10 @@ def write_inspect(train: Path, model: dict) -> str:
     if model.get("parent"):
         lines.append(f"parent: {model.get('parent')}")
         lines.append(f"parent_sha256: {model.get('parent_sha256')}")
+    if model.get("loss_on"):
+        lines.append(f"loss_on: {model.get('loss_on')}")
+    if model.get("n_pairs") is not None:
+        lines.append(f"n_pairs: {model.get('n_pairs')}")
     if model.get("mask_rate") is not None:
         lines.append(f"mask_rate: {model.get('mask_rate')}")
     lines += [
@@ -984,6 +1097,25 @@ def _ce_seq(logits: list[list[float]], tgt: list[int]) -> tuple[float, int]:
 
 
 def evaluate(model: dict, src: Path, rec: dict) -> tuple[float, int]:
+    obj = str(model.get("objective") or "next-token")
+    if obj == "sft":
+        tok_spec = model["tokenizer"]
+        ctx = int(model.get("context") or 24)
+        names = ["wq", "wk", "wv", "wo", "w1", "w2"]
+        tokv = Var(model["tok"])
+        blks = [{k: Var([row[:] for row in pack[k]]) for k in names} for pack in model["blocks"]]
+        wout = Var(model["wout"])
+        total = 0.0
+        n = 0
+        for p, c in _sft_pairs(src, rec):
+            seq, pairs = _sft_example(p, c, tok_spec, ctx)
+            logits = _decode(seq[:-1], tokv, blks, wout)
+            t, k = _ce_pairs(logits.data, pairs)
+            total += t
+            n += k
+        if n == 0:
+            raise SystemExit("sft eval: no completion tokens")
+        return total / n, n
     texts, sources, weights = _docs(src, rec)
     if model.get("mixture"):
         weights = model["mixture"]

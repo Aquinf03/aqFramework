@@ -68,7 +68,16 @@ def load_recipe(train: Path) -> dict:
         if not (data.get("text") or data.get("target")):
             raise SystemExit("recipe.yaml must set data.text (or data.target) for lora")
     elif method == "llm":
-        if not (data.get("text") or data.get("target")):
+        obj = str(rec.get("objective") or "next-token").lower().replace("_", "-")
+        if obj in ("sft", "supervised", "supervised-finetune"):
+            if not (
+                data.get("prompt")
+                or data.get("instruction")
+                or data.get("completion")
+                or data.get("output")
+            ):
+                raise SystemExit("sft needs data.prompt and data.completion (or instruction/output)")
+        elif not (data.get("text") or data.get("target")):
             raise SystemExit("recipe.yaml must set data.text (or data.target) for llm")
     elif method == "transformer":
         arch = str(rec.get("arch") or "decoder").replace("_", "-")
