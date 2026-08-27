@@ -6,7 +6,7 @@ import json
 import math
 from pathlib import Path
 
-from methods import bpe
+from methods import tok as tokenize
 from protocol.tokenizer import dump as dump_tokenizer
 from methods.transformer import (
     Var,
@@ -236,9 +236,9 @@ def _train_core(texts: list[str], rec: dict, size: str, layers=None, d=None, dff
     lr = float(_opt(rec, "lr", 0.05))
     merges = int(_opt(rec, "merges", 24))
     seed = [int(_opt(rec, "seed", 1))]
-    tok_spec = bpe.train_bpe(texts, merges)
-    windows = bpe.pack(texts, tok_spec, ctx)
-    vsz = len(tok_spec["itos"])
+    tok_spec = tokenize.train(texts, rec)
+    windows = tokenize.pack(texts, tok_spec, ctx)
+    vsz = tokenize.vocab_size(tok_spec)
     tok = Var(_rand(vsz, d, 0.2, seed))
     blks = [_init_block(d, dff, seed) for _ in range(layers)]
     wout = Var(_rand(d, vsz, 0.2, seed))
@@ -268,7 +268,7 @@ def _train_core(texts: list[str], rec: dict, size: str, layers=None, d=None, dff
         "train_loss": last,
         "vocab": vsz,
         "tokenizer": tok_spec,
-        "tokenizer_sha256": bpe.sha256(tok_spec),
+        "tokenizer_sha256": tokenize.sha256(tok_spec),
         "tok": tok.data,
         "wout": wout.data,
         "blocks": [_pack(b) for b in blks],
@@ -283,7 +283,7 @@ def _distill(texts: list[str], rec: dict) -> dict:
     student = _train_core(texts, rec, "slm")
     tok_spec = teacher["tokenizer"]
     ctx = int(student["context"])
-    windows = bpe.pack(texts, tok_spec, ctx)
+    windows = tokenize.pack(texts, tok_spec, ctx)
     t_tok, t_blks, t_wout = _load_float(teacher)
     d, dff, layers = student["d_model"], student["d_ff"], student["layers"]
     seed = [int(_opt(rec, "seed", 1)) + 7]
@@ -330,7 +330,7 @@ def _distill(texts: list[str], rec: dict) -> dict:
         "train_loss": last,
         "vocab": vsz,
         "tokenizer": tok_spec,
-        "tokenizer_sha256": bpe.sha256(tok_spec),
+        "tokenizer_sha256": tokenize.sha256(tok_spec),
         "tok": tok.data,
         "wout": wout.data,
         "blocks": [_pack(b) for b in blks],
@@ -372,7 +372,7 @@ def fit(src: Path, rec: dict) -> dict:
 
 def write_inspect(train: Path, model: dict) -> str:
     tok = model.get("tokenizer") or {}
-    digest = str(model.get("tokenizer_sha256") or bpe.sha256(tok))
+    digest = str(model.get("tokenizer_sha256") or tokenize.sha256(tok))
     tdir = train / "artifacts"
     tdir.mkdir(parents=True, exist_ok=True)
     dump_tokenizer(train, tok)
@@ -390,7 +390,7 @@ def write_inspect(train: Path, model: dict) -> str:
         f"d_ff: {model.get('d_ff')}",
         f"context: {model.get('context')}",
         f"vocab: {model.get('vocab')}",
-        "tokenizer: bpe",
+        f"tokenizer: {tok.get('kind') or 'bpe'}",
         f"tokenizer_sha256: {digest}",
         f"train_loss: {model.get('train_loss')}",
         f"windows: {model.get('n_windows')}",
@@ -444,7 +444,7 @@ def evaluate(model: dict, src: Path, rec: dict) -> tuple[float, int]:
     texts = _texts_field(src, field)
     tok_spec = model["tokenizer"]
     ctx = int(model.get("context") or 24)
-    windows = bpe.pack(texts, tok_spec, ctx)
+    windows = tokenize.pack(texts, tok_spec, ctx)
     tok, blks, wout = _load_float(model)
     total = 0.0
     n = 0

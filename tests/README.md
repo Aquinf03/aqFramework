@@ -13,4 +13,5 @@ Manual end-to-end trains. Not `aq eval` probes. Each folder is a train plus a RE
 - [gaussian-processes](gaussian-processes/) — RBF posterior mean
 - [transformers](transformers/) — encoder, decoder, encoder-decoder (kernel-owned)
 - [tokenizer-in-train](tokenizer-in-train/) — tokenizer file hashed like weights; eval loads that file
+- [tokenizer-algorithms](tokenizer-algorithms/) — byte, BPE, WordPiece, Unigram
 
