@@ -1,0 +1,15 @@
+family: llm
+method: llm
+size: slm
+objective: continued-pretrain
+init:
+  checkpoint: ../base/artifacts/checkpoints/last.json
+steps: 20
+lr: 0.02
+seed: 1
+data:
+  path: data.jsonl
+  text: text
+eval:
+  metric: loss
+  min_score: 4

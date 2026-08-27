@@ -7,6 +7,7 @@ import math
 from pathlib import Path
 
 from methods import tok as tokenize
+from protocol.revision import hash_file
 from protocol.tokenizer import dump as dump_tokenizer
 from methods.linear import _rows
 from methods.transformer import (
@@ -312,6 +313,30 @@ def _kl(p: list[float], q: list[float]) -> float:
     return sum(pi * (math.log(max(pi, 1e-12)) - math.log(max(qi, 1e-12))) for pi, qi in zip(p, q))
 
 
+def _ckpt_path(src: Path, rec: dict) -> Path | None:
+    init = rec.get("init") if isinstance(rec.get("init"), dict) else {}
+    rel = init.get("checkpoint") or rec.get("from_ckpt")
+    if not rel:
+        return None
+    p = Path(str(rel))
+    if not p.is_absolute():
+        p = (src.parent / p).resolve()
+    if not p.is_file():
+        raise SystemExit(f"init checkpoint not found: {rel} (train the parent first)")
+    return p
+
+
+def _blocks_from(parent: dict, layers: int) -> list[dict]:
+    names = ["wq", "wk", "wv", "wo", "w1", "w2"]
+    packs = parent.get("blocks") or []
+    if len(packs) != layers:
+        raise SystemExit("parent checkpoint layer count does not match")
+    out = []
+    for pack in packs:
+        out.append({k: Var([row[:] for row in pack[k]]) for k in names})
+    return out
+
+
 def _train_core(
     texts: list[str],
     rec: dict,
@@ -322,6 +347,9 @@ def _train_core(
     ctx=None,
     sources: list[str] | None = None,
     weights: dict | None = None,
+    parent: dict | None = None,
+    parent_rel: str | None = None,
+    parent_sha: str | None = None,
 ) -> dict:
     preset = PRESET[size]
     d = int(d if d is not None else _opt(rec, "d_model", preset["d_model"]))
@@ -332,15 +360,33 @@ def _train_core(
     lr = float(_opt(rec, "lr", 0.05))
     merges = int(_opt(rec, "merges", 24))
     seed = [int(_opt(rec, "seed", 1))]
-    tok_spec = tokenize.train(texts, rec)
+    if parent:
+        tok_spec = parent.get("tokenizer")
+        if not isinstance(tok_spec, dict):
+            raise SystemExit("parent checkpoint has no tokenizer")
+        d = int(parent.get("d_model") or d)
+        dff = int(parent.get("d_ff") or dff)
+        layers = int(parent.get("layers") or layers)
+        ctx = int(_opt(rec, "context", parent.get("context") or ctx))
+        if _opt(rec, "lr", None) is None:
+            lr = 0.02
+    else:
+        tok_spec = tokenize.train(texts, rec)
     seed_i = int(_opt(rec, "seed", 1))
     windows, pack_stats = tokenize.pack_ex(
         texts, tok_spec, ctx, sources, weights or None, seed_i
     )
     vsz = tokenize.vocab_size(tok_spec)
-    tok = Var(_rand(vsz, d, 0.2, seed))
-    blks = [_init_block(d, dff, seed) for _ in range(layers)]
-    wout = Var(_rand(d, vsz, 0.2, seed))
+    if parent:
+        tok = Var([row[:] for row in parent["tok"]])
+        wout = Var([row[:] for row in parent["wout"]])
+        blks = _blocks_from(parent, layers)
+        if len(tok.data) != vsz or len(wout.data[0]) != vsz:
+            raise SystemExit("parent vocab does not match tokenizer")
+    else:
+        tok = Var(_rand(vsz, d, 0.2, seed))
+        blks = [_init_block(d, dff, seed) for _ in range(layers)]
+        wout = Var(_rand(d, vsz, 0.2, seed))
     params = [tok, wout]
     for blk in blks:
         params.extend(blk.values())
@@ -359,7 +405,7 @@ def _train_core(
         "kind": "llm",
         "class": size,
         "arch": "decoder",
-        "objective": "next-token",
+        "objective": "continued-pretrain" if parent else "next-token",
         "causal": True,
         "d_model": d,
         "d_ff": dff,
@@ -383,6 +429,14 @@ def _train_core(
         "pack_seed": pack_stats.get("seed"),
         "n_pred": n_pred,
         "windows": windows,
+        **(
+            {
+                "parent": parent_rel,
+                "parent_sha256": parent_sha,
+            }
+            if parent
+            else {}
+        ),
     }
 
 
@@ -759,6 +813,15 @@ def fit(src: Path, rec: dict) -> dict:
     texts, sources, weights = _docs(src, rec)
     obj = str(_opt(rec, "objective", "next-token")).lower().replace("_", "-")
     size = _size(rec)
+    ckpt = _ckpt_path(src, rec)
+    parent = None
+    parent_rel = None
+    parent_sha = None
+    if ckpt is not None:
+        parent = json.loads(ckpt.read_text(encoding="utf-8"))
+        init = rec.get("init") if isinstance(rec.get("init"), dict) else {}
+        parent_rel = str(init.get("checkpoint") or rec.get("from_ckpt"))
+        parent_sha, _ = hash_file(ckpt)
     if _opt(rec, "distill", False):
         model = _distill(texts, rec, sources, weights)
     elif obj in ("mlm", "masked", "masked-lm"):
@@ -769,6 +832,20 @@ def fit(src: Path, rec: dict) -> dict:
         model = _train_mtp(texts, rec, size, sources, weights)
     elif obj in ("fim", "fill-in-the-middle", "fill-in-middle"):
         model = _train_fim(texts, rec, size, sources, weights)
+    elif parent or obj in ("continued-pretrain", "cpt", "continue"):
+        if parent is None:
+            raise SystemExit("continued pretrain needs init.checkpoint")
+        model = _train_core(
+            texts,
+            rec,
+            size,
+            sources=sources,
+            weights=weights,
+            parent=parent,
+            parent_rel=parent_rel,
+            parent_sha=parent_sha,
+        )
+        model.pop("windows", None)
     else:
         model = _train_core(texts, rec, size, sources=sources, weights=weights)
         model.pop("windows", None)
@@ -812,6 +889,9 @@ def write_inspect(train: Path, model: dict) -> str:
         lines.append(f"n_predict: {model.get('n_predict')}")
     if model.get("fim_order"):
         lines.append(f"fim_order: {model.get('fim_order')}")
+    if model.get("parent"):
+        lines.append(f"parent: {model.get('parent')}")
+        lines.append(f"parent_sha256: {model.get('parent_sha256')}")
     if model.get("mask_rate") is not None:
         lines.append(f"mask_rate: {model.get('mask_rate')}")
     lines += [

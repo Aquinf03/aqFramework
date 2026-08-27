@@ -1,0 +1,16 @@
+family: llm
+method: llm
+size: slm
+objective: next-token
+tokenizer: bpe
+merges: 16
+context: 16
+steps: 20
+lr: 0.08
+seed: 1
+data:
+  path: data.jsonl
+  text: text
+eval:
+  metric: loss
+  min_score: 4
