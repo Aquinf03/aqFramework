@@ -11,11 +11,11 @@ import sys
 from pathlib import Path
 
 from protocol.revision import hash_train
-from engine.step import do_checkpoint, do_eval, do_train
+from engine.step import do_checkpoint, do_eval, do_serve, do_train
 
 
 # Invocation only. Spec is recipe.yaml, never this file.
-REQ_KEYS = {"op", "snapshot", "ckpt", "keep", "probe"}
+REQ_KEYS = {"op", "snapshot", "ckpt", "keep", "probe", "prompt", "max_tokens", "temperature"}
 
 
 def dispatch(train: Path, req: dict) -> list[str]:
@@ -29,6 +29,16 @@ def dispatch(train: Path, req: dict) -> list[str]:
         return do_eval(train, req.get("ckpt"), req.get("probe"))
     if op == "checkpoint":
         return do_checkpoint(train, req.get("keep"))
+    if op == "serve":
+        mt = req.get("max_tokens")
+        temp = req.get("temperature")
+        return do_serve(
+            train,
+            req.get("ckpt"),
+            req.get("prompt"),
+            int(mt) if mt is not None else None,
+            float(temp) if temp is not None else None,
+        )
     raise SystemExit(f"unknown op: {op}")
 
 

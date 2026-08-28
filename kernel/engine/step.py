@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Kernel steps: train, eval, checkpoint. Compose them yourself. aq eval scores and pass/fails."""
+"""Kernel steps: train, eval, serve, checkpoint. Compose them yourself. aq eval scores and pass/fails."""
 
 from __future__ import annotations
 
@@ -220,6 +220,55 @@ def do_eval(train: Path, ckpt_name: str | None, probe: str | None = None) -> lis
     if len(probes) > 1 or (probes and probes[0]["path"].startswith("evals/")):
         for p in probes:
             lines.append("  " + p["path"] + "  " + str(p["score"]))
+    return lines
+
+
+def do_serve(
+    train: Path,
+    ckpt_name: str | None,
+    prompt: str | None,
+    max_tokens: int | None,
+    temperature: float | None,
+) -> list[str]:
+    rec = load_recipe(train)
+    ckpt = ckpt_dir(train) / ckpt_name if ckpt_name else last_ckpt(train)
+    if not ckpt.is_file():
+        raise SystemExit(f"no checkpoint: {ckpt.name}")
+    model = json.loads(ckpt.read_text(encoding="utf-8"))
+    pinned = check_tokenizer(train, model)
+    if pinned is not None:
+        model["tokenizer"] = pinned
+    if not prompt:
+        serve = rec.get("serve") if isinstance(rec.get("serve"), dict) else {}
+        prompt = serve.get("prompt")
+    if not prompt:
+        raise SystemExit("serve needs a prompt (argv or recipe serve.prompt)")
+    kind = str(model.get("kind") or rec.get("method") or "linear")
+    mod = load_method(train, kind)
+    if not hasattr(mod, "generate"):
+        raise SystemExit(f"method {kind} has no generate()")
+    out = mod.generate(model, str(prompt), rec, max_tokens=max_tokens, temperature=temperature)
+    out["checkpoint"] = str(ckpt.relative_to(train))
+    write_json(train / "artifacts" / "serve.json", out)
+    rid = update_last_run(
+        train,
+        {
+            "artifacts": {
+                "serve": "artifacts/serve.json",
+                "checkpoint": out["checkpoint"],
+            },
+        },
+    )
+    lines = [
+        "serve",
+        "  " + str(out.get("text") or ""),
+        "  " + out["checkpoint"],
+        "  artifacts/serve.json",
+        "  artifacts/runs/" + rid + ".json",
+    ]
+    if out.get("completion") not in (None, ""):
+        lines.append("  completion: " + str(out.get("completion")))
+    lines.append("  tokens: " + str(out.get("tokens")))
     return lines
 
 

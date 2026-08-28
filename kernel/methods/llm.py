@@ -928,6 +928,135 @@ def _decode_lora(ids: list[int], tok: Var, blks: list[dict], wout: Var, A: Var, 
     return add(matmul(h, wout), scale(matmul(matmul(h, A), B), ab))
 
 
+def _decode_lora_float(
+    ids: list[int], tok, blks, wout, A, B, ab: float
+) -> list[list[float]]:
+    h = _hidden_float(ids, tok, blks)
+    base = _mm(h, wout)
+    delta = _mm(_mm(h, A), B)
+    return _add(base, [[x * ab for x in row] for row in delta])
+
+
+def _pick_token(logits: list[float], temp: float, seed: int | None = None) -> int:
+    if not logits:
+        raise SystemExit("serve: empty logits")
+    if temp <= 0:
+        return max(range(len(logits)), key=lambda j: logits[j])
+    import random
+
+    rng = random.Random(seed)
+    scaled = [x / temp for x in logits]
+    mx = max(scaled)
+    ex = [math.exp(x - mx) for x in scaled]
+    z = sum(ex) or 1.0
+    probs = [e / z for e in ex]
+    r = rng.random()
+    c = 0.0
+    for i, p in enumerate(probs):
+        c += p
+        if r <= c:
+            return i
+    return len(probs) - 1
+
+
+def _serve_opts(rec: dict, max_tokens=None, temperature=None) -> tuple[int, float, int | None]:
+    serve = rec.get("serve") if isinstance(rec.get("serve"), dict) else {}
+    mt = max_tokens
+    if mt is None:
+        mt = serve.get("max_tokens")
+    if mt is None:
+        mt = _opt(rec, "max_tokens", 16)
+    temp = temperature
+    if temp is None:
+        temp = serve.get("temperature")
+    if temp is None:
+        temp = _opt(rec, "temperature", 0)
+    seed = serve.get("seed")
+    if seed is None:
+        seed = _opt(rec, "seed", None)
+    return int(mt), float(temp), (int(seed) if seed is not None else None)
+
+
+def generate(
+    model: dict,
+    prompt: str,
+    rec: dict,
+    max_tokens=None,
+    temperature=None,
+) -> dict:
+    tok_spec = model.get("tokenizer")
+    if not isinstance(tok_spec, dict):
+        raise SystemExit("serve: checkpoint has no tokenizer")
+    ctx = int(model.get("context") or 24)
+    mt, temp, seed = _serve_opts(rec, max_tokens, temperature)
+    if mt < 1:
+        raise SystemExit("serve max_tokens must be >= 1")
+    eos = tokenize.special_id(tok_spec, "eos")
+    prompt = str(prompt)
+    if not prompt.strip():
+        raise SystemExit("serve needs a non-empty prompt")
+    prompt_ids = tokenize.encode(prompt, tok_spec)
+    if prompt_ids and prompt_ids[-1] == eos:
+        prompt_ids = prompt_ids[:-1]
+    if not prompt_ids:
+        raise SystemExit("serve: prompt encodes to no tokens")
+    obj = str(model.get("objective") or "next-token")
+    tok, blks, wout = _load_float(model)
+    lora = None
+    if obj in ("lora", "qlora"):
+        rank = int(model.get("rank") or 1)
+        alpha = float(model.get("alpha") or rank)
+        lora = (model["lora_A"], model["lora_B"], alpha / rank)
+    ids = prompt_ids[:]
+    import random
+
+    rng = random.Random(seed if seed is not None else 0)
+    for step in range(mt):
+        if len(ids) >= ctx:
+            break
+        window = ids[-ctx:] if len(ids) > ctx else ids
+        if lora is not None:
+            A, B, ab = lora
+            logits = _decode_lora_float(window, tok, blks, wout, A, B, ab)
+        else:
+            logits = _decode_float(window, tok, blks, wout)
+        pick_seed = None if seed is None else seed + step + len(ids)
+        if temp > 0 and seed is not None:
+            next_id = _pick_token(logits[-1], temp, pick_seed)
+        elif temp > 0:
+            scaled = [x / temp for x in logits[-1]]
+            mx = max(scaled)
+            ex = [math.exp(x - mx) for x in scaled]
+            z = sum(ex) or 1.0
+            probs = [e / z for e in ex]
+            r = rng.random()
+            c = 0.0
+            next_id = len(probs) - 1
+            for i, p in enumerate(probs):
+                c += p
+                if r <= c:
+                    next_id = i
+                    break
+        else:
+            next_id = _pick_token(logits[-1], 0)
+        if next_id == eos:
+            break
+        ids.append(next_id)
+    completion_ids = ids[len(prompt_ids) :]
+    text = tokenize.decode(ids, tok_spec)
+    completion = tokenize.decode(completion_ids, tok_spec) if completion_ids else ""
+    return {
+        "prompt": prompt,
+        "text": text,
+        "completion": completion,
+        "tokens": len(completion_ids),
+        "max_tokens": mt,
+        "temperature": temp,
+        "objective": obj,
+        "causal": bool(model.get("causal", True)),
+    }
+
+
 def _train_lora(
     src: Path,
     rec: dict,

@@ -311,6 +311,43 @@ def encode(text: str, tok: dict) -> list[int]:
     return _encode_bpe(text, tok)
 
 
+def decode(ids: list[int], tok: dict) -> str:
+    k = str(tok.get("kind") or "bpe")
+    if k == "byte":
+        off = int(tok.get("byte_off") or 2)
+        eos = int(tok.get("eos") or 1)
+        out = bytearray()
+        for i in ids:
+            if i == eos:
+                break
+            if i >= off:
+                out.append(i - off)
+        return out.decode("utf-8", errors="replace")
+    itos = tok.get("itos") or []
+    eos = special_id(tok, "eos")
+    bos = special_id(tok, "bos")
+    skip = {
+        eos,
+        bos,
+        special_id(tok, "unk"),
+        special_id(tok, "mask"),
+        special_id(tok, "span"),
+        special_id(tok, "prefix"),
+        special_id(tok, "suffix"),
+        special_id(tok, "middle"),
+    }
+    parts: list[str] = []
+    for i in ids:
+        if i == eos:
+            break
+        if i < 0 or i >= len(itos):
+            continue
+        if i in skip:
+            continue
+        parts.append(itos[i])
+    return "".join(parts)
+
+
 def _windows(stream: list[int], ctx: int) -> list[list[int]]:
     if len(stream) < 2:
         raise SystemExit("pack: not enough tokens")

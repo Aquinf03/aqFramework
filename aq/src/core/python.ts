@@ -24,6 +24,9 @@ export type KernelReq = {
   ckpt?: string
   keep?: string
   probe?: string
+  prompt?: string
+  max_tokens?: number
+  temperature?: number
 }
 
 export function runKernel(train: string, req: KernelReq): void {
@@ -48,36 +51,62 @@ export function runKernel(train: string, req: KernelReq): void {
   process.stdout.write(lines.join("\n") + (lines.length ? "\n" : ""))
 }
 
+function popFlag(rest: string[], flag: string): { value?: string; rest: string[] } {
+  const idx = rest.indexOf(flag)
+  if (idx < 0) return { rest }
+  const value = rest[idx + 1]
+  if (value === undefined) throw new Error(`usage: missing value after ${flag}`)
+  return {
+    value,
+    rest: rest.filter((_, i) => i !== idx && i !== idx + 1),
+  }
+}
+
 export function kernelStep(step: string, argv: string[]): void {
-  const ckptIdx = argv.indexOf("--ckpt")
-  let ckpt: string | undefined
   let rest = argv
-  if (ckptIdx >= 0) {
-    ckpt = argv[ckptIdx + 1]
-    rest = argv.filter((_, i) => i !== ckptIdx && i !== ckptIdx + 1)
-  }
-  const keepIdx = rest.indexOf("--keep")
-  let keep: string | undefined
-  if (keepIdx >= 0) {
-    keep = rest[keepIdx + 1]
-    rest = rest.filter((_, i) => i !== keepIdx && i !== keepIdx + 1)
-  }
+  const ck = popFlag(rest, "--ckpt")
+  rest = ck.rest
+  const keep = popFlag(rest, "--keep")
+  rest = keep.rest
+  const mt = popFlag(rest, "--max-tokens")
+  rest = mt.rest
+  const temp = popFlag(rest, "--temperature")
+  rest = temp.rest
+
   let train: string
   let probe: string | undefined
+  let prompt: string | undefined
   if (step === "eval" && rest.length === 2) {
     train = assertTrain(rest[0])
     probe = rest[1]
   } else if (step === "eval" && rest.length === 1 && !isTrain(path.resolve(rest[0]))) {
     train = assertTrain(".")
     probe = rest[0]
+  } else if (step === "serve") {
+    if (rest.length === 2) {
+      train = assertTrain(rest[0])
+      prompt = rest[1]
+    } else if (rest.length === 1 && !isTrain(path.resolve(rest[0]))) {
+      train = assertTrain(".")
+      prompt = rest[0]
+    } else if (rest.length === 1) {
+      train = assertTrain(rest[0])
+    } else if (rest.length === 0) {
+      train = assertTrain(".")
+    } else {
+      throw new Error("usage: aq serve [dir] [prompt] [--ckpt name] [--max-tokens n] [--temperature t]")
+    }
   } else if (rest.length > 1) {
     throw new Error(`usage: aq ${step} [dir]`)
   } else {
     train = assertTrain(rest[0] ?? ".")
   }
   const req: KernelReq = { op: step }
-  if (ckpt) req.ckpt = ckpt
-  if (keep) req.keep = keep
+  if (ck.value) req.ckpt = ck.value
+  if (keep.value) req.keep = keep.value
   if (probe) req.probe = probe
+  if (prompt) req.prompt = prompt
+  if (mt.value !== undefined) req.max_tokens = Number(mt.value)
+  if (temp.value !== undefined) req.temperature = Number(temp.value)
   runKernel(train, req)
 }

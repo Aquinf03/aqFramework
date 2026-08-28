@@ -11,3 +11,7 @@ export async function evalCmd(argv: string[]): Promise<void> {
 export async function checkpoint(argv: string[]): Promise<void> {
   kernelStep("checkpoint", argv)
 }
+
+export async function serve(argv: string[]): Promise<void> {
+  kernelStep("serve", argv)
+}

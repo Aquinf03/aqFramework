@@ -24,4 +24,5 @@ Manual end-to-end trains. Not `aq eval` probes. Each folder is a train plus a RE
 - [full-ft](full-ft/) — full fine-tune (loss on all tokens)
 - [lora](lora/) — LoRA (frozen parent, rank adapters)
 - [qlora](qlora/) — QLoRA (4-bit frozen parent + LoRA)
+- [serve-checkpoint](serve-checkpoint/) — generate from a trained checkpoint (`aq serve`)
 

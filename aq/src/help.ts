@@ -31,6 +31,7 @@ export function help(): string {
     "  aq train [dir]          fit; write artifacts/checkpoints/last.json",
     "  aq eval [dir] [name] [--ckpt name]  score evals/<name> (all evals/ if omitted)",
     "  aq checkpoint [dir] [--keep name]  list or copy last to name",
+    "  aq serve [dir] [prompt] [--ckpt name] [--max-tokens n] [--temperature t]",
     "  aq tool [dir] [name] [-- args]  run tools/<name>; no name lists",
     "  aq schedule [dir] | tick | run <name>  sweeps/cron/resume-on-fail",
     "  aq stage [dir] | init <name> | <name> | eval <name>  nested trains",

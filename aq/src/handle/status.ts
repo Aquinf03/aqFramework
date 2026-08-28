@@ -54,6 +54,19 @@ export async function status(argv: string[]): Promise<void> {
     console.log("  " + (e.metric ?? "") + "  " + String(e.score ?? "") + "  " + p)
   } else console.log("  (none)")
 
+  const sv = path.join(train, "artifacts", "serve.json")
+  console.log("serve")
+  if (existsSync(sv)) {
+    const s = JSON.parse(readFileSync(sv, "utf8")) as {
+      text?: string
+      tokens?: number
+      checkpoint?: string
+    }
+    console.log("  " + String(s.text ?? ""))
+    console.log("  tokens: " + String(s.tokens ?? ""))
+    if (s.checkpoint) console.log("  " + s.checkpoint)
+  } else console.log("  (none)")
+
   const slog = path.join(train, "artifacts", "schedules")
   console.log("schedules")
   if (existsSync(slog)) {

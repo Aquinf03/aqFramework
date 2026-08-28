@@ -7,7 +7,7 @@ import { init } from "./handle/init.js"
 import { diffRuns } from "./handle/diff.js"
 import { data } from "./handle/data.js"
 import { job } from "./job/job.js"
-import { checkpoint, evalCmd, train } from "./handle/step.js"
+import { checkpoint, evalCmd, serve, train } from "./handle/step.js"
 import { schedule } from "./handle/schedule.js"
 import { status } from "./handle/status.js"
 import { stage } from "./handle/stage.js"
@@ -78,6 +78,11 @@ async function main(): Promise<void> {
 
   if (cmd === "checkpoint") {
     await checkpoint(argv.slice(1))
+    return
+  }
+
+  if (cmd === "serve") {
+    await serve(argv.slice(1))
     return
   }
 
