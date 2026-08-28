@@ -1,11 +1,24 @@
 #!/usr/bin/env bash
-# Install aq (CLI + bundled kernel).
+# Install aq (CLI + bundled kernel). Use bash: curl … | bash
 set -euo pipefail
 
 INSTALL_DIR="${AQUIN_INSTALL_DIR:-$HOME/.local/share/aquin-framework}"
 BRANCH="${AQUIN_BRANCH:-main}"
 DEFAULT_RELEASE_URL="https://aq.aquin.app/releases/aq-latestv.tar.gz"
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# BASH_SOURCE is unset when the script is piped: curl … | bash
+script_dir() {
+  local src="${BASH_SOURCE[0]:-}"
+  case "$src" in
+    "" | bash | /bin/bash | /usr/bin/bash | sh | /bin/sh) return 0 ;;
+  esac
+  if [ ! -f "$src" ]; then
+    return 0
+  fi
+  cd "$(dirname "$src")" && pwd
+}
+
+SCRIPT_DIR="$(script_dir || true)"
 
 command -v node >/dev/null || { echo "Node.js required (>=18)"; exit 1; }
 command -v npm >/dev/null || { echo "npm required"; exit 1; }
@@ -38,7 +51,11 @@ install_from_release() {
   mkdir -p "$INSTALL_DIR"
   local archive="$INSTALL_DIR/.release.tar.gz"
   echo "Downloading $url ..."
-  curl -fsSL "$url" -o "$archive"
+  if ! curl -fsSL "$url" -o "$archive"; then
+    echo "Download failed: $url" >&2
+    echo "No release yet? Publish from a checkout: ./scripts/release.sh 0.0.1" >&2
+    exit 1
+  fi
   tar xzf "$archive" -C "$INSTALL_DIR" --strip-components=0
   rm -f "$archive"
 
@@ -46,7 +63,7 @@ install_from_release() {
 }
 
 # 1) Run from your checkout: ./install.sh
-if [ -f "$SCRIPT_DIR/aq/package.json" ] && [ -f "$SCRIPT_DIR/aq/kernel/run.py" ]; then
+if [ -n "$SCRIPT_DIR" ] && [ -f "$SCRIPT_DIR/aq/package.json" ] && [ -f "$SCRIPT_DIR/aq/kernel/run.py" ]; then
   install_from_dir "$SCRIPT_DIR"
   exit 0
 fi
