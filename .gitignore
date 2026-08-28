@@ -5,6 +5,9 @@ internals/
 node_modules/
 aq/dist/
 
+# Cloudflare
+.wrangler/
+
 # Virtualenvs
 .venv/
 venv/
