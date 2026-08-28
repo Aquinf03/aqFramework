@@ -12,6 +12,15 @@ const config: Config = {
       fontFamily: {
         sans: ["var(--font-roboto)", "system-ui", "sans-serif"],
         roboto: ["var(--font-roboto)", "system-ui", "sans-serif"],
+        cardo: ["var(--font-cardo)", "serif"],
+        "host-grotesk": ["var(--font-host-grotesk)", "system-ui", "sans-serif"],
+        suisse: [
+          '"Suisse Intl"',
+          '"Suisse International"',
+          "var(--font-roboto)",
+          "system-ui",
+          "sans-serif",
+        ],
       },
     },
   },

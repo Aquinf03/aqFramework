@@ -149,7 +149,7 @@ export default function ProfileChip({ fullWidth, compact }: { fullWidth?: boolea
     "w-full max-w-xs rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-sm text-stone-800 outline-none focus:border-stone-300 focus:bg-white transition-colors";
 
   const stoneChipClass =
-    "inline-flex items-center gap-2 rounded-xl bg-stone-300/40 hover:bg-stone-300/70 border border-stone-300/60 px-3 py-1.5 text-sm font-medium text-stone-700 transition-colors";
+    "inline-flex items-center gap-2 rounded-xl bg-[#d6d3d1]/40 hover:bg-[#d6d3d1]/70 border border-black/15 px-3 py-1.5 text-sm font-medium text-stone-700 transition-colors";
 
   const trigger = compact ? (
     <button
@@ -201,7 +201,9 @@ export default function ProfileChip({ fullWidth, compact }: { fullWidth?: boolea
           className="flex flex-col gap-0 p-0 overflow-hidden w-full max-w-md !rounded-3xl border-4 border-stone-400/60 shadow-2xl sm:max-w-md"
         >
           <DialogHeader className="px-6 pt-5 pb-1">
-            <DialogTitle className="text-base font-semibold text-stone-900">Profile</DialogTitle>
+            <DialogTitle className="text-base font-semibold text-stone-900 font-host-grotesk tracking-[-0.02em]">
+              Profile
+            </DialogTitle>
             <DialogDescription className="text-xs text-stone-400">
               Manage your Aquin account
             </DialogDescription>

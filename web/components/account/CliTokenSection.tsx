@@ -268,7 +268,7 @@ export default function CliTokenSection({ hidden }: { hidden?: boolean }) {
                 <button
                   type="submit"
                   disabled={revealing}
-                  className="inline-flex items-center gap-1 rounded-lg bg-stone-800 px-2.5 py-1 text-[10px] font-semibold text-white hover:bg-stone-900 disabled:opacity-50"
+                  className="inline-flex items-center gap-1 rounded-lg bg-black px-2.5 py-1 text-[10px] font-semibold text-white hover:bg-black/90 disabled:opacity-50"
                 >
                   {revealing ? <Loader2 className="size-3 animate-spin" /> : <KeyRound className="size-3" />}
                   Show token
@@ -309,7 +309,7 @@ export default function CliTokenSection({ hidden }: { hidden?: boolean }) {
             type="button"
             onClick={() => void generateToken()}
             disabled={generating}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-stone-800 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-stone-900 disabled:opacity-50 transition-colors"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-black px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-black/90 disabled:opacity-50 transition-colors"
           >
             {generating ? <Loader2 className="size-3.5 animate-spin" /> : <KeyRound className="size-3.5" />}
             {generating ? "Generating…" : "Generate CLI token"}

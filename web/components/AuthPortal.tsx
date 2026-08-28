@@ -18,6 +18,16 @@ import CliTokenSection from "@/components/account/CliTokenSection";
 import { PipInstallPill } from "@/components/PipInstallPill";
 import ProfileChip from "@/components/account/ProfileChip";
 import { siteConfig } from "@/lib/config";
+import { AquinBrand } from "@/components/ui/AquinBrand";
+import {
+  ghostBtnCls,
+  inputCls,
+  labelCls,
+  messageErrorCls,
+  messageSuccessCls,
+  primaryBtnCls,
+  secondaryBtnCls,
+} from "@/lib/auth-ui";
 
 type AuthStep = "email" | "password" | "signup" | "signup-password" | "ready" | "desktop";
 type DesktopPhase = "minting" | "ready" | "error";
@@ -31,11 +41,6 @@ const ORG_TYPES = [
   "Consulting Firm",
   "Other",
 ] as const;
-
-const inputCls =
-  "w-full px-4 py-3 rounded-xl border border-stone-200 bg-white text-stone-900 placeholder-stone-400 text-sm focus:outline-none focus:ring-2 focus:ring-stone-300 focus:border-transparent transition-all";
-
-const labelCls = "block text-xs font-mono uppercase tracking-widest text-stone-500 mb-2";
 
 function codeFromDeepLink(link: string): string | null {
   try {
@@ -284,7 +289,7 @@ function AuthPortalInner() {
 
   if (authLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-[#f5f5f3]">
         <CircleNotch className="animate-spin h-6 w-6 text-stone-400" weight="bold" />
       </div>
     );
@@ -293,13 +298,10 @@ function AuthPortalInner() {
   const showBrandBar = step !== "ready" && step !== "desktop";
 
   return (
-    <div className="h-screen flex flex-col bg-white overflow-hidden">
+    <div className="h-screen flex flex-col bg-[#f5f5f3] overflow-hidden">
       {showBrandBar && (
         <div className="flex items-center justify-center px-6 py-4 shrink-0">
-          <a href={siteConfig.links.mainSite} className="flex items-center gap-2">
-            <img src="/mainlogo2.png" alt="Aquin" className="h-6" />
-            <span className="font-semibold tracking-tight text-lg text-stone-900">Aquin Labs</span>
-          </a>
+          <AquinBrand size="sm" />
         </div>
       )}
 
@@ -309,13 +311,8 @@ function AuthPortalInner() {
             <div className="space-y-6">
               <div className="flex flex-col items-stretch text-center gap-5">
                 <div>
-                  <a href={siteConfig.links.mainSite} className="inline-flex items-center justify-center gap-2.5 mb-7">
-                    <img src="/mainlogo2.png" alt="Aquin" className="h-8" />
-                    <span className="font-semibold tracking-tight text-xl sm:text-2xl text-stone-900">
-                      Aquin Labs
-                    </span>
-                  </a>
-                  <h2 className="text-2xl font-semibold tracking-tight text-stone-900">You&apos;re signed in</h2>
+                  <AquinBrand size="md" className="justify-center mb-7" />
+                  <h2 className="font-host-grotesk text-2xl font-semibold tracking-[-0.03em] text-stone-900">You&apos;re signed in</h2>
                   <p className="text-sm text-stone-500 mt-2">
                     Use the desktop app for AI and workspaces. CLI still uses a token below.
                   </p>
@@ -325,7 +322,7 @@ function AuthPortalInner() {
 
               <Link
                 href="/?view=desktop"
-                className="w-full flex justify-center items-center gap-2 py-3 px-4 rounded-xl text-sm font-semibold bg-stone-900 text-white hover:bg-stone-800 transition-colors"
+                className={primaryBtnCls + " transition-colors"}
               >
                 Open Aquin Desktop
               </Link>
@@ -340,13 +337,10 @@ function AuthPortalInner() {
 
           {step === "desktop" && user && (
             <div className="space-y-6 text-center">
-              <a href={siteConfig.links.mainSite} className="inline-flex items-center justify-center gap-2.5">
-                <img src="/mainlogo2.png" alt="Aquin" className="h-8" />
-                <span className="font-semibold tracking-tight text-xl text-stone-900">Aquin Labs</span>
-              </a>
+              <AquinBrand size="lg" className="justify-center" />
 
               <div>
-                <h1 className="text-2xl font-semibold tracking-tight text-stone-900">
+                <h1 className="font-host-grotesk text-2xl font-semibold tracking-[-0.03em] text-stone-900">
                   {isCli ? "Sign in for Aquin CLI" : "Sign in for CLI / desktop"}
                 </h1>
                 <p className="text-sm text-stone-500 mt-2">
@@ -365,7 +359,7 @@ function AuthPortalInner() {
               )}
 
               {desktopError && (
-                <p className="text-xs font-mono text-stone-600 border border-stone-200 rounded-xl px-4 py-3 bg-stone-50 text-left">
+                <p className={messageErrorCls + " text-left"}>
                   {desktopError}
                 </p>
               )}
@@ -376,14 +370,14 @@ function AuthPortalInner() {
                     In the terminal where <span className="font-mono text-stone-700">aq login</span> is waiting,
                     paste the code or the full <span className="font-mono">aquin://</span> link.
                   </p>
-                  <div className="rounded-xl border border-stone-200 bg-stone-50 px-3 py-2.5 space-y-2">
+                  <div className="rounded-xl border border-stone-200 bg-white/80 px-3 py-2.5 space-y-2">
                     <p className="text-[10px] font-medium uppercase tracking-wide text-stone-400">Code</p>
                     <p className="text-[11px] font-mono text-stone-800 break-all select-all leading-relaxed">
                       {code}
                     </p>
                     <button
                       type="button"
-                      className="w-full inline-flex items-center justify-center gap-1.5 rounded-lg bg-stone-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-stone-800"
+                      className="w-full inline-flex items-center justify-center gap-1.5 rounded-lg bg-black px-3 py-1.5 text-xs font-medium text-white hover:bg-black/90"
                       onClick={() => void copyText("code", code)}
                     >
                       {copied === "code" ? <Check className="h-3.5 w-3.5" weight="bold" /> : <Copy className="h-3.5 w-3.5" weight="bold" />}
@@ -391,12 +385,12 @@ function AuthPortalInner() {
                     </button>
                   </div>
                   {deepLink && (
-                    <div className="rounded-xl border border-stone-200 bg-stone-50 px-3 py-2.5 space-y-2">
+                    <div className="rounded-xl border border-stone-200 bg-white/80 px-3 py-2.5 space-y-2">
                       <p className="text-[10px] font-medium uppercase tracking-wide text-stone-400">aquin:// link</p>
                       <p className="text-[11px] font-mono text-stone-700 break-all select-all">{deepLink}</p>
                       <button
                         type="button"
-                        className="w-full inline-flex items-center justify-center gap-1.5 rounded-lg border border-stone-300 px-3 py-1.5 text-xs font-medium text-stone-800 hover:bg-stone-100"
+                        className={secondaryBtnCls}
                         onClick={() => void copyText("link", deepLink)}
                       >
                         {copied === "link" ? <Check className="h-3.5 w-3.5" weight="bold" /> : <Copy className="h-3.5 w-3.5" weight="bold" />}
@@ -414,7 +408,7 @@ function AuthPortalInner() {
                     minted.current = false;
                     void mintDesktopCode();
                   }}
-                  className="w-full py-3 px-4 rounded-xl text-sm font-semibold bg-stone-900 text-white hover:bg-stone-800"
+                  className={primaryBtnCls}
                 >
                   Try again
                 </button>
@@ -424,7 +418,7 @@ function AuthPortalInner() {
                 <button
                   type="button"
                   onClick={openDesktop}
-                  className="w-full py-3 px-4 rounded-xl text-sm font-semibold bg-stone-900 text-white hover:bg-stone-800"
+                  className={primaryBtnCls}
                 >
                   Open Aquin Desktop
                 </button>
@@ -434,7 +428,7 @@ function AuthPortalInner() {
                 <button
                   type="button"
                   onClick={openDesktop}
-                  className="w-full py-2.5 px-4 rounded-xl text-xs font-medium border border-stone-200 text-stone-600 hover:bg-stone-50"
+                  className={ghostBtnCls}
                 >
                   Open Aquin Desktop instead
                 </button>
@@ -449,7 +443,7 @@ function AuthPortalInner() {
           {step === "email" && (
             <div className="space-y-7">
               <div>
-                <h1 className="text-3xl font-semibold tracking-tight text-stone-900 leading-tight">
+                <h1 className="font-host-grotesk text-3xl font-semibold tracking-[-0.03em] text-stone-900 leading-tight">
                   {viewDesktop ? "Sign in for Aquin CLI" : "Welcome"}
                 </h1>
                 <p className="text-sm text-stone-500 mt-2">
@@ -475,7 +469,7 @@ function AuthPortalInner() {
                 </div>
 
                 {message && (
-                  <p className="text-xs font-mono text-stone-500 border border-stone-200 rounded-xl px-4 py-3 bg-stone-50">
+                  <p className={messageErrorCls}>
                     {message.text}
                   </p>
                 )}
@@ -483,7 +477,7 @@ function AuthPortalInner() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full flex justify-center items-center gap-2 py-3 px-4 rounded-xl text-sm font-semibold bg-stone-900 text-white hover:bg-stone-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className={primaryBtnCls + " transition-colors"}
                 >
                   {loading ? <CircleNotch className="animate-spin h-4 w-4" weight="bold" /> : null}
                   {loading ? "Checking…" : "Continue"}
@@ -496,7 +490,7 @@ function AuthPortalInner() {
             <div className="space-y-7">
               <div>
                 <p className="text-xs font-mono uppercase tracking-widest text-stone-400 mb-3">Sign in</p>
-                <h1 className="text-3xl font-semibold tracking-tight text-stone-900">Enter password</h1>
+                <h1 className="font-host-grotesk text-3xl font-semibold tracking-[-0.03em] text-stone-900">Enter password</h1>
               </div>
 
               <form className="space-y-3.5" onSubmit={handleSignIn}>
@@ -545,11 +539,7 @@ function AuthPortalInner() {
                 </div>
 
                 {message && (
-                  <p className={`text-xs font-mono border rounded-xl px-4 py-3 ${
-                    message.type === "error"
-                      ? "text-stone-500 border-stone-200 bg-stone-50"
-                      : "text-stone-600 border-stone-200 bg-[#ffee91]/40"
-                  }`}>
+                  <p className={message.type === "error" ? messageErrorCls : messageSuccessCls}>
                     {message.text}
                   </p>
                 )}
@@ -557,7 +547,7 @@ function AuthPortalInner() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full flex justify-center items-center gap-2 py-3 px-4 rounded-xl text-sm font-semibold bg-stone-900 text-white hover:bg-stone-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className={primaryBtnCls + " transition-colors"}
                 >
                   {loading ? <CircleNotch className="animate-spin h-4 w-4" weight="bold" /> : null}
                   {loading ? "Signing in…" : "Sign In"}
@@ -569,7 +559,7 @@ function AuthPortalInner() {
           {step === "signup" && (
             <div className="space-y-7">
               <div>
-                <h1 className="text-3xl font-semibold tracking-tight text-stone-900 leading-tight">Request access</h1>
+                <h1 className="font-host-grotesk text-3xl font-semibold tracking-[-0.03em] text-stone-900 leading-tight">Request access</h1>
                 <p className="text-sm text-stone-500 mt-1.5 leading-relaxed">
                   Tell us a bit about yourself. We review every request personally.
                 </p>
@@ -623,7 +613,7 @@ function AuthPortalInner() {
                   <input id="linkedin" type="url" value={linkedin} onChange={(e) => setLinkedin(e.target.value)} className={inputCls} placeholder="https://linkedin.com/in/yourprofile" />
                 </div>
 
-                <button type="submit" className="w-full flex justify-center items-center gap-2 py-3 px-4 rounded-xl text-sm font-semibold bg-stone-900 text-white hover:bg-stone-800 transition-colors">
+                <button type="submit" className={primaryBtnCls + " transition-colors"}>
                   Continue
                 </button>
               </form>
@@ -634,7 +624,7 @@ function AuthPortalInner() {
             <div className="space-y-7">
               <div>
                 <p className="text-xs font-mono uppercase tracking-widest text-stone-400 mb-3">Almost there</p>
-                <h1 className="text-3xl font-semibold tracking-tight text-stone-900 leading-tight">Secure your spot</h1>
+                <h1 className="font-host-grotesk text-3xl font-semibold tracking-[-0.03em] text-stone-900 leading-tight">Secure your spot</h1>
                 <p className="text-sm text-stone-500 mt-1.5">Set a password for your account.</p>
               </div>
 
@@ -661,11 +651,7 @@ function AuthPortalInner() {
                 </div>
 
                 {message && (
-                  <p className={`text-xs font-mono border rounded-xl px-4 py-3 ${
-                    message.type === "error"
-                      ? "text-stone-500 border-stone-200 bg-stone-50"
-                      : "text-stone-600 border-stone-200 bg-[#ffee91]/40"
-                  }`}>
+                  <p className={message.type === "error" ? messageErrorCls : messageSuccessCls}>
                     {message.text}
                   </p>
                 )}
@@ -673,7 +659,7 @@ function AuthPortalInner() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full flex justify-center items-center gap-2 py-3 px-4 rounded-xl text-sm font-semibold bg-stone-900 text-white hover:bg-stone-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className={primaryBtnCls + " transition-colors"}
                 >
                   {loading ? <CircleNotch className="animate-spin h-4 w-4" weight="bold" /> : null}
                   {loading ? "Submitting…" : "Request Access"}
@@ -701,7 +687,7 @@ export default function AuthPortal() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen flex items-center justify-center">
+        <div className="min-h-screen flex items-center justify-center bg-[#f5f5f3]">
           <CircleNotch className="animate-spin h-6 w-6 text-stone-400" weight="bold" />
         </div>
       }
