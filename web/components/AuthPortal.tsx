@@ -7,15 +7,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Check, CircleNotch, Copy, Eye, EyeSlash } from "@phosphor-icons/react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import CliTokenSection from "@/components/account/CliTokenSection";
-import { PipInstallPill } from "@/components/PipInstallPill";
 import ProfileChip from "@/components/account/ProfileChip";
 import { siteConfig } from "@/lib/config";
 import { AquinBrand } from "@/components/ui/AquinBrand";
@@ -31,16 +23,6 @@ import {
 
 type AuthStep = "email" | "password" | "signup" | "signup-password" | "ready" | "desktop";
 type DesktopPhase = "minting" | "ready" | "error";
-
-const ORG_TYPES = [
-  "ML Engineer / AI Researcher",
-  "Startup or Frontier Lab",
-  "University or Research Group",
-  "Data Collection / Curation Company",
-  "Compliance Vendor or AI Auditor",
-  "Consulting Firm",
-  "Other",
-] as const;
 
 function codeFromDeepLink(link: string): string | null {
   try {
@@ -63,11 +45,6 @@ function AuthPortalInner() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
-  const [orgType, setOrgType] = useState("");
-  const [orgName, setOrgName] = useState("");
-  const [useCase, setUseCase] = useState("");
-  const [twitter, setTwitter] = useState("");
-  const [linkedin, setLinkedin] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "error" | "success"; text: string } | null>(null);
@@ -138,7 +115,7 @@ function AuthPortalInner() {
     try {
       const { data, error } = await supabase
         .from("profiles")
-        .select("email, is_approved")
+        .select("email")
         .eq("email", email)
         .maybeSingle();
       if (error) throw error;
@@ -157,16 +134,15 @@ function AuthPortalInner() {
     try {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
-      let { data: profile } = await supabase
+      const { data: profile } = await supabase
         .from("profiles")
-        .select("is_approved")
+        .select("id")
         .eq("id", data.user.id)
         .maybeSingle();
       if (!profile) {
         await supabase.from("profiles").insert({
           id: data.user.id,
           email: data.user.email!,
-          is_approved: false,
         });
       }
       if (viewDesktop) {
@@ -204,20 +180,8 @@ function AuthPortalInner() {
           email: data.user.email!,
           name: name || null,
           avatar_url: null,
-          is_approved: false,
-          waitlist_role: orgType || null,
-          waitlist_use_case: useCase || null,
-          waitlist_company: orgName || null,
-          waitlist_twitter: twitter || null,
-          waitlist_linkedin: linkedin || null,
         });
         if (profileError) throw profileError;
-
-        fetch("/api/waitlist-notify", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name, email, role: orgType, company: orgName, useCase, twitter, linkedin }),
-        }).catch(console.error);
 
         const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
         if (signInError) throw signInError;
@@ -258,11 +222,6 @@ function AuthPortalInner() {
     setStep("email");
     setPassword("");
     setName("");
-    setOrgType("");
-    setOrgName("");
-    setUseCase("");
-    setTwitter("");
-    setLinkedin("");
     setMessage(null);
   };
 
@@ -326,8 +285,6 @@ function AuthPortalInner() {
               >
                 Open Aquin Desktop
               </Link>
-
-              <PipInstallPill variant="hero" size="md" fullWidth />
 
               <div className="text-left">
                 <CliTokenSection />
@@ -449,7 +406,7 @@ function AuthPortalInner() {
                 <p className="text-sm text-stone-500 mt-2">
                   {viewDesktop
                     ? "Use your aquin.app account, then paste the code into aq login."
-                    : "Enter your email to sign in or request access."}
+                    : "Enter your email to sign in or create an account."}
                 </p>
               </div>
 
@@ -559,9 +516,9 @@ function AuthPortalInner() {
           {step === "signup" && (
             <div className="space-y-7">
               <div>
-                <h1 className="font-host-grotesk text-3xl font-semibold tracking-[-0.03em] text-stone-900 leading-tight">Request access</h1>
+                <h1 className="font-host-grotesk text-3xl font-semibold tracking-[-0.03em] text-stone-900 leading-tight">Create account</h1>
                 <p className="text-sm text-stone-500 mt-1.5 leading-relaxed">
-                  Tell us a bit about yourself. We review every request personally.
+                  Set up your Aquin account to get started.
                 </p>
               </div>
 
@@ -581,38 +538,6 @@ function AuthPortalInner() {
                   <input id="name" type="text" value={name} onChange={(e) => setName(e.target.value)} className={inputCls} placeholder="Jane Smith" autoFocus />
                 </div>
 
-                <div>
-                  <label className={labelCls}>Organisation</label>
-                  <div className="flex gap-2">
-                    <Select value={orgType} onValueChange={setOrgType}>
-                      <SelectTrigger className="h-11.5 rounded-xl border-stone-200 text-sm text-stone-900 bg-white focus:ring-2 focus:ring-stone-300 shrink-0 w-40">
-                        <SelectValue placeholder="Type…" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {ORG_TYPES.map((t) => (
-                          <SelectItem key={t} value={t}>{t}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <input type="text" value={orgName} onChange={(e) => setOrgName(e.target.value)} className={inputCls} placeholder="Name…" />
-                  </div>
-                </div>
-
-                <div>
-                  <label htmlFor="use-case" className={labelCls}>What will you use Aquin for?</label>
-                  <textarea id="use-case" value={useCase} onChange={(e) => setUseCase(e.target.value)} rows={2} className={inputCls + " resize-none"} placeholder="Briefly describe your use case…" />
-                </div>
-
-                <div>
-                  <label htmlFor="twitter" className={labelCls}>X / Twitter URL <span className="normal-case tracking-normal font-sans text-stone-300">(optional)</span></label>
-                  <input id="twitter" type="url" value={twitter} onChange={(e) => setTwitter(e.target.value)} className={inputCls} placeholder="https://x.com/yourhandle" />
-                </div>
-
-                <div>
-                  <label htmlFor="linkedin" className={labelCls}>LinkedIn URL <span className="normal-case tracking-normal font-sans text-stone-300">(optional)</span></label>
-                  <input id="linkedin" type="url" value={linkedin} onChange={(e) => setLinkedin(e.target.value)} className={inputCls} placeholder="https://linkedin.com/in/yourprofile" />
-                </div>
-
                 <button type="submit" className={primaryBtnCls + " transition-colors"}>
                   Continue
                 </button>
@@ -624,8 +549,8 @@ function AuthPortalInner() {
             <div className="space-y-7">
               <div>
                 <p className="text-xs font-mono uppercase tracking-widest text-stone-400 mb-3">Almost there</p>
-                <h1 className="font-host-grotesk text-3xl font-semibold tracking-[-0.03em] text-stone-900 leading-tight">Secure your spot</h1>
-                <p className="text-sm text-stone-500 mt-1.5">Set a password for your account.</p>
+                <h1 className="font-host-grotesk text-3xl font-semibold tracking-[-0.03em] text-stone-900 leading-tight">Choose a password</h1>
+                <p className="text-sm text-stone-500 mt-1.5">Secure your new Aquin account.</p>
               </div>
 
               <form className="space-y-3.5" onSubmit={handleSignUp}>
@@ -662,7 +587,7 @@ function AuthPortalInner() {
                   className={primaryBtnCls + " transition-colors"}
                 >
                   {loading ? <CircleNotch className="animate-spin h-4 w-4" weight="bold" /> : null}
-                  {loading ? "Submitting…" : "Request Access"}
+                  {loading ? "Creating account…" : "Create account"}
                 </button>
 
                 <button type="button" onClick={() => setStep("signup")} className="w-full py-2 text-xs font-mono text-stone-400 hover:text-stone-700 transition-colors">

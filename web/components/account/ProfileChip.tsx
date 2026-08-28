@@ -25,9 +25,6 @@ interface Profile {
   name: string | null;
   avatar_url: string | null;
   email: string;
-  waitlist_role: string | null;
-  waitlist_company: string | null;
-  waitlist_use_case: string | null;
 }
 
 function SettingRow({
@@ -65,7 +62,7 @@ export default function ProfileChip({ fullWidth, compact }: { fullWidth?: boolea
     if (!user?.id) return;
     supabase
       .from("profiles")
-      .select("name, avatar_url, email, waitlist_role, waitlist_company, waitlist_use_case")
+      .select("name, avatar_url, email")
       .eq("id", user.id)
       .single()
       .then(({ data, error }) => {
@@ -76,9 +73,6 @@ export default function ProfileChip({ fullWidth, compact }: { fullWidth?: boolea
             name: null,
             avatar_url: null,
             email: user.email ?? "",
-            waitlist_role: null,
-            waitlist_company: null,
-            waitlist_use_case: null,
           });
           if (error) console.warn("[ProfileChip] profile fetch:", error.message);
         }
@@ -136,7 +130,6 @@ export default function ProfileChip({ fullWidth, compact }: { fullWidth?: boolea
 
   const displayName = profile.name || profile.email.split("@")[0];
   const avatarValue = profile.email || displayName;
-  const hasAbout = !!(profile.waitlist_role || profile.waitlist_company || profile.waitlist_use_case);
 
   const avatarThumb = (size: number) =>
     profile.avatar_url ? (
@@ -287,26 +280,6 @@ export default function ProfileChip({ fullWidth, compact }: { fullWidth?: boolea
                 </a>
               </SettingRow>
             </div>
-
-            {hasAbout && (
-              <div className="rounded-2xl border border-stone-100 bg-stone-50/40 px-4">
-                {profile.waitlist_role && (
-                  <SettingRow id="role" label="Role">
-                    <p className="text-sm text-stone-700">{profile.waitlist_role}</p>
-                  </SettingRow>
-                )}
-                {profile.waitlist_company && (
-                  <SettingRow id="company" label="Company">
-                    <p className="text-sm text-stone-700">{profile.waitlist_company}</p>
-                  </SettingRow>
-                )}
-                {profile.waitlist_use_case && (
-                  <SettingRow id="use-case" label="Use case">
-                    <p className="text-sm text-stone-700 leading-relaxed">{profile.waitlist_use_case}</p>
-                  </SettingRow>
-                )}
-              </div>
-            )}
           </div>
         </DialogContent>
       </Dialog>

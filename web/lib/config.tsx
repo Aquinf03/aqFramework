@@ -6,7 +6,6 @@ export const siteConfig = {
   links: {
     email: "aquin@aquin.app",
     mainSite: "https://www.aquin.app",
-    docs: "https://www.aquin.app/docs",
   },
 };
 

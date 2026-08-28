@@ -7,7 +7,6 @@ const nextConfig: NextConfig = {
   async redirects() {
     return [
       { source: "/login", destination: "/", permanent: false },
-      { source: "/waitlist", destination: "/", permanent: false },
       {
         source: "/auth/desktop",
         destination: "/?view=desktop",
