@@ -43,7 +43,7 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body
         className={cn(
-          `${roboto.variable} ${cardo.variable} ${hostGrotesk.variable} min-h-screen bg-background overflow-x-hidden antialiased w-full mx-auto scroll-smooth font-sans`,
+          `${roboto.variable} ${cardo.variable} ${hostGrotesk.variable} min-h-screen bg-background overflow-x-hidden antialiased w-full mx-auto scroll-smooth font-host-grotesk`,
         )}
       >
         <AuthProvider>{children}</AuthProvider>

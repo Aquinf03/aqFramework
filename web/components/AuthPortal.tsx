@@ -9,11 +9,14 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import CliTokenSection from "@/components/account/CliTokenSection";
 import ProfileChip from "@/components/account/ProfileChip";
-import { siteConfig } from "@/lib/config";
 import { AquinBrand } from "@/components/ui/AquinBrand";
+import { PoliciesDropdown } from "@/components/PoliciesDropdown";
 import {
   ghostBtnCls,
   inputCls,
+  inputShellCls,
+  inputInnerCls,
+  continueInInputBtnCls,
   labelCls,
   messageErrorCls,
   messageSuccessCls,
@@ -254,23 +257,19 @@ function AuthPortalInner() {
     );
   }
 
-  const showBrandBar = step !== "ready" && step !== "desktop";
-
   return (
-    <div className="h-screen flex flex-col bg-[#f5f5f3] overflow-hidden">
-      {showBrandBar && (
-        <div className="flex items-center justify-center px-6 py-4 shrink-0">
-          <AquinBrand size="sm" />
-        </div>
-      )}
+    <div className="relative min-h-screen bg-[#f5f5f3]">
+      <div className="absolute inset-x-0 top-0 z-10 flex items-center justify-start gap-4 px-6 py-4 bg-[#f5f5f3]/95 backdrop-blur-sm">
+        <AquinBrand size="sm" href="/" />
+        <PoliciesDropdown />
+      </div>
 
-      <div className="flex flex-1 items-center justify-center px-4 min-h-0 overflow-y-auto">
-        <div className="w-full max-w-sm py-6">
+      <div className="flex min-h-screen items-center justify-center overflow-y-auto px-4 py-24">
+        <div className="w-full max-w-md">
           {step === "ready" && (
             <div className="space-y-6">
               <div className="flex flex-col items-stretch text-center gap-5">
                 <div>
-                  <AquinBrand size="md" className="justify-center mb-7" />
                   <h2 className="font-host-grotesk text-2xl font-semibold tracking-[-0.03em] text-stone-900">You&apos;re signed in</h2>
                   <p className="text-sm text-stone-500 mt-2">
                     Use the desktop app for AI and workspaces. CLI still uses a token below.
@@ -294,8 +293,6 @@ function AuthPortalInner() {
 
           {step === "desktop" && user && (
             <div className="space-y-6 text-center">
-              <AquinBrand size="lg" className="justify-center" />
-
               <div>
                 <h1 className="font-host-grotesk text-2xl font-semibold tracking-[-0.03em] text-stone-900">
                   {isCli ? "Sign in for Aquin CLI" : "Sign in for CLI / desktop"}
@@ -398,31 +395,40 @@ function AuthPortalInner() {
           )}
 
           {step === "email" && (
-            <div className="space-y-7">
-              <div>
-                <h1 className="font-host-grotesk text-3xl font-semibold tracking-[-0.03em] text-stone-900 leading-tight">
-                  {viewDesktop ? "Sign in for Aquin CLI" : "Welcome"}
-                </h1>
-                <p className="text-sm text-stone-500 mt-2">
-                  {viewDesktop
-                    ? "Use your aquin.app account, then paste the code into aq login."
-                    : "Enter your email to sign in or create an account."}
+            <div className="mx-auto flex w-full max-w-md flex-col items-center space-y-7">
+              <h1 className="font-host-grotesk text-center text-3xl font-semibold tracking-[-0.03em] text-stone-900 leading-tight">
+                {viewDesktop ? "Sign in for Aquin CLI" : "Get Started with aq"}
+              </h1>
+              {viewDesktop && (
+                <p className="text-center text-sm text-stone-500">
+                  Use your aquin.app account, then paste the code into aq login.
                 </p>
-              </div>
+              )}
 
-              <form className="space-y-3.5" onSubmit={checkEmailExists}>
-                <div>
-                  <label htmlFor="email" className={labelCls}>Email</label>
+              <form className="w-full space-y-3.5" onSubmit={checkEmailExists}>
+                <div className={inputShellCls}>
                   <input
                     id="email"
                     type="email"
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className={inputCls}
+                    className={inputInnerCls}
                     placeholder="you@example.com"
+                    aria-label="Email"
                     autoFocus
                   />
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className={continueInInputBtnCls}
+                  >
+                    {loading ? (
+                      <CircleNotch className="size-4 animate-spin" weight="bold" />
+                    ) : (
+                      "Continue"
+                    )}
+                  </button>
                 </div>
 
                 {message && (
@@ -430,15 +436,6 @@ function AuthPortalInner() {
                     {message.text}
                   </p>
                 )}
-
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className={primaryBtnCls + " transition-colors"}
-                >
-                  {loading ? <CircleNotch className="animate-spin h-4 w-4" weight="bold" /> : null}
-                  {loading ? "Checking…" : "Continue"}
-                </button>
               </form>
             </div>
           )}
@@ -446,21 +443,20 @@ function AuthPortalInner() {
           {step === "password" && (
             <div className="space-y-7">
               <div>
-                <p className="text-xs font-mono uppercase tracking-widest text-stone-400 mb-3">Sign in</p>
                 <h1 className="font-host-grotesk text-3xl font-semibold tracking-[-0.03em] text-stone-900">Enter password</h1>
               </div>
 
               <form className="space-y-3.5" onSubmit={handleSignIn}>
                 <div>
-                  <label className={labelCls}>Email</label>
                   <div className="flex items-center gap-2">
                     <input
                       type="email"
                       value={email}
                       disabled
+                      aria-label="Email"
                       className="flex-1 px-4 py-3 rounded-xl border border-stone-200 bg-stone-100 text-stone-500 text-sm"
                     />
-                    <button type="button" onClick={resetForm} className="text-xs font-mono text-stone-500 hover:text-stone-900 whitespace-nowrap transition-colors">
+                    <button type="button" onClick={resetForm} className="text-xs font-host-grotesk text-stone-500 hover:text-stone-900 whitespace-nowrap transition-colors">
                       change
                     </button>
                   </div>
@@ -490,7 +486,7 @@ function AuthPortalInner() {
                 </div>
 
                 <div className="flex justify-end">
-                  <button type="button" onClick={handleForgotPassword} className="text-xs font-mono text-stone-400 hover:text-stone-700 transition-colors">
+                  <button type="button" onClick={handleForgotPassword} className="text-xs font-host-grotesk text-stone-400 hover:text-stone-700 transition-colors">
                     forgot password?
                   </button>
                 </div>
@@ -524,10 +520,9 @@ function AuthPortalInner() {
 
               <form className="space-y-3.5" onSubmit={handleSignupNext}>
                 <div>
-                  <label className={labelCls}>Email</label>
                   <div className="flex items-center gap-2">
-                    <input type="email" value={email} disabled className="flex-1 px-4 py-3 rounded-xl border border-stone-200 bg-stone-100 text-stone-500 text-sm" />
-                    <button type="button" onClick={resetForm} className="text-xs font-mono text-stone-500 hover:text-stone-900 whitespace-nowrap transition-colors">
+                    <input type="email" value={email} disabled aria-label="Email" className="flex-1 px-4 py-3 rounded-xl border border-stone-200 bg-stone-100 text-stone-500 text-sm" />
+                    <button type="button" onClick={resetForm} className="text-xs font-host-grotesk text-stone-500 hover:text-stone-900 whitespace-nowrap transition-colors">
                       change
                     </button>
                   </div>
@@ -548,7 +543,7 @@ function AuthPortalInner() {
           {step === "signup-password" && (
             <div className="space-y-7">
               <div>
-                <p className="text-xs font-mono uppercase tracking-widest text-stone-400 mb-3">Almost there</p>
+                <p className="text-xs font-host-grotesk uppercase tracking-widest text-stone-400 mb-3">Almost there</p>
                 <h1 className="font-host-grotesk text-3xl font-semibold tracking-[-0.03em] text-stone-900 leading-tight">Choose a password</h1>
                 <p className="text-sm text-stone-500 mt-1.5">Secure your new Aquin account.</p>
               </div>
@@ -572,7 +567,7 @@ function AuthPortalInner() {
                       {showPassword ? <EyeSlash className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>
                   </div>
-                  <p className="text-xs font-mono text-stone-400 mt-1.5">min. 6 characters</p>
+                  <p className="text-xs font-host-grotesk text-stone-400 mt-1.5">min. 6 characters</p>
                 </div>
 
                 {message && (
@@ -590,19 +585,13 @@ function AuthPortalInner() {
                   {loading ? "Creating account…" : "Create account"}
                 </button>
 
-                <button type="button" onClick={() => setStep("signup")} className="w-full py-2 text-xs font-mono text-stone-400 hover:text-stone-700 transition-colors">
+                <button type="button" onClick={() => setStep("signup")} className="w-full py-2 text-xs font-host-grotesk text-stone-400 hover:text-stone-700 transition-colors">
                   &larr; back
                 </button>
               </form>
             </div>
           )}
         </div>
-      </div>
-
-      <div className="px-6 py-4 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 shrink-0 text-center">
-        <span className="text-xs font-mono text-stone-400">&copy; {new Date().getFullYear()} Aquin Labs</span>
-        <a href={`${siteConfig.links.mainSite}/privacy-policy`} className="text-xs font-mono text-stone-400 hover:text-stone-700 transition-colors">Privacy</a>
-        <a href={`${siteConfig.links.mainSite}/terms`} className="text-xs font-mono text-stone-400 hover:text-stone-700 transition-colors">Terms</a>
       </div>
     </div>
   );

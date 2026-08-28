@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { Eye, EyeSlash } from "@phosphor-icons/react";
 import { AquinBrand } from "@/components/ui/AquinBrand";
+import { PoliciesDropdown } from "@/components/PoliciesDropdown";
 import {
   inputCls,
   labelCls,
@@ -75,8 +76,9 @@ export default function ResetPasswordPage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-[#f5f5f3]">
-      <div className="flex items-center justify-center px-6 py-4 shrink-0">
+      <div className="flex items-center justify-start gap-4 px-6 py-4 shrink-0 bg-[#f5f5f3]/95 backdrop-blur-sm">
         <AquinBrand size="sm" href="/" />
+        <PoliciesDropdown />
       </div>
 
       <div className="flex flex-1 items-center justify-center px-4 py-8">
