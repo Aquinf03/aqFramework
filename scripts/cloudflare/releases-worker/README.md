@@ -25,13 +25,13 @@ https://aq.aquin.app/framework/install.sh
    npx wrangler deploy
    ```
 
-3. Add a **Worker route** (Workers & Pages → aqfw-releases → Settings → Domains & Routes):
+3. Route is in `wrangler.toml` (`aq.aquin.app/releases/*`). Redeploy after changes:
 
-   ```
-   aq.aquin.app/releases/*
+   ```bash
+   npx wrangler deploy
    ```
 
-   Requests on this path hit R2. Everything else on `aq.aquin.app` stays on your Next auth app.
+   Or add manually: Workers & Pages → aqfw-releases → Settings → Domains & Routes → `aq.aquin.app/releases/*`
 
 4. Optional — **Cloudflare Access** on `/releases/*` so only your team can download. Install script stays public; tarball is gated.
 
