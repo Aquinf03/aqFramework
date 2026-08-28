@@ -1,0 +1,10 @@
+name = "aqfw-releases"
+main = "src/index.ts"
+compatibility_date = "2024-08-01"
+
+[[r2_buckets]]
+binding = "RELEASES"
+bucket_name = "aqfw-releases"
+
+# Add route in Cloudflare dashboard (or uncomment when zone is on this account):
+# routes = [{ pattern = "aq.aquin.app/framework/releases/*", zone_name = "aquin.app" }]

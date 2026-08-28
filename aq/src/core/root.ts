@@ -1,4 +1,4 @@
-/** Package and repo roots. Safe from any file under src/. */
+/** aq package root and bundled kernel path. Safe from any file under src/. */
 
 import { existsSync } from "node:fs"
 import path from "node:path"
@@ -13,10 +13,6 @@ export function aqRoot(): string {
   throw new Error("aq package root not found")
 }
 
-export function repoRoot(): string {
-  return path.dirname(aqRoot())
-}
-
 export function kernelRoot(): string {
-  return path.join(repoRoot(), "kernel")
+  return path.join(aqRoot(), "kernel")
 }

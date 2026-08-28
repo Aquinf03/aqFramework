@@ -9,6 +9,7 @@
   "files": [
     "bin",
     "dist",
+    "kernel",
     "assets"
   ],
   "scripts": {

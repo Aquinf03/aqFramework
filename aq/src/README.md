@@ -12,4 +12,4 @@ agent/          chat, ask, spawn, doctor, provider
 lib/            files, explore, memory, skills, mcp, web, registry
 ```
 
-Kernel lives in `../../kernel`. Templates in `../templates`. Assets in `../assets`.
+Kernel lives in `kernel/` inside this package. Templates in `templates/`. Assets in `assets/`.

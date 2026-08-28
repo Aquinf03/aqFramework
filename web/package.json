@@ -4,6 +4,7 @@
   "private": true,
   "description": "Aquin auth portal — Supabase login, CLI tokens, desktop handoff, and SDK API",
   "scripts": {
+    "prebuild": "mkdir -p public/framework && cp ../install.sh public/framework/install.sh",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
