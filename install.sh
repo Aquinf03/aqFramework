@@ -33,27 +33,23 @@ install_from_dir() {
   cd "$root/aq"
   npm install
   npm link
-  echo ""
   echo "Installed. Run: aq help"
-  echo "Source: $root/aq (kernel in aq/kernel/)"
   if ! command -v aq >/dev/null; then
-    echo ""
-    echo "If aq is not on PATH, add npm's global bin dir:"
+    echo "Add npm's global bin to PATH if needed:"
     echo "  export PATH=\"\$(npm config get prefix)/bin:\$PATH\""
   fi
 }
 
 install_from_release() {
   local url="$1"
-  command -v curl >/dev/null || { echo "curl required for release install"; exit 1; }
-  command -v tar >/dev/null || { echo "tar required for release install"; exit 1; }
+  command -v curl >/dev/null || { echo "curl required." >&2; exit 1; }
+  command -v tar >/dev/null || { echo "tar required." >&2; exit 1; }
 
   mkdir -p "$INSTALL_DIR"
   local archive="$INSTALL_DIR/.release.tar.gz"
-  echo "Downloading $url ..."
-  if ! curl -fsSL "$url" -o "$archive"; then
-    echo "Download failed: $url" >&2
-    echo "No release yet? Publish from a checkout: ./scripts/release.sh 0.0.1" >&2
+  echo "Installing Aquin..."
+  if ! curl -fsSL "$url" -o "$archive" 2>/dev/null; then
+    echo "Install unavailable. Try again later." >&2
     exit 1
   fi
   tar xzf "$archive" -C "$INSTALL_DIR" --strip-components=0

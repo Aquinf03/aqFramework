@@ -30,13 +30,13 @@ tar czf "$ARCHIVE" -C "$ROOT" \
   aq install.sh README.md
 
 REMOTE="$(release_object_name "$VERSION")"
-echo "Uploading r2://${BUCKET}/${REMOTE} ..."
-wrangler r2 object put "${BUCKET}/${REMOTE}" --file="$ARCHIVE" --content-type application/gzip
+echo "Uploading r2://${BUCKET}/${REMOTE} (remote) ..."
+wrangler r2 object put "${BUCKET}/${REMOTE}" --file="$ARCHIVE" --content-type application/gzip --remote
 
 if [ "$VERSION" != "latest" ]; then
   LATEST="$(release_object_name latest)"
   echo "Updating ${LATEST} alias ..."
-  wrangler r2 object put "${BUCKET}/${LATEST}" --file="$ARCHIVE" --content-type application/gzip
+  wrangler r2 object put "${BUCKET}/${LATEST}" --file="$ARCHIVE" --content-type application/gzip --remote
 fi
 
 echo ""
