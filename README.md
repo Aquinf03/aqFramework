@@ -10,7 +10,7 @@ A train is a directory. **aq** is the CLI. The Python kernel ships inside the `a
 curl -fsSL https://aq.aquin.app/framework/install.sh | bash
 ```
 
-Tarballs live in Cloudflare R2; a Worker proxies `https://aq.aquin.app/framework/releases/latest.tar.gz`. See `cloudflare/releases-worker/README.md` to set up the bucket and publish.
+Tarballs live in Cloudflare R2; a Worker proxies `https://aq.aquin.app/framework/releases/latest.tar.gz`. See `scripts/cloudflare/releases-worker/README.md` to set up the bucket and publish.
 
 From a checkout:
 

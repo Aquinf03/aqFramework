@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Build a framework tarball and upload to Cloudflare R2 (aqfw-releases bucket).
-# Requires: wrangler logged in, bucket created (see cloudflare/releases-worker/README.md).
+# Requires: wrangler logged in, bucket created (see scripts/cloudflare/releases-worker/README.md).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

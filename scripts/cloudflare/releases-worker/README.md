@@ -20,7 +20,7 @@ https://aq.aquin.app/framework/install.sh
 2. Deploy the worker:
 
    ```bash
-   cd cloudflare/releases-worker
+   cd scripts/cloudflare/releases-worker
    npm install
    npx wrangler deploy
    ```
