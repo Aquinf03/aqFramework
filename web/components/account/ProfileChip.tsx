@@ -4,22 +4,15 @@ import { useEffect, useRef, useState, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import Avvvatars from "avvvatars-react";
+import { CircleNotch } from "@phosphor-icons/react";
 import {
-  Camera,
-  CircleNotch,
-  Envelope,
-  Check,
-  SignOut,
-  Key,
-} from "@phosphor-icons/react";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { cn } from "@/lib/utils";
+  Popover,
+  PopoverContent,
+  PopoverDescription,
+  PopoverHeader,
+  PopoverTitle,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 
 interface Profile {
   name: string | null;
@@ -27,27 +20,7 @@ interface Profile {
   email: string;
 }
 
-function SettingRow({
-  id,
-  label,
-  children,
-}: {
-  id: string;
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div
-      data-setting-id={id}
-      className="grid grid-cols-[7.5rem_1fr] gap-x-6 items-center py-3.5 border-b border-stone-100 last:border-0"
-    >
-      <span className="text-sm text-stone-500">{label}</span>
-      <div className="min-w-0">{children}</div>
-    </div>
-  );
-}
-
-export default function ProfileChip({ fullWidth, compact }: { fullWidth?: boolean; compact?: boolean }) {
+export default function ProfileChip() {
   const { user } = useAuth();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [open, setOpen] = useState(false);
@@ -57,6 +30,7 @@ export default function ProfileChip({ fullWidth, compact }: { fullWidth?: boolea
   const [tempName, setTempName] = useState("");
   const [savingName, setSavingName] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [avatarFileName, setAvatarFileName] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -83,11 +57,27 @@ export default function ProfileChip({ fullWidth, compact }: { fullWidth?: boolea
     if (profile) setTempName(profile.name || profile.email.split("@")[0]);
   }, [profile]);
 
+  useEffect(() => {
+    if (!profile?.avatar_url) {
+      setAvatarFileName(null);
+      return;
+    }
+    try {
+      const path = new URL(profile.avatar_url).pathname;
+      const saved = path.split("/").pop();
+      setAvatarFileName(saved && saved !== "" ? saved : "avatar");
+    } catch {
+      setAvatarFileName("avatar");
+    }
+  }, [profile?.avatar_url]);
+
   const handleSaveName = async () => {
     if (!tempName.trim() || !user?.id) return;
+    const next = tempName.trim();
+    if (next === (profile?.name || profile?.email.split("@")[0])) return;
     setSavingName(true);
-    const { error } = await supabase.from("profiles").update({ name: tempName.trim() }).eq("id", user.id);
-    if (!error) setProfile(p => (p ? { ...p, name: tempName.trim() } : p));
+    const { error } = await supabase.from("profiles").update({ name: next }).eq("id", user.id);
+    if (!error) setProfile(p => (p ? { ...p, name: next } : p));
     setSavingName(false);
   };
 
@@ -118,6 +108,7 @@ export default function ProfileChip({ fullWidth, compact }: { fullWidth?: boolea
       const publicUrl = `${urlData.publicUrl}?t=${Date.now()}`;
       await supabase.from("profiles").update({ avatar_url: publicUrl }).eq("id", user.id);
       setProfile(p => (p ? { ...p, avatar_url: publicUrl } : p));
+      setAvatarFileName(file.name);
     } catch (err) {
       console.error("[ProfileChip] avatar upload:", err);
     } finally {
@@ -138,151 +129,99 @@ export default function ProfileChip({ fullWidth, compact }: { fullWidth?: boolea
       <Avvvatars value={avatarValue} style="shape" size={size} />
     );
 
-  const inputClass =
-    "w-full max-w-xs rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-sm text-stone-800 outline-none focus:border-stone-300 focus:bg-white transition-colors";
+  const linkTextClass =
+    "text-sm text-stone-600 underline underline-offset-[3px] decoration-stone-300 transition-colors hover:text-stone-900 hover:decoration-stone-500";
 
-  const stoneChipClass =
-    "inline-flex items-center gap-2 rounded-xl bg-[#d6d3d1]/40 hover:bg-[#d6d3d1]/70 border border-black/15 px-3 py-1.5 text-sm font-medium text-stone-700 transition-colors";
-
-  const trigger = compact ? (
-    <button
-      type="button"
-      onClick={() => setOpen(true)}
-      className="size-9 rounded-full overflow-hidden shrink-0 ring-1 ring-stone-300/70 hover:ring-stone-400 transition-shadow"
-      title={displayName}
-    >
-      {avatarThumb(36)}
-    </button>
-  ) : (
-    <div
-      className={cn(
-        "flex items-center min-w-0 rounded-2xl border-2 border-black/10 overflow-hidden",
-        fullWidth && "w-full",
-      )}
-    >
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="flex items-center gap-3 min-w-0 flex-1 px-3 py-2.5 hover:bg-stone-50 transition-colors text-left"
-      >
-        <div className="size-10 rounded-full overflow-hidden shrink-0">{avatarThumb(40)}</div>
-        <div className="min-w-0 flex-1">
-          <span className="block text-base font-medium text-stone-800 leading-tight truncate">{displayName}</span>
-          <span className="block text-xs text-stone-400 leading-tight truncate mt-0.5">{profile.email}</span>
-        </div>
-      </button>
-      <button
-        type="button"
-        onClick={() => void handleSignOut()}
-        className="shrink-0 flex items-center gap-1.5 self-stretch px-3.5 border-l border-black/10 text-xs font-semibold text-stone-500 hover:text-red-700 hover:bg-red-50/80 transition-colors"
-        title="Sign out"
-      >
-        <SignOut className="size-4" />
-        <span className="hidden sm:inline">Sign out</span>
-      </button>
-    </div>
-  );
+  const nameInputClass =
+    "w-full min-w-0 border-0 bg-transparent p-0 text-sm text-stone-600 underline underline-offset-[3px] decoration-stone-300 outline-none transition-colors placeholder:text-stone-400 focus:text-stone-900 focus:decoration-stone-500";
 
   return (
     <>
-      {trigger}
-
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent
-          showCloseButton
-          overlayClassName="bg-stone-900/15 backdrop-blur-[2px]"
-          className="flex flex-col gap-0 p-0 overflow-hidden w-full max-w-md !rounded-3xl border-4 border-stone-400/60 shadow-2xl sm:max-w-md"
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            className="size-9 shrink-0 overflow-hidden rounded-full ring-1 ring-stone-300/70 outline-none transition-shadow hover:ring-stone-400 data-[state=open]:ring-stone-500"
+            title={displayName}
+          >
+            {avatarThumb(36)}
+          </button>
+        </PopoverTrigger>
+        <PopoverContent
+          align="end"
+          side="bottom"
+          sideOffset={8}
+          className="w-[min(calc(100vw-2rem),20rem)] rounded-2xl border-stone-200 bg-white p-0 shadow-xl"
         >
-          <DialogHeader className="px-6 pt-5 pb-1">
-            <DialogTitle className="text-base font-semibold text-stone-900 font-host-grotesk tracking-[-0.02em]">
+          <PopoverHeader className="gap-0.5 px-5 pt-4 pb-2">
+            <PopoverTitle className="text-base font-semibold text-stone-900 font-host-grotesk tracking-[-0.02em]">
               Profile
-            </DialogTitle>
-            <DialogDescription className="text-xs text-stone-400">
+            </PopoverTitle>
+            <PopoverDescription className="text-xs text-stone-400">
               Manage your Aquin account
-            </DialogDescription>
-          </DialogHeader>
+            </PopoverDescription>
+          </PopoverHeader>
 
-          <div className="px-6 pb-6 pt-3 overflow-y-auto no-scrollbar max-h-[min(70vh,560px)] space-y-4">
-            <div className="rounded-2xl border border-stone-100 bg-stone-50/40 px-4">
-              <SettingRow id="avatar" label="Avatar">
-                <div className="flex items-center gap-3">
-                  <div className="relative group shrink-0">
-                    <div className="size-12 rounded-full overflow-hidden ring-1 ring-stone-200">
-                      {avatarThumb(48)}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={uploadingAvatar}
-                      className="absolute inset-0 rounded-full bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity disabled:cursor-not-allowed"
-                    >
-                      {uploadingAvatar ? (
-                        <CircleNotch className="size-4 text-white animate-spin" weight="bold" />
-                      ) : (
-                        <Camera className="size-4 text-white" weight="bold" />
-                      )}
-                    </button>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="text-sm text-stone-500 hover:text-stone-800 transition-colors"
-                  >
-                    Change photo
-                  </button>
-                </div>
-              </SettingRow>
+          <div className="max-h-[min(70vh,560px)] overflow-y-auto px-5 pb-5 pt-2 no-scrollbar">
+            <div className="flex flex-col items-start gap-2.5">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploadingAvatar}
+                className={`${linkTextClass} max-w-full truncate text-left disabled:opacity-50`}
+              >
+                {uploadingAvatar ? (
+                  <span className="inline-flex items-center gap-2">
+                    <CircleNotch className="size-3.5 animate-spin" weight="bold" />
+                    Uploading…
+                  </span>
+                ) : avatarFileName ? (
+                  avatarFileName
+                ) : (
+                  "Change photo"
+                )}
+              </button>
+              <div className="relative w-full">
+                <input
+                  value={tempName}
+                  onChange={e => setTempName(e.target.value)}
+                  onBlur={() => void handleSaveName()}
+                  onKeyDown={e => {
+                    if (e.key === "Enter") {
+                      e.currentTarget.blur();
+                    }
+                  }}
+                  disabled={savingName}
+                  aria-label="Full name"
+                  className={nameInputClass}
+                />
+                {savingName ? (
+                  <CircleNotch
+                    className="absolute right-0 top-1/2 size-3.5 -translate-y-1/2 animate-spin text-stone-400"
+                    weight="bold"
+                  />
+                ) : null}
+              </div>
 
-              <SettingRow id="name" label="Full name">
-                <div className="flex items-center gap-2">
-                  <input value={tempName} onChange={e => setTempName(e.target.value)} className={inputClass} />
-                  <button
-                    type="button"
-                    onClick={() => void handleSaveName()}
-                    disabled={savingName || tempName.trim() === (profile.name || displayName)}
-                    className="shrink-0 p-2 rounded-xl bg-stone-300/40 hover:bg-stone-300/70 border border-stone-300/60 text-stone-500 hover:text-emerald-700 disabled:opacity-40 transition-colors"
-                  >
-                    {savingName ? (
-                      <CircleNotch className="size-4 animate-spin" weight="bold" />
-                    ) : (
-                      <Check className="size-4" />
-                    )}
-                  </button>
-                </div>
-              </SettingRow>
+              <p className={linkTextClass}>{profile.email}</p>
 
-              <SettingRow id="email" label="Email">
-                <p className="text-sm text-stone-700">{profile.email}</p>
-              </SettingRow>
-
-              <SettingRow id="password" label="Password">
-                <button type="button" onClick={() => void handlePasswordReset()} className={stoneChipClass}>
-                  <Key className="size-4 text-stone-600" />
-                  Send reset email
-                </button>
-              </SettingRow>
-
-              <SettingRow id="session" label="Sign out">
-                <button
-                  type="button"
-                  onClick={() => void handleSignOut()}
-                  className={`${stoneChipClass} hover:bg-red-100/60 hover:border-red-200/80 hover:text-red-700`}
-                >
-                  <SignOut className="size-4 text-stone-600" />
-                  Sign out
-                </button>
-              </SettingRow>
-
-              <SettingRow id="contact" label="Contact">
-                <a href="mailto:aquin@aquin.app" className={stoneChipClass}>
-                  <Envelope className="size-4 text-stone-600" />
-                  aquin@aquin.app
-                </a>
-              </SettingRow>
+              <button type="button" onClick={() => void handlePasswordReset()} className={linkTextClass}>
+                Send reset email
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleSignOut()}
+                className={`${linkTextClass} hover:text-red-700 hover:decoration-red-300`}
+              >
+                Sign out
+              </button>
+              <a href="mailto:aquin@aquin.app" className={linkTextClass}>
+                aquin@aquin.app
+              </a>
             </div>
           </div>
-        </DialogContent>
-      </Dialog>
+        </PopoverContent>
+      </Popover>
 
       <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
     </>

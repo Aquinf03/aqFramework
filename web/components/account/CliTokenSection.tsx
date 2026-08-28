@@ -1,7 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { CaretDown } from "@phosphor-icons/react";
 import { Loader2, Copy, Check as CheckIcon, RefreshCw, KeyRound } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface ApiKey {
   id: string;
@@ -15,7 +21,7 @@ interface ApiKey {
 
 const REVEAL_TTL_MS = 60_000;
 
-export default function CliTokenSection({ hidden }: { hidden?: boolean }) {
+function useCliToken(enabled: boolean) {
   const [keys, setKeys] = useState<ApiKey[]>([]);
   const [loading, setLoading] = useState(true);
   const [newKey, setNewKey] = useState<string | null>(null);
@@ -72,9 +78,9 @@ export default function CliTokenSection({ hidden }: { hidden?: boolean }) {
   }, []);
 
   useEffect(() => {
-    if (hidden) return;
+    if (!enabled) return;
     void fetchKeys();
-  }, [fetchKeys, hidden]);
+  }, [fetchKeys, enabled]);
 
   async function generateToken() {
     if (
@@ -151,8 +157,54 @@ export default function CliTokenSection({ hidden }: { hidden?: boolean }) {
     });
   }
 
-  if (hidden) return null;
+  return {
+    keys,
+    loading,
+    newKey,
+    revealedKey,
+    generating,
+    copied,
+    showRevealForm,
+    password,
+    revealing,
+    revealError,
+    fetchError,
+    generateError,
+    generateWarning,
+    setNewKey,
+    setPassword,
+    setRevealError,
+    setShowRevealForm,
+    hideRevealedKey,
+    generateToken,
+    revealToken,
+    copyKey,
+  };
+}
 
+function CliTokenPanel({
+  keys,
+  loading,
+  newKey,
+  revealedKey,
+  generating,
+  copied,
+  showRevealForm,
+  password,
+  revealing,
+  revealError,
+  fetchError,
+  generateError,
+  generateWarning,
+  setNewKey,
+  setPassword,
+  setRevealError,
+  setShowRevealForm,
+  hideRevealedKey,
+  generateToken,
+  revealToken,
+  copyKey,
+}: ReturnType<typeof useCliToken>) {
   const active = keys[0];
   const visibleKey = newKey ?? revealedKey;
 
@@ -318,4 +370,31 @@ export default function CliTokenSection({ hidden }: { hidden?: boolean }) {
       ) : null}
     </div>
   );
+}
+
+export function CliTokenDropdown() {
+  const cli = useCliToken(true);
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger className="inline-flex items-center gap-1 text-sm font-medium font-host-grotesk text-stone-600 outline-none transition-colors hover:text-stone-900 data-[state=open]:text-stone-900">
+        <span>aq-token</span>
+        <CaretDown className="size-3.5 shrink-0" weight="bold" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="end"
+        sideOffset={8}
+        className="w-[min(calc(100vw-2rem),22rem)] rounded-xl border-stone-200 bg-white p-3 shadow-lg"
+        onCloseAutoFocus={e => e.preventDefault()}
+      >
+        <CliTokenPanel {...cli} />
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+export default function CliTokenSection({ hidden }: { hidden?: boolean }) {
+  const cli = useCliToken(!hidden);
+  if (hidden) return null;
+  return <CliTokenPanel {...cli} />;
 }

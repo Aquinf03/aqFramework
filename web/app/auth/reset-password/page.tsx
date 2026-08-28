@@ -4,8 +4,7 @@ import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { Eye, EyeSlash } from "@phosphor-icons/react";
-import { AquinBrand } from "@/components/ui/AquinBrand";
-import { PoliciesDropdown } from "@/components/PoliciesDropdown";
+import { AuthHeader } from "@/components/AuthHeader";
 import {
   inputCls,
   labelCls,
@@ -75,13 +74,10 @@ export default function ResetPasswordPage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#f5f5f3]">
-      <div className="flex items-center justify-start gap-4 px-6 py-4 shrink-0 bg-[#f5f5f3]/95 backdrop-blur-sm">
-        <AquinBrand size="sm" href="/" />
-        <PoliciesDropdown />
-      </div>
+    <div className="relative min-h-screen bg-[#f5f5f3]">
+      <AuthHeader showProfile />
 
-      <div className="flex flex-1 items-center justify-center px-4 py-8">
+      <div className="flex min-h-screen items-center justify-center px-4 py-24">
         <div className="w-full max-w-sm space-y-7">
           <div className="text-center">
             <h1 className="font-host-grotesk text-3xl font-semibold tracking-[-0.03em] text-stone-900">

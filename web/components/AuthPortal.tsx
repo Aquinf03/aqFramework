@@ -7,10 +7,9 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Check, CircleNotch, Copy, Eye, EyeSlash } from "@phosphor-icons/react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import CliTokenSection from "@/components/account/CliTokenSection";
-import ProfileChip from "@/components/account/ProfileChip";
-import { AquinBrand } from "@/components/ui/AquinBrand";
-import { PoliciesDropdown } from "@/components/PoliciesDropdown";
+import { AuthHeader } from "@/components/AuthHeader";
+import { cn } from "@/lib/utils";
+import { firstName, timeGreeting } from "@/lib/greeting";
 import {
   ghostBtnCls,
   inputCls,
@@ -57,6 +56,7 @@ function AuthPortalInner() {
   const [deepLink, setDeepLink] = useState<string | null>(null);
   const [code, setCode] = useState<string | null>(null);
   const [copied, setCopied] = useState<"code" | "link" | null>(null);
+  const [profileName, setProfileName] = useState<string | null>(null);
   const minted = useRef(false);
 
   const desktopQuery = useMemo(() => {
@@ -79,6 +79,25 @@ function AuthPortalInner() {
     }
     setStep("ready");
   }, [user, authLoading, viewDesktop]);
+
+  useEffect(() => {
+    if (!user?.id) {
+      setProfileName(null);
+      return;
+    }
+    void supabase
+      .from("profiles")
+      .select("name")
+      .eq("id", user.id)
+      .maybeSingle()
+      .then(({ data }) => setProfileName(data?.name ?? null));
+  }, [user?.id, supabase]);
+
+  useEffect(() => {
+    if (step !== "password") return;
+    const t = window.setTimeout(() => document.getElementById("password")?.focus(), 320);
+    return () => window.clearTimeout(t);
+  }, [step]);
 
   const mintDesktopCode = useCallback(async () => {
     setDesktopPhase("minting");
@@ -238,17 +257,6 @@ function AuthPortalInner() {
     }
   };
 
-  const openDesktop = () => {
-    if (!deepLink) return;
-    const a = document.createElement("a");
-    a.href = deepLink;
-    a.rel = "noopener noreferrer";
-    a.style.display = "none";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-  };
-
   if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#f5f5f3]">
@@ -259,10 +267,10 @@ function AuthPortalInner() {
 
   return (
     <div className="relative min-h-screen bg-[#f5f5f3]">
-      <div className="absolute inset-x-0 top-0 z-10 flex items-center justify-start gap-4 px-6 py-4 bg-[#f5f5f3]/95 backdrop-blur-sm">
-        <AquinBrand size="sm" href="/" />
-        <PoliciesDropdown />
-      </div>
+      <AuthHeader
+        showProfile={Boolean(user && (step === "ready" || step === "desktop"))}
+        showCliToken={Boolean(user && step === "ready")}
+      />
 
       <div className="flex min-h-screen items-center justify-center overflow-y-auto px-4 py-24">
         <div className="w-full max-w-md">
@@ -270,23 +278,10 @@ function AuthPortalInner() {
             <div className="space-y-6">
               <div className="flex flex-col items-stretch text-center gap-5">
                 <div>
-                  <h2 className="font-host-grotesk text-2xl font-semibold tracking-[-0.03em] text-stone-900">You&apos;re signed in</h2>
-                  <p className="text-sm text-stone-500 mt-2">
-                    Use the desktop app for AI and workspaces. CLI still uses a token below.
-                  </p>
+                  <h2 className="font-host-grotesk text-2xl font-semibold tracking-[-0.03em] text-stone-900">
+                    {timeGreeting()}, {firstName(profileName, user?.email ?? email)}
+                  </h2>
                 </div>
-                <ProfileChip fullWidth />
-              </div>
-
-              <Link
-                href="/?view=desktop"
-                className={primaryBtnCls + " transition-colors"}
-              >
-                Open Aquin Desktop
-              </Link>
-
-              <div className="text-left">
-                <CliTokenSection />
               </div>
             </div>
           )}
@@ -303,8 +298,6 @@ function AuthPortalInner() {
                     : "Copy the code for the CLI, or open the desktop app with the button below."}
                 </p>
               </div>
-
-              <ProfileChip fullWidth />
 
               {desktopPhase === "minting" && (
                 <div className="flex justify-center py-2">
@@ -368,25 +361,6 @@ function AuthPortalInner() {
                 </button>
               )}
 
-              {desktopPhase === "ready" && deepLink && !isCli && (
-                <button
-                  type="button"
-                  onClick={openDesktop}
-                  className={primaryBtnCls}
-                >
-                  Open Aquin Desktop
-                </button>
-              )}
-
-              {desktopPhase === "ready" && deepLink && isCli && (
-                <button
-                  type="button"
-                  onClick={openDesktop}
-                  className={ghostBtnCls}
-                >
-                  Open Aquin Desktop instead
-                </button>
-              )}
 
               <Link href="/" className="block text-xs text-stone-400 hover:text-stone-600">
                 &larr; Back to account
@@ -394,101 +368,141 @@ function AuthPortalInner() {
             </div>
           )}
 
-          {step === "email" && (
-            <div className="mx-auto flex w-full max-w-md flex-col items-center space-y-7">
-              <h1 className="font-host-grotesk text-center text-3xl font-semibold tracking-[-0.03em] text-stone-900 leading-tight">
-                {viewDesktop ? "Sign in for Aquin CLI" : "Get Started with aq"}
-              </h1>
-              {viewDesktop && (
-                <p className="text-center text-sm text-stone-500">
+          {(step === "email" || step === "password") && (
+            <div className="mx-auto flex w-full max-w-md flex-col items-center">
+              <div className="relative mb-7 h-10 w-full">
+                <h1
+                  className={cn(
+                    "font-host-grotesk absolute inset-x-0 top-0 text-center text-3xl font-semibold tracking-[-0.03em] text-stone-900 leading-tight transition-all duration-500 ease-out",
+                    step === "email"
+                      ? "translate-y-0 opacity-100"
+                      : "pointer-events-none -translate-y-2 opacity-0",
+                  )}
+                >
+                  {viewDesktop ? "Sign in for Aquin CLI" : "Get Started with aq"}
+                </h1>
+                <h1
+                  className={cn(
+                    "font-host-grotesk absolute inset-x-0 top-0 text-center text-3xl font-semibold tracking-[-0.03em] text-stone-900 leading-tight transition-all duration-500 ease-out",
+                    step === "password"
+                      ? "translate-y-0 opacity-100"
+                      : "pointer-events-none translate-y-2 opacity-0",
+                  )}
+                >
+                  Enter password
+                </h1>
+              </div>
+
+              {viewDesktop && step === "email" && (
+                <p className="mb-7 text-center text-sm text-stone-500">
                   Use your aquin.app account, then paste the code into aq login.
                 </p>
               )}
 
-              <form className="w-full space-y-3.5" onSubmit={checkEmailExists}>
+              <form
+                className="w-full space-y-3.5"
+                onSubmit={step === "email" ? checkEmailExists : handleSignIn}
+              >
                 <div className={inputShellCls}>
                   <input
                     id="email"
                     type="email"
-                    required
+                    required={step === "email"}
+                    readOnly={step === "password"}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className={inputInnerCls}
+                    className={cn(
+                      inputInnerCls,
+                      step === "password" && "cursor-default text-stone-500",
+                    )}
                     placeholder="you@example.com"
                     aria-label="Email"
-                    autoFocus
+                    autoFocus={step === "email"}
+                    tabIndex={step === "password" ? -1 : 0}
                   />
                   <button
                     type="submit"
                     disabled={loading}
-                    className={continueInInputBtnCls}
+                    aria-hidden={step === "password"}
+                    className={cn(
+                      continueInInputBtnCls,
+                      "overflow-hidden transition-all duration-500 ease-out",
+                      step === "email"
+                        ? "max-w-[8.5rem] translate-x-0 opacity-100"
+                        : "pointer-events-none max-w-0 px-0 opacity-0",
+                    )}
                   >
-                    {loading ? (
+                    {loading && step === "email" ? (
                       <CircleNotch className="size-4 animate-spin" weight="bold" />
                     ) : (
                       "Continue"
                     )}
                   </button>
-                </div>
-
-                {message && (
-                  <p className={messageErrorCls}>
-                    {message.text}
-                  </p>
-                )}
-              </form>
-            </div>
-          )}
-
-          {step === "password" && (
-            <div className="space-y-7">
-              <div>
-                <h1 className="font-host-grotesk text-3xl font-semibold tracking-[-0.03em] text-stone-900">Enter password</h1>
-              </div>
-
-              <form className="space-y-3.5" onSubmit={handleSignIn}>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="email"
-                      value={email}
-                      disabled
-                      aria-label="Email"
-                      className="flex-1 px-4 py-3 rounded-xl border border-stone-200 bg-stone-100 text-stone-500 text-sm"
-                    />
-                    <button type="button" onClick={resetForm} className="text-xs font-host-grotesk text-stone-500 hover:text-stone-900 whitespace-nowrap transition-colors">
-                      change
-                    </button>
-                  </div>
-                </div>
-
-                <div>
-                  <label htmlFor="password" className={labelCls}>Password</label>
-                  <div className="relative">
-                    <input
-                      id="password"
-                      type={showPassword ? "text" : "password"}
-                      required
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className={inputCls + " pr-12"}
-                      placeholder="••••••••"
-                      autoFocus
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute inset-y-0 right-0 pr-4 flex items-center text-stone-400 hover:text-stone-700 transition-colors"
-                    >
-                      {showPassword ? <EyeSlash className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
-                  </div>
-                </div>
-
-                <div className="flex justify-end">
-                  <button type="button" onClick={handleForgotPassword} className="text-xs font-host-grotesk text-stone-400 hover:text-stone-700 transition-colors">
-                    forgot password?
+                  <button
+                    type="button"
+                    onClick={resetForm}
+                    aria-hidden={step === "email"}
+                    className={cn(
+                      "shrink-0 overflow-hidden whitespace-nowrap text-xs font-host-grotesk text-stone-500 transition-all duration-500 ease-out hover:text-stone-900",
+                      step === "password"
+                        ? "max-w-[4rem] translate-x-0 pr-1 opacity-100"
+                        : "pointer-events-none max-w-0 opacity-0",
+                    )}
+                  >
+                    change
                   </button>
+                </div>
+
+                <div
+                  className={cn(
+                    "grid transition-[grid-template-rows,opacity,margin-top] duration-500 ease-out",
+                    step === "password"
+                      ? "mt-3.5 grid-rows-[1fr] opacity-100"
+                      : "mt-0 grid-rows-[0fr] opacity-0",
+                  )}
+                >
+                  <div className="min-h-0 space-y-3.5 overflow-hidden">
+                    <div className="relative">
+                      <input
+                        id="password"
+                        type={showPassword ? "text" : "password"}
+                        required={step === "password"}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className={inputCls + " pr-12"}
+                        placeholder="••••••••"
+                        tabIndex={step === "password" ? 0 : -1}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute inset-y-0 right-0 flex items-center pr-4 text-stone-400 transition-colors hover:text-stone-700"
+                      >
+                        {showPassword ? <EyeSlash className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        onClick={handleForgotPassword}
+                        className="text-xs font-host-grotesk text-stone-400 transition-colors hover:text-stone-700"
+                      >
+                        forgot password?
+                      </button>
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className={primaryBtnCls + " transition-colors"}
+                    >
+                      {loading && step === "password" ? (
+                        <CircleNotch className="animate-spin h-4 w-4" weight="bold" />
+                      ) : null}
+                      {loading && step === "password" ? "Signing in…" : "Sign In"}
+                    </button>
+                  </div>
                 </div>
 
                 {message && (
@@ -496,15 +510,6 @@ function AuthPortalInner() {
                     {message.text}
                   </p>
                 )}
-
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className={primaryBtnCls + " transition-colors"}
-                >
-                  {loading ? <CircleNotch className="animate-spin h-4 w-4" weight="bold" /> : null}
-                  {loading ? "Signing in…" : "Sign In"}
-                </button>
               </form>
             </div>
           )}
