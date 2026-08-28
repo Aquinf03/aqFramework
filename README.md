@@ -1,4 +1,4 @@
-# Aquin
+# Aquin Framework
 
 A train is a directory. **aq** is the CLI.
 
