@@ -1,6 +1,6 @@
-/** Proxy /framework/releases/* on aq.aquin.app → R2 bucket aqfw-releases. */
+/** Proxy /releases/* on aq.aquin.app → R2 bucket aqfw-releases. */
 
-const PREFIX = "/framework/releases/";
+const PREFIX = "/releases/";
 
 export interface Env {
   RELEASES: R2Bucket;

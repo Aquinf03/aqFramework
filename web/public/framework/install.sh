@@ -4,7 +4,7 @@ set -euo pipefail
 
 INSTALL_DIR="${AQUIN_INSTALL_DIR:-$HOME/.local/share/aquin-framework}"
 BRANCH="${AQUIN_BRANCH:-main}"
-DEFAULT_RELEASE_URL="https://aq.aquin.app/framework/releases/latest.tar.gz"
+DEFAULT_RELEASE_URL="https://aq.aquin.app/releases/aq-latestv.tar.gz"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 command -v node >/dev/null || { echo "Node.js required (>=18)"; exit 1; }
@@ -85,9 +85,3 @@ echo "  AQUIN_SOURCE=/path/to/aqfw ./install.sh" >&2
 echo "  AQUIN_REPO=<git-url> ./install.sh" >&2
 echo "  curl -fsSL https://aq.aquin.app/framework/install.sh | bash" >&2
 exit 1
-
-if ! command -v aq >/dev/null; then
-  echo ""
-  echo "If aq is not on PATH, add npm's global bin dir:"
-  echo "  export PATH=\"\$(npm config get prefix)/bin:\$PATH\""
-fi

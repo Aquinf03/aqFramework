@@ -7,13 +7,17 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VERSION="${1:-latest}"
 BUCKET="${AQUIN_R2_BUCKET:-aqfw-releases}"
 
+release_object_name() {
+  echo "aq-${1}v.tar.gz"
+}
+
 command -v wrangler >/dev/null || {
   echo "wrangler CLI required: npm i -g wrangler && wrangler login" >&2
   exit 1
 }
 
 TMP="$(mktemp -d)"
-ARCHIVE="$TMP/aqfw-${VERSION}.tar.gz"
+ARCHIVE="$TMP/$(release_object_name "$VERSION")"
 trap 'rm -rf "$TMP"' EXIT
 
 echo "Building aq (TypeScript) ..."
@@ -25,19 +29,20 @@ tar czf "$ARCHIVE" -C "$ROOT" \
   --exclude='.git' \
   aq install.sh README.md
 
-REMOTE="${VERSION}.tar.gz"
+REMOTE="$(release_object_name "$VERSION")"
 echo "Uploading r2://${BUCKET}/${REMOTE} ..."
 wrangler r2 object put "${BUCKET}/${REMOTE}" --file="$ARCHIVE" --content-type application/gzip
 
 if [ "$VERSION" != "latest" ]; then
-  echo "Updating latest.tar.gz alias ..."
-  wrangler r2 object put "${BUCKET}/latest.tar.gz" --file="$ARCHIVE" --content-type application/gzip
+  LATEST="$(release_object_name latest)"
+  echo "Updating ${LATEST} alias ..."
+  wrangler r2 object put "${BUCKET}/${LATEST}" --file="$ARCHIVE" --content-type application/gzip
 fi
 
 echo ""
 echo "Published:"
 echo "  R2:  ${BUCKET}/${REMOTE}"
-echo "  URL: https://aq.aquin.app/framework/releases/${VERSION}.tar.gz"
+echo "  URL: https://aq.aquin.app/releases/${REMOTE}"
 if [ "$VERSION" != "latest" ]; then
-  echo "  URL: https://aq.aquin.app/framework/releases/latest.tar.gz"
+  echo "  URL: https://aq.aquin.app/releases/$(release_object_name latest)"
 fi

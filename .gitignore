@@ -1,5 +1,5 @@
 # Local only. Not on the remote.
-docs/
+internals/
 
 # Node
 node_modules/

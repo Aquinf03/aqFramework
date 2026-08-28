@@ -4,7 +4,7 @@ set -euo pipefail
 
 INSTALL_DIR="${AQUIN_INSTALL_DIR:-$HOME/.local/share/aquin-framework}"
 BRANCH="${AQUIN_BRANCH:-main}"
-DEFAULT_RELEASE_URL="https://aq.aquin.app/framework/releases/latest.tar.gz"
+DEFAULT_RELEASE_URL="https://aq.aquin.app/releases/aq-latestv.tar.gz"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 command -v node >/dev/null || { echo "Node.js required (>=18)"; exit 1; }
