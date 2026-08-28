@@ -8,7 +8,7 @@ export async function GET(req: NextRequest) {
 
   const { data: profile } = await supabaseService
     .from("profiles")
-    .select("email, name, avatar_url")
+    .select("email, name, username, avatar_url")
     .eq("id", auth.userId)
     .single();
 
@@ -16,6 +16,7 @@ export async function GET(req: NextRequest) {
     user_id: auth.userId,
     email: profile?.email ?? null,
     name: profile?.name ?? null,
+    username: profile?.username ?? null,
     avatar_url: profile?.avatar_url ?? null,
   });
 }

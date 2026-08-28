@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useMemo } from "react";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import Avvvatars from "avvvatars-react";
@@ -13,11 +14,34 @@ import {
   PopoverTitle,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { userProfileHref, userProfilePath, validateUsername } from "@/lib/username";
 
 interface Profile {
   name: string | null;
+  username: string | null;
   avatar_url: string | null;
   email: string;
+}
+
+function ProfileUrlLink({
+  username,
+  className,
+  onNavigate,
+}: {
+  username: string;
+  className: string;
+  onNavigate: () => void;
+}) {
+  const [label, setLabel] = useState(userProfilePath(username));
+  useEffect(() => {
+    setLabel(userProfileHref(username, window.location.origin));
+  }, [username]);
+
+  return (
+    <Link href={userProfilePath(username)} className={className} onClick={onNavigate}>
+      {label}
+    </Link>
+  );
 }
 
 export default function ProfileChip() {
@@ -28,7 +52,10 @@ export default function ProfileChip() {
   const supabase = useMemo(() => createClient(), []);
 
   const [tempName, setTempName] = useState("");
+  const [tempUsername, setTempUsername] = useState("");
   const [savingName, setSavingName] = useState(false);
+  const [savingUsername, setSavingUsername] = useState(false);
+  const [usernameError, setUsernameError] = useState<string | null>(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [avatarFileName, setAvatarFileName] = useState<string | null>(null);
 
@@ -36,7 +63,7 @@ export default function ProfileChip() {
     if (!user?.id) return;
     supabase
       .from("profiles")
-      .select("name, avatar_url, email")
+      .select("name, username, avatar_url, email")
       .eq("id", user.id)
       .single()
       .then(({ data, error }) => {
@@ -45,6 +72,7 @@ export default function ProfileChip() {
         } else {
           setProfile({
             name: null,
+            username: null,
             avatar_url: null,
             email: user.email ?? "",
           });
@@ -54,7 +82,11 @@ export default function ProfileChip() {
   }, [user?.id, supabase, user?.email]);
 
   useEffect(() => {
-    if (profile) setTempName(profile.name || profile.email.split("@")[0]);
+    if (profile) {
+      setTempName(profile.name || profile.email.split("@")[0]);
+      setTempUsername(profile.username || "");
+      setUsernameError(null);
+    }
   }, [profile]);
 
   useEffect(() => {
@@ -79,6 +111,47 @@ export default function ProfileChip() {
     const { error } = await supabase.from("profiles").update({ name: next }).eq("id", user.id);
     if (!error) setProfile(p => (p ? { ...p, name: next } : p));
     setSavingName(false);
+  };
+
+  const handleSaveUsername = async () => {
+    if (!user?.id) return;
+    const raw = tempUsername.trim();
+
+    if (!raw) {
+      if (!profile?.username) return;
+    } else {
+      const checked = validateUsername(raw);
+      if (!checked.ok) {
+        setUsernameError(checked.error);
+        setTempUsername(profile?.username || "");
+        return;
+      }
+      if (checked.username === profile?.username) return;
+    }
+
+    setSavingUsername(true);
+    setUsernameError(null);
+    try {
+      const res = await fetch("/api/account/username", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: raw }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setUsernameError(typeof data.error === "string" ? data.error : "Could not save username.");
+        setTempUsername(profile?.username || "");
+        return;
+      }
+      const next = typeof data.username === "string" ? data.username : null;
+      setProfile(p => (p ? { ...p, username: next } : p));
+      setTempUsername(next || "");
+    } catch {
+      setUsernameError("Could not save username.");
+      setTempUsername(profile?.username || "");
+    } finally {
+      setSavingUsername(false);
+    }
   };
 
   const handlePasswordReset = async () => {
@@ -202,6 +275,42 @@ export default function ProfileChip() {
                   />
                 ) : null}
               </div>
+
+              <div className="relative w-full">
+                <div className="flex items-baseline gap-0.5">
+                  <span className="shrink-0 text-sm text-stone-400">@</span>
+                  <input
+                    value={tempUsername}
+                    onChange={e => {
+                      setTempUsername(e.target.value.toLowerCase());
+                      setUsernameError(null);
+                    }}
+                    onBlur={() => void handleSaveUsername()}
+                    onKeyDown={e => {
+                      if (e.key === "Enter") {
+                        e.currentTarget.blur();
+                      }
+                    }}
+                    disabled={savingUsername}
+                    aria-label="Username"
+                    placeholder="username"
+                    className={nameInputClass}
+                  />
+                </div>
+                {savingUsername ? (
+                  <CircleNotch
+                    className="absolute right-0 top-1/2 size-3.5 -translate-y-1/2 animate-spin text-stone-400"
+                    weight="bold"
+                  />
+                ) : null}
+                {usernameError ? (
+                  <p className="mt-1 text-[11px] text-red-600">{usernameError}</p>
+                ) : null}
+              </div>
+
+              {profile.username ? (
+                <ProfileUrlLink username={profile.username} className={linkTextClass} onNavigate={() => setOpen(false)} />
+              ) : null}
 
               <p className={linkTextClass}>{profile.email}</p>
 

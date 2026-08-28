@@ -8,7 +8,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "backfill:usernames": "tsx --env-file=.env scripts/backfill-usernames.ts"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",

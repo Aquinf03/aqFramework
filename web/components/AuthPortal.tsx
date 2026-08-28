@@ -207,6 +207,7 @@ function AuthPortalInner() {
 
         const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
         if (signInError) throw signInError;
+        await fetch("/api/account/username/allocate", { method: "POST" }).catch(() => null);
         if (viewDesktop) {
           router.replace(desktopQuery);
           return;
