@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { spawnSync } from "node:child_process"
 import path from "node:path"
 import { assertTrain, isTrain } from "./schema.js"
@@ -8,6 +8,8 @@ const kernelDir = kernelRoot()
 const runPy = path.join(kernelDir, "run.py")
 
 export function pythonBin(): string {
+  const venvPy = path.join(kernelRoot(), ".venv", "bin", "python")
+  if (existsSync(venvPy)) return venvPy
   for (const bin of ["python3", "python"]) {
     const r = spawnSync(bin, ["-c", "import sys; print(sys.executable)"], {
       encoding: "utf8",

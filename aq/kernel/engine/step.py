@@ -89,7 +89,7 @@ def do_train(train: Path) -> list[str]:
             assert_no_leak(train, rec)
             aq_metrics.event("guard.leak", ok=True)
         mod = load_method(train, str(method))
-        model = call_fit(mod, src, rec)
+        model = call_fit(mod, src, rec, train=train)
         if not isinstance(model, dict):
             raise SystemExit("fit() must return a dict")
         model.setdefault("kind", str(method))
@@ -179,9 +179,10 @@ def score(metric: str, y_true: list, y_hat: list) -> float:
 def _score_file(train: Path, rec: dict, model: dict, src: Path) -> tuple[str, float, int]:
     kind = str(model.get("kind") or rec.get("method") or "linear")
     mod = load_method(train, kind)
-    if hasattr(mod, "evaluate") and not hasattr(mod, "predict"):
-        metric = str((rec.get("eval") or {}).get("metric") or "loss")
-        sc, n = mod.evaluate(model, src, rec)
+    rec2 = {**rec, "_train": str(train.resolve())}
+    if hasattr(mod, "evaluate"):
+        metric = str((rec.get("eval") or {}).get("metric") or ("loss" if model.get("backend") == "transformers" else "mse"))
+        sc, n = mod.evaluate(model, src, rec2)
         return str(metric), sc, n
     if not hasattr(mod, "predict"):
         raise SystemExit(f"method {kind} needs predict() or evaluate()")
@@ -348,7 +349,8 @@ def do_serve(
         mod = load_method(train, kind)
         if not hasattr(mod, "generate"):
             raise SystemExit(f"method {kind} has no generate()")
-        out = mod.generate(model, str(prompt), rec, max_tokens=max_tokens, temperature=temperature)
+        rec2 = {**rec, "_train": str(train.resolve())}
+        out = mod.generate(model, str(prompt), rec2, max_tokens=max_tokens, temperature=temperature)
         out["checkpoint"] = str(ckpt.relative_to(train))
         write_json(train / "artifacts" / "serve.json", out)
         aq_metrics.end(

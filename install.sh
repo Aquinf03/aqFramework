@@ -33,7 +33,15 @@ install_from_dir() {
   cd "$root/aq"
   npm install
   npm link
+  if [ -f "$root/aq/kernel/requirements.txt" ]; then
+    echo "Installing kernel Python deps (venv)…"
+    python3 -m venv "$root/aq/kernel/.venv"
+    # shellcheck disable=SC1091
+    "$root/aq/kernel/.venv/bin/pip" install -U pip
+    "$root/aq/kernel/.venv/bin/pip" install -r "$root/aq/kernel/requirements.txt"
+  fi
   echo "Installed. Run: aq help"
+  echo "LLM/LoRA needs recipe.model (hub id). QLoRA needs CUDA + bitsandbytes."
   if ! command -v aq >/dev/null; then
     echo "Add npm's global bin to PATH if needed:"
     echo "  export PATH=\"\$(npm config get prefix)/bin:\$PATH\""

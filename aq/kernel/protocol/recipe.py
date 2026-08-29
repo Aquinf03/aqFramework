@@ -64,9 +64,11 @@ def load_recipe(train: Path) -> dict:
     data = rec.get("data")
     if not isinstance(data, dict) or not data.get("path"):
         raise SystemExit("recipe.yaml must set data.path")
-    if method == "lora":
-        if not (data.get("text") or data.get("target")):
-            raise SystemExit("recipe.yaml must set data.text (or data.target) for lora")
+    if method in ("lora", "qlora"):
+        if not (data.get("text") or data.get("target") or data.get("prompt") or data.get("completion")):
+            raise SystemExit(
+                "recipe.yaml must set data.text (or prompt+completion) for lora/qlora"
+            )
     elif method == "llm":
         obj = str(rec.get("objective") or "next-token").lower().replace("_", "-")
         if obj in (
@@ -76,17 +78,13 @@ def load_recipe(train: Path) -> dict:
             "full-ft",
             "full-finetune",
             "full-fine-tune",
-            "lora",
-            "qlora",
         ):
             if not (
-                data.get("prompt")
-                or data.get("instruction")
-                or data.get("completion")
-                or data.get("output")
+                (data.get("prompt") or data.get("instruction"))
+                and (data.get("completion") or data.get("output"))
             ):
-                raise SystemExit("sft needs data.prompt and data.completion (or instruction/output)")
-        elif not (data.get("text") or data.get("target")):
+                raise SystemExit("sft/full-ft needs data.prompt and data.completion (or instruction/output)")
+        elif not (data.get("text") or data.get("target") or data.get("prompt") or data.get("completion")):
             raise SystemExit("recipe.yaml must set data.text (or data.target) for llm")
     elif method == "transformer":
         arch = str(rec.get("arch") or "decoder").replace("_", "-")

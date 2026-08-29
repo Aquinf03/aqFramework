@@ -1,8 +1,4 @@
-"""LLM family from recipe.yaml only. Requires recipe.model (hub id or local path).
-
-Objectives: next-token, sft, full-ft, lora, qlora, continued-pretrain.
-No stdlib toy weights.
-"""
+"""QLoRA alias — same as lora with 4-bit when bits/quantization set."""
 
 from __future__ import annotations
 
@@ -12,7 +8,12 @@ from backends import hf_lm
 
 
 def fit(src: Path, rec: dict) -> dict:
-    return hf_lm.fit(src, rec, method_name=str(rec.get("method") or "llm"))
+    rec = {**rec, "objective": rec.get("objective") or "qlora"}
+    if rec.get("bits") is None and not (
+        isinstance(rec.get("quantization"), dict) and rec["quantization"].get("load_in_4bit")
+    ):
+        rec = {**rec, "bits": 4}
+    return hf_lm.fit(src, rec, method_name="qlora")
 
 
 def evaluate(model: dict, src: Path, rec: dict) -> tuple[float, int]:

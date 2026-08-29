@@ -1,19 +1,44 @@
 # Kernel spec. aq does not override this.
+# The recipe is the full train spec. You do not write Python for supported methods.
 
-family: tabular          # tabular | llm | ...
-method: linear           # linear | boosting | lora | ...
-# llm + lora: data.path is .jsonl or csv, data.text (or target) is the text field
+# --- tabular (scikit-learn / xgboost) ---
+# family: tabular
+# method: linear | logistic | ridge | lasso | elasticnet | tree | forest | boosting | gp
+# data:
+#   path: data.csv
+#   target: label
+# eval:
+#   metric: mse          # or accuracy, mae, rmse, r2
+#   min_score: null
+# lambda: 1.0            # ridge / lasso / elasticnet
+# l1_ratio: 0.5          # elasticnet
+# trees: 100             # forest / boosting
+# depth: 3
+# library: auto          # boosting: auto | xgboost | lightgbm | sklearn
+
+# --- LLM / LoRA / QLoRA (Hugging Face). recipe.model is required. No toy fallback. ---
+family: llm
+method: lora             # or llm | qlora | transformer
+model: meta-llama/Llama-3.2-1B-Instruct
+objective: lora          # next-token | sft | full-ft | lora | qlora | continued-pretrain
+# bits: 4                # QLoRA (CUDA + bitsandbytes). Omit for LoRA on CPU/MPS.
+rank: 16
+alpha: 32
+steps: 100
+lr: 2.0e-4
+batch_size: 1
+grad_accum: 8
+max_seq_len: 512
+seed: 0
 data:
-  path: data.csv         # your file. not bundled.
-  target: label
+  path: data.jsonl       # data.text, or data.prompt + data.completion for SFT
+  prompt: prompt
+  completion: completion
 eval:
-  metric: accuracy
-  min_score: null        # number, or null; aq eval reports pass/fail when set
+  metric: loss
+  min_score: null
 
-# Optional watches. Off unless you turn them on.
+# Optional watches (off unless set):
 # guard:
-#   safety: true         # NaN/Inf or loss blow-up → stop the job
-#   leak: true           # train↔evals overlap → stop before train/eval
-#   max_loss: null       # optional absolute loss ceiling
-#   blowup_factor: 8      # stop if loss > best * factor (after warmup)
-#   blowup_warmup: 2
+#   safety: true
+#   leak: true

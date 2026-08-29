@@ -35,9 +35,11 @@ def load_method(train: Path, name: str):
     )
 
 
-def call_fit(mod, src: Path, rec: dict) -> dict:
+def call_fit(mod, src: Path, rec: dict, train: Path | None = None) -> dict:
     if not hasattr(mod, "fit"):
         raise SystemExit("method module needs fit()")
+    if train is not None:
+        rec = {**rec, "_train": str(Path(train).resolve())}
     n = len(inspect.signature(mod.fit).parameters)
     if n >= 3:
         data = rec.get("data") or {}
