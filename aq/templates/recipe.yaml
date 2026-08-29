@@ -9,3 +9,11 @@ data:
 eval:
   metric: accuracy
   min_score: null        # number, or null; aq eval reports pass/fail when set
+
+# Optional watches. Off unless you turn them on.
+# guard:
+#   safety: true         # NaN/Inf or loss blow-up → stop the job
+#   leak: true           # train↔evals overlap → stop before train/eval
+#   max_loss: null       # optional absolute loss ceiling
+#   blowup_factor: 8      # stop if loss > best * factor (after warmup)
+#   blowup_warmup: 2

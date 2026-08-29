@@ -36,6 +36,8 @@ export function runKernel(train: string, req: KernelReq): void {
   const r = spawnSync(pythonBin(), [runPy, train], {
     encoding: "utf8",
     cwd: kernelDir,
+    // live kernel progress (metrics steps) must stream; result still in result.json
+    stdio: ["ignore", "inherit", "inherit"],
   })
   const resultPath = path.join(art, "result.json")
   let result: { ok?: boolean; lines?: string[]; error?: string }

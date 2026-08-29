@@ -1,0 +1,16 @@
+family: tabular
+method: watchdemo
+demo: blowup
+steps: 40
+lr: 0.05
+pause_ms: 45
+data:
+  path: data.csv
+  target: y
+eval:
+  metric: mse
+  min_score: null
+guard:
+  safety: true
+  blowup_factor: 4
+  blowup_warmup: 3

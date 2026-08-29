@@ -25,4 +25,5 @@ Manual end-to-end trains. Not `aq eval` probes. Each folder is a train plus a RE
 - [lora](lora/) — LoRA (frozen parent, rank adapters)
 - [qlora](qlora/) — QLoRA (4-bit frozen parent + LoRA)
 - [serve-checkpoint](serve-checkpoint/) — generate from a trained checkpoint (`aq serve`)
+- [guard-safety](guard-safety/) — opt-in `guard.safety`: `aq train` good settle vs mid-train blow-up abort
 

@@ -13,6 +13,7 @@ from protocol.method import call_fit, load_method
 from protocol.recipe import load_recipe
 from protocol.record import data_hash, recipe_hash, update_last_run, write_run
 from protocol import metrics as aq_metrics
+from protocol.guard import GuardAbort, assert_no_leak, parse_guard
 from protocol.tokenizer import check as check_tokenizer
 from protocol.tokenizer import pin as pin_tokenizer
 
@@ -72,9 +73,11 @@ def do_train(train: Path) -> list[str]:
     src = data_file(train, rec)
     _, rh = recipe_hash(train)
     dh = data_hash(train, rec)
+    gcfg = parse_guard(rec)
     aq_metrics.begin(
         train,
         op="train",
+        recipe=rec,
         family=rec.get("family"),
         method=method,
         recipe_hash=rh,
@@ -82,11 +85,20 @@ def do_train(train: Path) -> list[str]:
         data_path=str((rec.get("data") or {}).get("path") or ""),
     )
     try:
+        if gcfg.get("leak"):
+            assert_no_leak(train, rec)
+            aq_metrics.event("guard.leak", ok=True)
         mod = load_method(train, str(method))
         model = call_fit(mod, src, rec)
         if not isinstance(model, dict):
             raise SystemExit("fit() must return a dict")
         model.setdefault("kind", str(method))
+        if gcfg.get("safety"):
+            tl = model.get("train_loss")
+            if tl is not None:
+                from protocol.guard import SafetyWatch
+
+                SafetyWatch(gcfg).check_step(step=0, loss=tl)
         tok_hash = pin_tokenizer(train, model)
         dest = ckpt_dir(train)
         n = 1 + sum(1 for p in dest.glob("*.json") if p.name != "last.json")
@@ -121,7 +133,17 @@ def do_train(train: Path) -> list[str]:
         if arts.get("tokenizer"):
             lines.append("  " + arts["tokenizer"])
             lines.append("  tokenizer sha256:" + str(arts.get("tokenizer_sha256")))
+        if gcfg.get("safety") or gcfg.get("leak"):
+            lines.append(
+                "  guard  "
+                + ("safety " if gcfg.get("safety") else "")
+                + ("leak" if gcfg.get("leak") else "")
+            )
         return lines
+    except GuardAbort as e:
+        aq_metrics.event("guard.abort", message=str(e))
+        aq_metrics.end(ok=False, aborted=True, error=str(e))
+        raise
     except Exception as e:
         aq_metrics.event("error", error=str(e))
         aq_metrics.end(ok=False, error=str(e))
@@ -198,6 +220,7 @@ def do_eval(train: Path, ckpt_name: str | None, probe: str | None = None) -> lis
     aq_metrics.begin(
         train,
         op="eval",
+        recipe=rec,
         family=rec.get("family"),
         method=rec.get("method"),
         recipe_hash=rh,
@@ -205,6 +228,9 @@ def do_eval(train: Path, ckpt_name: str | None, probe: str | None = None) -> lis
         min_score=min_score,
     )
     try:
+        if parse_guard(rec).get("leak"):
+            assert_no_leak(train, rec)
+            aq_metrics.event("guard.leak", ok=True)
         probes = []
         wsum = 0.0
         ntot = 0
@@ -278,10 +304,15 @@ def do_eval(train: Path, ckpt_name: str | None, probe: str | None = None) -> lis
             for p in probes:
                 lines.append("  " + p["path"] + "  " + str(p["score"]))
         return lines
+    except GuardAbort as e:
+        aq_metrics.event("guard.abort", message=str(e))
+        aq_metrics.end(ok=False, aborted=True, error=str(e))
+        raise
     except Exception as e:
         aq_metrics.event("error", error=str(e))
         aq_metrics.end(ok=False, error=str(e))
         raise
+
 
 def do_serve(
     train: Path,
