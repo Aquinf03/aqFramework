@@ -1,5 +1,6 @@
 family: sequence
 method: transformer
+model: hf-internal-testing/tiny-random-gpt2
 arch: decoder
 d_model: 8
 d_ff: 16

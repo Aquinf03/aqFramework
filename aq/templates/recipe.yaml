@@ -1,27 +1,22 @@
 # Kernel spec. aq does not override this.
-# The recipe is the full train spec. You do not write Python for supported methods.
+# Built-in methods: recipe is enough. No custom Python required.
 
-# --- tabular (scikit-learn / xgboost) ---
+# --- tabular (scikit-learn / xgboost / lightgbm / catboost) ---
 # family: tabular
 # method: linear | logistic | ridge | lasso | elasticnet | tree | forest | boosting | gp
 # data:
 #   path: data.csv
 #   target: label
 # eval:
-#   metric: mse          # or accuracy, mae, rmse, r2
+#   metric: mse
 #   min_score: null
-# lambda: 1.0            # ridge / lasso / elasticnet
-# l1_ratio: 0.5          # elasticnet
-# trees: 100             # forest / boosting
-# depth: 3
-# library: auto          # boosting: auto | xgboost | lightgbm | sklearn
 
-# --- LLM / LoRA / QLoRA (Hugging Face). recipe.model is required. No toy fallback. ---
+# --- LLM (Hugging Face). model: is required. size: is a label only. ---
 family: llm
-method: lora             # or llm | qlora | transformer
+method: lora
 model: meta-llama/Llama-3.2-1B-Instruct
-objective: lora          # next-token | sft | full-ft | lora | qlora | continued-pretrain
-# bits: 4                # QLoRA (CUDA + bitsandbytes). Omit for LoRA on CPU/MPS.
+objective: lora
+# bits: 4                # QLoRA: CUDA + bitsandbytes only
 rank: 16
 alpha: 32
 steps: 100
@@ -31,14 +26,12 @@ grad_accum: 8
 max_seq_len: 512
 seed: 0
 data:
-  path: data.jsonl       # data.text, or data.prompt + data.completion for SFT
+  path: data.jsonl
   prompt: prompt
   completion: completion
 eval:
   metric: loss
   min_score: null
 
-# Optional watches (off unless set):
-# guard:
-#   safety: true
-#   leak: true
+# Unsupported (errors on purpose): formats, speculative, paged_kv, objective: mtp
+# Optional: guard.safety / guard.leak

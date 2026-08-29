@@ -31,7 +31,7 @@ This folder is the deep reference for the whole framework: philosophy, architect
 | [Web & auth](./web-auth.md) | Auth portal, CLI tokens, desktop handoff, SDK API |
 | [Install & release](./install-release.md) | curl install, git, checkout, R2 releases |
 | [Tests catalog](./tests-catalog.md) | Every `tests/` family and what it proves |
-| [Coverage & roadmap](./coverage-roadmap.md) | What works today vs the remaining ML walk |
+| [Coverage & roadmap](./coverage-roadmap.md) | What actually works vs unfinished (matches COMPLETED) |
 | [PyAquin](./pyaquin.md) | Future language/runtime (destination, not next) |
 
 ---
@@ -40,19 +40,14 @@ This folder is the deep reference for the whole framework: philosophy, architect
 
 ```
 cwd = train/
-  instructions.md + recipe.yaml     identity of the train
-  data/  evals/  methods/  tools/   your science
-  skills/  memory/  schedules/      agent + automation
-  jobs/  artifacts/                 system state
+  instructions.md + recipe.yaml     identity; recipe is the train API
+  data/  evals/  methods/  tools/   your science (methods/ only if custom)
+  artifacts/                        checkpoints, metrics, runs
 
-aq (TypeScript CLI)
-  → writes artifacts/request.json
-  → spawns aq/kernel/run.py
-  → reads artifacts/result.json
-  → streams live step lines from kernel stderr
+aq (TypeScript) → kernel (Python: HF / sklearn)
+  Devices: CUDA | MPS | ROCm | CPU
+  Unsupported knobs error out (see TODO.md)
 ```
-
-The UI (web auth portal) is a **viewer and identity surface**. It does not own train state. Disk does.
 
 ---
 

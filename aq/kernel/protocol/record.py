@@ -35,12 +35,17 @@ def data_hash(train: Path, rec: dict) -> str | None:
 
 
 def code_hash(train: Path) -> str:
+    """Hash kernel code that affects fit (protocol, backends, methods, engine) + train files."""
     h = hashlib.sha256()
-    kernel = Path(__file__).resolve().parent
-    for f in sorted(kernel.glob("*.py")):
-        digest, _ = hash_file(f)
-        h.update(f.name.encode())
-        h.update(digest.encode())
+    kernel_root = Path(__file__).resolve().parent.parent
+    for sub in ("protocol", "backends", "methods", "engine"):
+        base = kernel_root / sub
+        if not base.is_dir():
+            continue
+        for f in sorted(base.rglob("*.py")):
+            digest, _ = hash_file(f)
+            h.update(str(f.relative_to(kernel_root)).encode())
+            h.update(digest.encode())
     for rel in ("train.ts", "recipe.yaml"):
         p = train / rel
         if p.is_file():

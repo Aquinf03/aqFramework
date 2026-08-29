@@ -1,4 +1,4 @@
-"""Post-train deploy artifacts: quant, prune, format exports, serve knobs."""
+"""Post-train deploy: real prune + aq weight quant dump. No fake GPTQ/AWQ/GGUF theater."""
 
 from __future__ import annotations
 
@@ -6,64 +6,72 @@ import json
 from pathlib import Path
 from typing import Any
 
-from backends.device import device_kind, move_batch, torch_device
+from backends.device import device_kind
 from backends.recipe_opt import opt
 
 
 def apply_deploy(model, tok, slot: Path, rec: dict, manifest: dict) -> dict:
-    """Mutate/save deploy artifacts next to checkpoint; update manifest."""
-    torch = __import__("torch")
-    deploy: dict[str, Any] = {"device": device_kind()}
+    """Apply deploy knobs that we actually implement. Fail closed on unsupported ones."""
+    _reject_unsupported(rec)
 
-    # --- prune ---
+    deploy: dict[str, Any] = {"device": device_kind()}
+    train = Path(rec["_train"])
+
     prune_frac = opt(rec, "prune", None, "deploy", "llm")
-    if prune_frac:
+    if prune_frac is not None and prune_frac is not False:
         frac = float(prune_frac)
         n_zero = _magnitude_prune(model, frac)
-        deploy["prune"] = {"fraction": frac, "zeros": n_zero}
         pruned_dir = slot / "pruned"
         pruned_dir.mkdir(exist_ok=True)
         model.save_pretrained(str(pruned_dir))
         tok.save_pretrained(str(pruned_dir))
-        deploy["pruned_path"] = str(pruned_dir.relative_to(slot.parent.parent.parent)) if False else str(
-            (slot / "pruned").relative_to(Path(rec["_train"]))
-        )
+        deploy["prune"] = {
+            "fraction": frac,
+            "zeros": n_zero,
+            "path": str(pruned_dir.relative_to(train)),
+        }
 
-    # --- quantize weights (int8 / int4 / binary) — works on MPS/CUDA/ROCm/CPU ---
     quant = opt(rec, "quant", None, "deploy", "quantization", "llm")
-    bits = opt(rec, "bits", None, "quantization", "deploy")
-    if quant or (bits and str(manifest.get("objective")) not in ("qlora",) and not opt(rec, "rank", None)):
-        qname = str(quant or f"int{bits}").lower()
+    if quant:
+        qname = str(quant).lower()
+        if qname not in ("int8", "int4", "binary", "q8", "q4", "int1"):
+            raise SystemExit(
+                f"unsupported quant={quant!r}. Supported: int8, int4, binary "
+                "(writes aq quantized.pt dump; not GPTQ/AWQ/GGUF)"
+            )
         qdir = slot / "quantized"
         qdir.mkdir(exist_ok=True)
         qmeta = _quantize_state_dict(model, qname, qdir)
+        qmeta["path"] = str(qdir.relative_to(train))
+        qmeta["note"] = "aq weight dump for inspection/export; serve still loads HF weights"
         deploy["quant"] = qmeta
-
-    # --- weight formats (export sidecars; real converters when tools exist) ---
-    if opt(rec, "formats", False, "deploy", "llm"):
-        fmt_dir = slot / "formats"
-        fmt_dir.mkdir(exist_ok=True)
-        formats = _export_formats(model, tok, fmt_dir, rec)
-        deploy["formats"] = formats
-
-    # --- speculative / paged kv flags (honored at serve) ---
-    if opt(rec, "speculative", False, "deploy", "serve", "llm"):
-        deploy["speculative"] = True
-        deploy["draft_layers"] = int(opt(rec, "draft_layers", 1, "deploy", "serve") or 1)
-        deploy["n_predict"] = int(opt(rec, "n_predict", 2, "deploy", "llm") or 2)
-    if opt(rec, "paged_kv", False, "deploy", "serve", "llm"):
-        deploy["paged_kv"] = True
-        deploy["page_size"] = int(opt(rec, "page_size", 16, "deploy", "serve") or 16)
-        deploy["continuous_batching"] = True
 
     if deploy:
         (slot / "deploy.json").write_text(json.dumps(deploy, indent=2) + "\n", encoding="utf-8")
         manifest["deploy"] = deploy
-        # flatten common flags onto manifest for inspect/serve
-        for k in ("speculative", "paged_kv", "page_size", "n_predict", "formats", "quant"):
-            if k in deploy:
-                manifest[k] = deploy[k]
+        if "quant" in deploy:
+            manifest["quant"] = deploy["quant"]
+        if "prune" in deploy:
+            manifest["prune"] = deploy["prune"]
     return manifest
+
+
+def _reject_unsupported(rec: dict) -> None:
+    if opt(rec, "formats", False, "deploy", "llm"):
+        raise SystemExit(
+            "recipe formats: true is not supported yet "
+            "(no real GPTQ/AWQ/GGUF/EXL2 exporter). Remove it or implement a converter."
+        )
+    if opt(rec, "speculative", False, "deploy", "serve", "llm"):
+        raise SystemExit(
+            "recipe speculative: true is not supported yet "
+            "(no draft model). Remove it."
+        )
+    if opt(rec, "paged_kv", False, "deploy", "serve", "llm"):
+        raise SystemExit(
+            "recipe paged_kv: true is not supported yet "
+            "(HF use_cache is default; not paged attention). Remove it."
+        )
 
 
 def _magnitude_prune(model, fraction: float) -> int:
@@ -71,9 +79,7 @@ def _magnitude_prune(model, fraction: float) -> int:
 
     fraction = max(0.0, min(0.95, float(fraction)))
     tensors = []
-    for name, p in model.named_parameters():
-        if not p.requires_grad and p.ndim >= 1:
-            continue
+    for p in model.parameters():
         if p.ndim >= 2:
             tensors.append(p.data.abs().flatten())
     if not tensors:
@@ -97,28 +103,33 @@ def _magnitude_prune(model, fraction: float) -> int:
 def _quantize_state_dict(model, qname: str, qdir: Path) -> dict:
     import torch
 
+    if qname in ("q8",):
+        qname = "int8"
+    if qname in ("q4",):
+        qname = "int4"
+    if qname in ("int1",):
+        qname = "binary"
+
     sd = model.state_dict()
     out = {}
-    meta = {"scheme": qname, "tensors": 0}
+    meta = {"scheme": qname, "tensors": 0, "format": "aq-quantized-pt"}
     for k, v in sd.items():
         if not torch.is_floating_point(v) or v.numel() < 32:
             out[k] = v.cpu()
             continue
         meta["tensors"] += 1
-        if qname in ("binary", "int1", "1"):
+        if qname == "binary":
             out[k] = {
                 "q": (v > 0).to(torch.uint8).cpu(),
-                "scale": v.abs().mean().item(),
+                "scale": float(v.abs().mean().item()),
                 "bits": 1,
             }
-        elif qname in ("int4", "q4", "4", "nf4"):
-            # group-wise absmax int4 packing (store as int8 nibbles expanded)
+        elif qname == "int4":
             flat = v.detach().float().cpu().flatten()
             scale = flat.abs().max().clamp(min=1e-8) / 7.0
             q = (flat / scale).round().clamp(-8, 7).to(torch.int8)
             out[k] = {"q": q.reshape(v.shape), "scale": float(scale), "bits": 4}
         else:
-            # int8
             flat = v.detach().float().cpu()
             scale = flat.abs().max().clamp(min=1e-8) / 127.0
             q = (flat / scale).round().clamp(-127, 127).to(torch.int8)
@@ -126,86 +137,3 @@ def _quantize_state_dict(model, qname: str, qdir: Path) -> dict:
     torch.save(out, qdir / "quantized.pt")
     (qdir / "quant_meta.json").write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
     return meta
-
-
-def _export_formats(model, tok, fmt_dir: Path, rec: dict) -> list[str]:
-    """Write sidecars for GPTQ/AWQ/GGUF/EXL2. Prefer real converters when installed."""
-    written = []
-    # Always write safetensors / bin dump reference
-    try:
-        model.save_pretrained(str(fmt_dir / "hf"))
-        tok.save_pretrained(str(fmt_dir / "hf"))
-        written.append("hf")
-    except Exception:
-        pass
-
-    # GPTQ / AWQ / EXL2: write recipe-compatible stubs that record intent + weight stats
-    # Real GPTQ needs auto-gptq; if present, attempt.
-    for name, attempt in (
-        ("gptq", _try_gptq),
-        ("awq", _try_awq),
-        ("exl2", _try_exl2),
-        ("gguf", _try_gguf),
-    ):
-        path = fmt_dir / name
-        path.mkdir(exist_ok=True)
-        info = {"format": name, "status": "meta"}
-        try:
-            extra = attempt(model, tok, path, rec)
-            if extra:
-                info.update(extra)
-                info["status"] = "exported"
-        except Exception as e:
-            info["status"] = "meta"
-            info["note"] = str(e)[:200]
-        # Always leave a readable descriptor so the train artifact is real on disk
-        (path / "format.json").write_text(json.dumps(info, indent=2) + "\n", encoding="utf-8")
-        # Pack a compact int4 snapshot as portable weight blob for gptq/awq/exl2 families
-        if name in ("gptq", "awq", "exl2"):
-            _quantize_state_dict(model, "int4", path)
-            info["weights"] = "quantized.pt"
-            (path / "format.json").write_text(json.dumps(info, indent=2) + "\n", encoding="utf-8")
-        written.append(name)
-    return written
-
-
-def _try_gptq(model, tok, path, rec):
-    try:
-        import auto_gptq  # noqa: F401
-
-        return {"engine": "auto_gptq"}
-    except ImportError:
-        return {"engine": "aq-int4-pack"}
-
-
-def _try_awq(model, tok, path, rec):
-    try:
-        import awq  # noqa: F401
-
-        return {"engine": "awq"}
-    except ImportError:
-        return {"engine": "aq-int4-pack"}
-
-
-def _try_exl2(model, tok, path, rec):
-    return {"engine": "aq-int4-pack"}
-
-
-def _try_gguf(model, tok, path, rec):
-    """Write a minimal GGUF-like header + tensor index if llama.cpp converter absent."""
-    import struct
-
-    # Real gguf via llama.cpp convert if on PATH later; for now write aqgguf container
-    blob = path / "model.aqgguf"
-    with blob.open("wb") as f:
-        f.write(b"AQGG")  # magic
-        f.write(struct.pack("<I", 1))  # version
-        n = 0
-        for p in model.parameters():
-            n += 1
-            if n > 8:
-                break
-            t = p.detach().float().cpu().flatten()[:64]
-            f.write(struct.pack("<I", t.numel()))
-            f.write(t.numpy().astype("float32").tobytes())
-    return {"engine": "aqgguf", "file": "model.aqgguf"}

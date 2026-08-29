@@ -1,41 +1,21 @@
 # Coverage and roadmap
 
-Internal sources of truth for builders: `internals/COMPLETED.md`, `internals/TODO.md`, `internals/ML_MODEL_TAXONOMY.md`, `internals/ML_DEVELOPMENT_METHODS.md`, `internals/PLAN.md`.
+Internal checklist: [COMPLETED.md](../internals/COMPLETED.md) (honest ticks) and [TODO.md](../internals/TODO.md).
 
-This page is the **user-facing** map of what the framework already walks vs what remains encyclopedia material.
+## Works today (proven)
 
-## Done (harness)
+- Tabular via scikit-learn (+ boosting libs when installed)
+- HF transformers (encoder / decoder / enc-dec) with explicit `model:`
+- HF LM: next-token, SFT, full-ft, LoRA, FIM, MLM, span, pack/mixture, continued-pretrain, serve, live steps
+- QLoRA on **CUDA** with bitsandbytes
+- Tokenizers: HF pin + optional local BPE/Unigram/WordPiece/byte
+- Devices: CUDA / MPS / ROCm / CPU for supported paths
+- Fail-closed rejects for fake deploy theater (`formats`, `speculative`, `paged_kv`, `mtp`)
 
-Directory protocol, CLI verbs, jobs, kernel ops (hash/train/eval/checkpoint/serve), metrics stream + live steps, opt-in guard, tools/skills/schedules/stages, research tracking (`runs`, `diff`, `status`), agent chat/ask/spawn/doctor, auth login tokens, install/release.
+## Not done
 
-## Done (coverage walk)
+See [TODO.md](../internals/TODO.md) — especially **Deploy / inference / size** (MTP, GPTQ/AWQ/GGUF, speculative, paged_kv, size zoo, AdaBoost method, vision/TinyML).
 
-- Classic tabular: linear → GP (see [tests catalog](./tests-catalog.md))  
-- Transformers: encoder / decoder / encoder-decoder  
-- Foundation models: tokenizers, pack/mixture, AR / MLM+span / MTP / FIM, continued pretrain, SFT, full-ft, LoRA, QLoRA, serve  
+## Rule
 
-## Remaining (TODO backlog themes)
-
-Not stubs - only tick when a real train exists:
-
-- Classic leftovers (SVM, kNN, …)  
-- Architectures beyond the tiny transformer  
-- Preference / RLHF / large-scale parallelism (when kernel-owned, not wraps)  
-- Vision, multimodal, scientific ML, RL, unsupervised, embeddings, causal, robotics, 3D, security, federated, AutoML, …  
-- Training infrastructure encyclopedia items (optimizers, schedules, compression, HPO, …) as **first-class folder workflows**
-
-Taxonomy and methods encyclopedias under `internals/` list the landscape; they are not a promise that every row ships tomorrow.
-
-## Build order reminder
-
-Directory → CLI → Jobs → Kernel → Grow handle → Research tracking → Agent → Coverage → Own stack / [PyAquin](./pyaquin.md) only when reason-gated.
-
-## What “coverage” means here
-
-Same path every family:
-
-```
-init/fork → recipe + data → aq train → aq eval (your gate) → inspect → job/checkout → fork again
-```
-
-Wrapping an external library solely to claim a checkbox is explicitly **not** coverage.
+Tick COMPLETED only when a stranger can `aq train` a recipe and get real weights — not metadata stubs. Unfinished items live in TODO only.

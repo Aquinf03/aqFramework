@@ -95,22 +95,5 @@ def supports_bnb_4bit() -> bool:
         return False
 
 
-# Public small defaults when recipe sets size: but omits model:
-SIZE_DEFAULT_MODELS = {
-    "edge": "hf-internal-testing/tiny-random-gpt2",
-    "slm": "hf-internal-testing/tiny-random-gpt2",
-    "llm": "hf-internal-testing/tiny-random-gpt2",
-    "tiny": "hf-internal-testing/tiny-random-gpt2",
-}
-
-SIZE_DEFAULT_ENCODER = {
-    "edge": "hf-internal-testing/tiny-random-bert",
-    "slm": "hf-internal-testing/tiny-random-bert",
-    "llm": "hf-internal-testing/tiny-random-bert",
-}
-
-SIZE_DEFAULT_SEQ2SEQ = {
-    "edge": "hf-internal-testing/tiny-random-t5",
-    "slm": "hf-internal-testing/tiny-random-t5",
-    "llm": "hf-internal-testing/tiny-random-t5",
-}
+# size: is a label only (llm|slm|edge). It does NOT pick a model.
+# Always set recipe.model to a hub id or local path.

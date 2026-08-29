@@ -1,5 +1,6 @@
 family: llm
 method: llm
+model: hf-internal-testing/tiny-random-bert
 size: slm
 objective: mlm
 mask_rate: 0.3

@@ -1,5 +1,6 @@
 family: llm
 method: llm
+model: hf-internal-testing/tiny-random-gpt2
 size: slm
 objective: mtp
 n_predict: 2

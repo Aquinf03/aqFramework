@@ -14,7 +14,6 @@ from typing import Any
 
 from backends import deploy as deploy_mod
 from backends.device import (
-    SIZE_DEFAULT_MODELS,
     default_dtype,
     device_kind,
     move_batch,
@@ -36,28 +35,9 @@ def resolve_model_id(rec: dict, *, arch: str = "causal") -> str:
     mid = init.get("model") or init.get("pretrained") or init.get("base")
     if mid:
         return str(mid)
-    size = str(opt(rec, "size", "") or "").lower()
-    from backends.device import SIZE_DEFAULT_ENCODER, SIZE_DEFAULT_MODELS, SIZE_DEFAULT_SEQ2SEQ
-
-    if size:
-        if arch in ("encoder", "bert", "classify"):
-            if size in SIZE_DEFAULT_ENCODER:
-                return SIZE_DEFAULT_ENCODER[size]
-        if arch in ("encoder-decoder", "enc-dec", "seq2seq", "t5"):
-            if size in SIZE_DEFAULT_SEQ2SEQ:
-                return SIZE_DEFAULT_SEQ2SEQ[size]
-        if size in SIZE_DEFAULT_MODELS:
-            return SIZE_DEFAULT_MODELS[size]
-    # transformer tests often omit both model and size — use tiny public defaults
-    if arch in ("encoder", "bert", "classify"):
-        return SIZE_DEFAULT_ENCODER["edge"]
-    if arch in ("encoder-decoder", "enc-dec", "seq2seq", "t5"):
-        return SIZE_DEFAULT_SEQ2SEQ["edge"]
-    if arch in ("decoder", "causal", "gpt", "transformer"):
-        return SIZE_DEFAULT_MODELS["edge"]
     raise SystemExit(
-        "recipe.model is required (Hugging Face id or local path), "
-        "or set size: edge|slm|llm for a default small public model. "
+        "recipe.model is required (Hugging Face id or local path). "
+        "size: is only a label (llm|slm|edge); it does not pick weights. "
         "Example: model: meta-llama/Llama-3.2-1B-Instruct"
     )
 
@@ -223,27 +203,25 @@ def _build_model_and_tok(rec: dict, obj: str, slot: Path, texts: list[str]):
         )
         load_kw["device_map"] = opt(rec, "device_map", "auto")
         qlora_engine = "bitsandbytes"
+    elif want_qlora:
+        raise SystemExit(
+            f"QLoRA needs CUDA + bitsandbytes (this device is {kind}). "
+            "Use objective/method lora without bits, or run on NVIDIA CUDA."
+        )
     else:
-        # MPS / ROCm / CPU: load full precision (or dtype), then LoRA.
-        # For qlora objective without CUDA, we still LoRA-train and int4-pack weights (aq-qlora).
         load_kw["torch_dtype"] = dtype
         if kind in ("cuda", "rocm"):
             load_kw["device_map"] = opt(rec, "device_map", "auto")
-        if want_qlora:
-            qlora_engine = f"aq-qlora-{kind}"
 
     # Model class by objective
     if obj in ("mlm", "masked", "masked-lm"):
-        # Causal LMs are not MaskedLM; use an encoder default when model is a GPT-class tiny.
-        mlm_id = model_id
         try:
-            model = transformers.AutoModelForMaskedLM.from_pretrained(mlm_id, **load_kw)
-        except Exception:
-            from backends.device import SIZE_DEFAULT_ENCODER
-
-            mlm_id = SIZE_DEFAULT_ENCODER.get(str(opt(rec, "size", "edge") or "edge"), SIZE_DEFAULT_ENCODER["edge"])
-            model = transformers.AutoModelForMaskedLM.from_pretrained(mlm_id, **load_kw)
-            model_id = mlm_id
+            model = transformers.AutoModelForMaskedLM.from_pretrained(model_id, **load_kw)
+        except Exception as e:
+            raise SystemExit(
+                f"objective mlm needs a MaskedLM-capable recipe.model (e.g. a BERT). "
+                f"Failed to load {model_id!r}: {e}"
+            ) from e
     else:
         model = transformers.AutoModelForCausalLM.from_pretrained(model_id, **load_kw)
 
@@ -278,9 +256,10 @@ def _build_model_and_tok(rec: dict, obj: str, slot: Path, texts: list[str]):
             try:
                 model = peft.get_peft_model(model, cfg)
                 used_lora = True
-            except Exception:
-                # some tiny random models lack matching targets — full train
-                model.train()
+            except Exception as e:
+                raise SystemExit(
+                    f"LoRA/PEFT failed for {model_id!r} (check target_modules / model type): {e}"
+                ) from e
     else:
         model.train()
 
@@ -316,13 +295,23 @@ def _span_corrupt(texts: list[str], rng: random.Random, rate: float = 0.15) -> l
     return pairs
 
 
-def _build_dataset(torch, tok, texts: list[str], rec: dict, obj: str, max_len: int):
+def _build_dataset(torch, tok, texts: list[str], rec: dict, obj: str, max_len: int, src: Path | None = None):
     rng = random.Random(int(opt(rec, "seed", 0) or 0))
     mask_rate = float(opt(rec, "mask_rate", 0.15, "llm") or 0.15)
-    n_predict = int(opt(rec, "n_predict", 1, "llm") or 1)
+
+    if obj in ("mtp", "multi-token", "multi-token-prediction"):
+        raise SystemExit(
+            "objective mtp is not implemented as multi-token prediction heads. "
+            "Use next-token, or contribute a real MTP head."
+        )
 
     if obj in ("fim", "fill-in-the-middle", "fill-in-middle"):
         texts = _fim_texts(texts, rng)
+
+    if obj in ("sft", "supervised", "supervised-finetune", "full-ft", "full-finetune", "full-fine-tune"):
+        if src is None:
+            raise SystemExit("internal: sft dataset needs src")
+        return _sft_dataset(torch, tok, src, rec, obj, max_len)
 
     if obj in ("mlm", "masked", "masked-lm"):
         enc = tok(
@@ -389,7 +378,7 @@ def _build_dataset(torch, tok, texts: list[str], rec: dict, obj: str, max_len: i
 
         return DS()
 
-    # causal / sft / full-ft / lora / qlora / cpt / mtp / next-token
+    # causal / lora / qlora / cpt / next-token / fim (already rewritten texts)
     enc = tok(
         texts,
         truncation=True,
@@ -398,14 +387,7 @@ def _build_dataset(torch, tok, texts: list[str], rec: dict, obj: str, max_len: i
         return_tensors="pt",
     )
     labels = enc["input_ids"].clone()
-    if obj in ("sft", "supervised", "supervised-finetune"):
-        # Soft SFT: still LM loss on full sequence (prompt+completion already concatenated)
-        pass
-    if obj in ("mtp", "multi-token", "multi-token-prediction") and n_predict > 1:
-        # Shift labels by n_predict for multi-token target (approximate MTP)
-        shifted = torch.full_like(labels, -100)
-        shifted[:, :-n_predict] = labels[:, n_predict:]
-        labels = shifted
+    labels[labels == tok.pad_token_id] = -100
 
     class DS(torch.utils.data.Dataset):
         def __len__(self):
@@ -421,9 +403,116 @@ def _build_dataset(torch, tok, texts: list[str], rec: dict, obj: str, max_len: i
     return DS()
 
 
+def _sft_dataset(torch, tok, src: Path, rec: dict, obj: str, max_len: int):
+    """SFT: loss on completion tokens only. full-ft: loss on all non-pad tokens."""
+    data = rec.get("data") or {}
+    prompt_k = data.get("prompt") or data.get("instruction")
+    comp_k = data.get("completion") or data.get("output") or data.get("response")
+    if not prompt_k or not comp_k:
+        raise SystemExit("sft/full-ft needs data.prompt and data.completion")
+    rows = _load_rows(src)
+    loss_all = obj in ("full-ft", "full-finetune", "full-fine-tune")
+    input_rows = []
+    label_rows = []
+    mask_rows = []
+    for r in rows:
+        prompt = str(r.get(prompt_k) or "")
+        comp = str(r.get(comp_k) or "")
+        full = prompt.rstrip() + "\n" + comp.lstrip()
+        full_ids = tok(
+            full, truncation=True, max_length=max_len, padding="max_length", return_tensors="pt"
+        )
+        prompt_ids = tok(prompt, truncation=True, max_length=max_len, add_special_tokens=True)
+        plen = min(len(prompt_ids["input_ids"]), max_len)
+        labels = full_ids["input_ids"][0].clone()
+        if not loss_all:
+            labels[:plen] = -100
+        labels[labels == tok.pad_token_id] = -100
+        input_rows.append(full_ids["input_ids"][0])
+        label_rows.append(labels)
+        mask_rows.append(full_ids["attention_mask"][0])
+    if not input_rows:
+        raise SystemExit("empty sft data")
+    input_ids = torch.stack(input_rows)
+    labels_t = torch.stack(label_rows)
+    attn = torch.stack(mask_rows)
+
+    class DS(torch.utils.data.Dataset):
+        def __len__(self):
+            return input_ids.shape[0]
+
+        def __getitem__(self, i):
+            return {
+                "input_ids": input_ids[i],
+                "attention_mask": attn[i],
+                "labels": labels_t[i],
+            }
+
+    return DS()
+
+
+def _load_parent_weights(model, rec: dict, used_lora: bool):
+    """Load prior aq checkpoint into the in-memory model when init.checkpoint is set."""
+    init = rec.get("init") if isinstance(rec.get("init"), dict) else {}
+    rel = init.get("checkpoint") or opt(rec, "from_ckpt", None)
+    if not rel:
+        return model
+    train = _train_root(rec)
+    ckpt_path = (train / str(rel)).resolve()
+    if ckpt_path.is_file() and ckpt_path.suffix == ".json":
+        meta = json.loads(ckpt_path.read_text(encoding="utf-8"))
+        sub = meta.get("adapter_path") or meta.get("model_path")
+        if not sub:
+            raise SystemExit(f"parent checkpoint {rel} has no adapter_path/model_path")
+        weight_dir = (train / str(sub)).resolve()
+    elif ckpt_path.is_dir():
+        weight_dir = ckpt_path
+        meta = {}
+    else:
+        raise SystemExit(f"init.checkpoint not found: {rel}")
+    if not weight_dir.is_dir():
+        raise SystemExit(f"parent weights dir missing: {weight_dir}")
+
+    peft = require_peft()
+    transformers = require_transformers()
+    import torch
+
+    if (weight_dir / "adapter_config.json").is_file():
+        if not used_lora:
+            raise SystemExit("parent is a LoRA adapter; continue with objective lora/qlora")
+        sd = None
+        bin_path = weight_dir / "adapter_model.bin"
+        safe_path = weight_dir / "adapter_model.safetensors"
+        if safe_path.is_file():
+            from safetensors.torch import load_file
+
+            sd = load_file(str(safe_path))
+        elif bin_path.is_file():
+            sd = torch.load(bin_path, map_location="cpu", weights_only=True)
+        if not sd:
+            raise SystemExit(f"no adapter weights in {weight_dir}")
+        from peft import set_peft_model_state_dict
+
+        set_peft_model_state_dict(model, sd)
+        return model
+
+    if (weight_dir / "config.json").is_file():
+        parent = transformers.AutoModelForCausalLM.from_pretrained(str(weight_dir))
+        missing, unexpected = model.load_state_dict(parent.state_dict(), strict=False)
+        if missing and len(missing) > len(parent.state_dict()) // 2:
+            raise SystemExit(
+                f"parent weight load looked wrong (missing {len(missing)} keys). "
+                "Check init.checkpoint matches this architecture."
+            )
+        return model
+
+    raise SystemExit(f"unrecognized parent checkpoint layout: {weight_dir}")
+
+
 def fit(src: Path, rec: dict, *, method_name: str | None = None) -> dict:
     torch = require_torch()
     transformers = require_transformers()
+    deploy_mod._reject_unsupported(rec)
     obj = _objective(rec, method_name)
     texts, sources = _texts_from_data(src, rec)
     max_len = int(opt(rec, "max_seq_len", opt(rec, "context", 512, "llm"), "train", "llm") or 512)
@@ -433,6 +522,7 @@ def fit(src: Path, rec: dict, *, method_name: str | None = None) -> dict:
     model, tok, model_id, want_qlora, used_lora, qlora_engine, tok_meta = _build_model_and_tok(
         rec, obj, slot, texts
     )
+    model = _load_parent_weights(model, rec, used_lora)
 
     steps = opt(rec, "steps", None, "train", "llm")
     epochs = opt(rec, "epochs", None, "train", "llm")
@@ -445,7 +535,7 @@ def fit(src: Path, rec: dict, *, method_name: str | None = None) -> dict:
     seed = int(opt(rec, "seed", 0, "train", "llm") or 0)
     transformers.set_seed(seed)
 
-    ds = _build_dataset(torch, tok, texts, rec, obj, max_len)
+    ds = _build_dataset(torch, tok, texts, rec, obj, max_len, src=src)
     dtype = default_dtype(rec)
     prec = training_precision_flags(dtype)
 
@@ -541,12 +631,8 @@ def fit(src: Path, rec: dict, *, method_name: str | None = None) -> dict:
             "continue",
         ) else "continued-pretrain"
 
-    # Deploy knobs
-    if any(
-        opt(rec, k, None, "deploy", "llm", "serve")
-        for k in ("quant", "prune", "formats", "speculative", "paged_kv")
-    ) or opt(rec, "formats", False) or opt(rec, "prune", None) or opt(rec, "quant", None):
-        # reload plain model for deploy exports when peft
+    # Deploy knobs that we actually support (prune / aquant)
+    if opt(rec, "prune", None) is not None or opt(rec, "quant", None) is not None:
         deploy_mod.apply_deploy(model, tok, slot, rec, manifest)
 
     return manifest
@@ -633,22 +719,16 @@ def generate(
     temp = float(
         temperature if temperature is not None else opt(rec, "temperature", 0.7, "serve") or 0.7
     )
-    # speculative / multi-token decode: generate extra tokens when flagged
-    if model.get("speculative") or (model.get("deploy") or {}).get("speculative"):
-        n_pred = int(model.get("n_predict") or (model.get("deploy") or {}).get("n_predict") or 2)
-        mt = max(mt, n_pred * mt)
     enc = move_batch(tok(prompt, return_tensors="pt"), m)
     gen_kw = dict(
         max_new_tokens=mt,
         do_sample=temp > 0,
         pad_token_id=tok.pad_token_id,
         eos_token_id=tok.eos_token_id,
+        use_cache=True,
     )
     if temp > 0:
         gen_kw["temperature"] = max(temp, 1e-5)
-    # paged KV / cache
-    if model.get("paged_kv") or (model.get("deploy") or {}).get("paged_kv"):
-        gen_kw["use_cache"] = True
     with torch.no_grad():
         out = m.generate(**enc, **gen_kw)
     text = tok.decode(out[0], skip_special_tokens=True)
@@ -657,8 +737,6 @@ def generate(
         "tokens": int(out.shape[-1]),
         "prompt": prompt,
         "device": device_kind(),
-        "speculative": bool(model.get("speculative")),
-        "paged_kv": bool(model.get("paged_kv")),
     }
 
 

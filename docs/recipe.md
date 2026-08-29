@@ -1,6 +1,6 @@
 # Recipe (`recipe.yaml`)
 
-The recipe is the **full train spec**. For built-in methods, you do not write Python. `aq train` loads the method named in `recipe.method` and that module reads the recipe.
+The recipe is the **full train spec** for built-in methods. You do not write Python unless you add `methods/<name>.py`.
 
 Install backends: `pip install -r aq/kernel/requirements.txt`
 
@@ -13,40 +13,47 @@ data:
   path: data.csv
   target: y
 eval:
-  metric: mse
-  min_score: null
-# lambda / l1_ratio / trees / depth / library (boosting: auto|xgboost|lightgbm|sklearn)
+  metric: mse    # accuracy | mae | rmse | r2
+# lambda / l1_ratio / trees / depth / library (boosting: auto|xgboost|lightgbm|catboost|sklearn)
 ```
 
-Backed by **scikit-learn** (XGBoost/LightGBM when installed for boosting).
+Backed by **scikit-learn** (and XGBoost/LightGBM/CatBoost when installed for boosting).
 
 ## LLM / LoRA / QLoRA
 
 ```yaml
 family: llm
 method: lora          # or llm | qlora
-model: meta-llama/Llama-3.2-1B-Instruct   # REQUIRED (hub id or local path)
-objective: lora       # next-token | sft | full-ft | lora | qlora | continued-pretrain
-bits: 4               # optional QLoRA (CUDA + bitsandbytes)
+model: meta-llama/Llama-3.2-1B-Instruct   # REQUIRED
+objective: lora       # next-token | sft | full-ft | lora | qlora | fim | mlm | span | continued-pretrain
+# bits: 4             # QLoRA — CUDA + bitsandbytes only
 rank: 16
 alpha: 32
 steps: 100
 lr: 2.0e-4
-batch_size: 1
-grad_accum: 8
+tokenizer: bpe        # optional: train a local tokenizer (bpe|unigram|wordpiece|byte)
+merges: 1000
 max_seq_len: 512
+# mixture: { web: 0.5, code: 0.5 }   # with data.source
+# prune: 0.1                         # magnitude prune after train
+# quant: int8                        # aq weight dump (not GPTQ)
 data:
   path: data.jsonl
-  text: text                    # or:
+  text: text
+  # or for sft/full-ft:
   # prompt: prompt
   # completion: completion
 eval:
   metric: loss
 ```
 
-There is **no toy fallback**. Missing `model` is an error.
+Rules:
 
-Nested forms also work: `train.lr`, `lora.rank`, `quantization.load_in_4bit`, etc.
+- **`model:` is required.** `size:` is only a label (`llm`/`slm`/`edge`).
+- **SFT** masks prompt tokens (loss on completion only). **full-ft** trains all non-pad tokens.
+- **mlm** needs a MaskedLM-capable model (e.g. BERT).
+- **QLoRA** fails on MPS/CPU/ROCm without CUDA bitsandbytes.
+- These **fail closed** (not faked): `formats: true`, `speculative: true`, `paged_kv: true`, `objective: mtp`.
 
 ## Transformer
 
@@ -55,11 +62,10 @@ method: transformer
 model: bert-base-uncased      # required
 arch: encoder                 # decoder | encoder | encoder-decoder
 steps: 50
-lr: 5.0e-5
 data:
   path: data.csv
   text: text
-  target: label               # encoder classify
+  target: label               # encoder
   # src / tgt for encoder-decoder
 ```
 
@@ -73,4 +79,4 @@ guard:
 
 ## Custom methods
 
-Only if you need something not built in: put `methods/<name>.py` with `fit(src, rec)` in the train. That overrides the kernel file of the same name.
+Only if you need something not built in: `methods/<name>.py` with `fit(src, rec)`.
