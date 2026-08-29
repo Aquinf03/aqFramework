@@ -83,6 +83,27 @@ def training_precision_flags(dtype) -> dict[str, Any]:
     }
 
 
+def model_load_dtype(rec: dict | None = None):
+    """Dtype for from_pretrained under HF Trainer.
+
+    When TrainingArguments enables fp16/bf16 AMP, weights must stay float32.
+    Loading the whole model as float16 + GradScaler raises:
+    'Attempting to unscale FP16 gradients.'
+    recipe.dtype still selects AMP (fp16 vs bf16) via training_precision_flags.
+    """
+    torch = require_torch()
+    compute = default_dtype(rec)
+    prec = training_precision_flags(compute)
+    if prec.get("fp16") or prec.get("bf16"):
+        return torch.float32
+    return compute
+
+
+def apply_pretrained_dtype(load_kw: dict[str, Any], dtype) -> None:
+    """Set load dtype for transformers from_pretrained (avoids deprecated torch_dtype-only)."""
+    load_kw["dtype"] = dtype
+
+
 def supports_bnb_4bit() -> bool:
     """bitsandbytes 4-bit is CUDA-only in practice."""
     if device_kind() != "cuda":

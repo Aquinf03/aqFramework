@@ -14,8 +14,10 @@ from typing import Any
 
 from backends import deploy as deploy_mod
 from backends.device import (
+    apply_pretrained_dtype,
     default_dtype,
     device_kind,
+    model_load_dtype,
     move_batch,
     supports_bnb_4bit,
     training_precision_flags,
@@ -209,7 +211,8 @@ def _build_model_and_tok(rec: dict, obj: str, slot: Path, texts: list[str]):
             "Use objective/method lora without bits, or run on NVIDIA CUDA."
         )
     else:
-        load_kw["torch_dtype"] = dtype
+        # AMP (CUDA/ROCm fp16|bf16) needs FP32 params; see model_load_dtype.
+        apply_pretrained_dtype(load_kw, model_load_dtype(rec))
         if kind in ("cuda", "rocm"):
             load_kw["device_map"] = opt(rec, "device_map", "auto")
 
@@ -648,7 +651,8 @@ def _load_for_infer(train: Path, model: dict):
     full = model.get("model_path")
     qlora = model.get("bits") == 4 or model.get("objective") == "qlora"
     dtype = default_dtype({})
-    load_kw: dict[str, Any] = {"trust_remote_code": True, "torch_dtype": dtype}
+    load_kw: dict[str, Any] = {"trust_remote_code": True}
+    apply_pretrained_dtype(load_kw, dtype)
     if qlora and supports_bnb_4bit():
         from transformers import BitsAndBytesConfig
 

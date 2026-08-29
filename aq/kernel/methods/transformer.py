@@ -6,7 +6,14 @@ import csv
 import json
 from pathlib import Path
 
-from backends.device import default_dtype, device_kind, torch_device, training_precision_flags
+from backends.device import (
+    apply_pretrained_dtype,
+    default_dtype,
+    device_kind,
+    model_load_dtype,
+    torch_device,
+    training_precision_flags,
+)
 from backends.deps import require_torch, require_transformers
 from backends.hf_lm import resolve_model_id
 from backends.recipe_opt import opt
@@ -73,8 +80,10 @@ def fit(src: Path, rec: dict) -> dict:
         label2id = {c: i for i, c in enumerate(classes)}
         y = [label2id[str(x)] for x in labels]
         tok = transformers.AutoTokenizer.from_pretrained(model_id)
+        load_kw: dict = {"num_labels": len(classes), "trust_remote_code": True}
+        apply_pretrained_dtype(load_kw, model_load_dtype(rec))
         model = transformers.AutoModelForSequenceClassification.from_pretrained(
-            model_id, num_labels=len(classes), torch_dtype=dtype, trust_remote_code=True
+            model_id, **load_kw
         )
         if device_kind() == "mps":
             model.to(torch_device())
@@ -134,9 +143,9 @@ def fit(src: Path, rec: dict) -> dict:
         sources = [str(r[src_k]) for r in rows]
         targets = [str(r[tgt_k]) for r in rows]
         tok = transformers.AutoTokenizer.from_pretrained(model_id)
-        model = transformers.AutoModelForSeq2SeqLM.from_pretrained(
-            model_id, torch_dtype=dtype, trust_remote_code=True
-        )
+        load_kw: dict = {"trust_remote_code": True}
+        apply_pretrained_dtype(load_kw, model_load_dtype(rec))
+        model = transformers.AutoModelForSeq2SeqLM.from_pretrained(model_id, **load_kw)
         if device_kind() == "mps":
             model.to(torch_device())
         enc = tok(sources, truncation=True, padding=True, max_length=max_len, return_tensors="pt")
