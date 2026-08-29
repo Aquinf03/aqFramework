@@ -1,14 +1,25 @@
-/** Markdown → ANSI for chat. Code fences, inline code, a bit of LaTeX. Not a spec. */
+/** Markdown → ANSI for chat. Code fences, inline code, OSC-8 file links, a bit of LaTeX. */
+
+import { existsSync } from "node:fs"
+import path from "node:path"
+import { pathToFileURL } from "node:url"
 
 const RESET = "\x1b[0m"
 const BOLD = "\x1b[1m"
 const DIM = "\x1b[38;5;245m"
 const ITAL = "\x1b[3m"
 const CODE = "\x1b[38;5;187m"
+const LINK = "\x1b[38;5;117m"
 const MATH = "\x1b[38;5;159m"
 const GUTTER = `${DIM}│${RESET} `
+const OSC8_END = "\x1b]8;;\x07"
 
 export type MdState = { fence: boolean; math: boolean }
+
+export type MdOpts = {
+  /** Train / workspace root — relative cite targets resolve here for clickable file:// links. */
+  baseDir?: string
+}
 
 const SUPER: Record<string, string> = {
   "0": "⁰",
@@ -103,19 +114,81 @@ function latex(src: string): string {
   return `${MATH}${t}${RESET}`
 }
 
-function inline(s: string): string {
+/** Strip :L12 / :12 suffix used in cites. */
+function splitCiteTarget(raw: string): { rel: string; line?: string } {
+  const m = raw.trim().match(/^(.*?)(?::[Ll]?(\d+))?$/)
+  if (!m) return { rel: raw.trim() }
+  return { rel: (m[1] ?? raw).trim(), line: m[2] }
+}
+
+function looksLikeRelPath(s: string): boolean {
+  if (!s || s.length > 240) return false
+  if (/\s/.test(s)) return false
+  if (/^(https?:|mailto:|file:)/i.test(s)) return false
+  // code-ish, not a path
+  if (/^[a-z]+$/.test(s) && !s.includes(".") && !s.includes("/")) return false
+  return /^(?:\.\.?\/|[A-Za-z0-9_.@+-]+\/|[A-Za-z0-9_.@+-]+\.[A-Za-z0-9_+-]+)/.test(s)
+}
+
+function resolveFileUrl(target: string, baseDir?: string): string | null {
+  const t = target.trim()
+  if (!t) return null
+  if (/^https?:\/\//i.test(t) || /^mailto:/i.test(t)) return t
+  if (/^file:\/\//i.test(t)) return t
+
+  const { rel } = splitCiteTarget(t.replace(/^\.\//, ""))
+  if (!looksLikeRelPath(rel) && !path.isAbsolute(rel)) return null
+
+  let abs: string
+  if (path.isAbsolute(rel)) {
+    abs = path.resolve(rel)
+  } else if (baseDir) {
+    const root = path.resolve(baseDir)
+    abs = path.resolve(root, rel)
+    const to = path.relative(root, abs)
+    if (to.startsWith("..") || path.isAbsolute(to)) return null
+  } else {
+    abs = path.resolve(rel)
+  }
+  return pathToFileURL(abs).href
+}
+
+function osc8(url: string, label: string): string {
+  return `\x1b]8;;${url}\x07${LINK}${label}${RESET}${OSC8_END}`
+}
+
+function linkify(label: string, href: string, baseDir?: string): string {
+  const url = resolveFileUrl(href, baseDir) ?? (/^https?:\/\//i.test(href) ? href : null)
+  if (!url) return `${label}${DIM} (${href})${RESET}`
+  return osc8(url, label)
+}
+
+function autoLinkBacktick(body: string, baseDir?: string): string {
+  const { rel, line } = splitCiteTarget(body)
+  if (!looksLikeRelPath(rel)) return `${CODE}${body}${RESET}`
+  if (!baseDir) return `${CODE}${body}${RESET}`
+  const root = path.resolve(baseDir)
+  const abs = path.resolve(root, rel.replace(/^\.\//, ""))
+  const to = path.relative(root, abs)
+  if (to.startsWith("..") || path.isAbsolute(to)) return `${CODE}${body}${RESET}`
+  if (!existsSync(abs)) return `${CODE}${body}${RESET}`
+  const label = line ? `${rel}:L${line}` : rel
+  return osc8(pathToFileURL(abs).href, label)
+}
+
+function inline(s: string, baseDir?: string): string {
   let t = s
   t = t.replace(/\$\$([^$]+)\$\$/g, (_, x: string) => latex(x))
   t = t.replace(/\\\((.+?)\\\)/g, (_, x: string) => latex(x))
   t = t.replace(/\\\[(.+?)\\\]/g, (_, x: string) => `  ${latex(x)}`)
   t = t.replace(/(?<!\$)\$([^$\n]+)\$(?!\$)/g, (_, x: string) => latex(x))
-  t = t.replace(/`([^`]+)`/g, (_, x: string) => `${CODE}${x}${RESET}`)
+  // markdown links first — preferred cite form: [recipe.yaml](recipe.yaml) or [recipe.yaml:L12](recipe.yaml)
+  t = t.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, label: string, url: string) =>
+    linkify(label, url, baseDir),
+  )
+  t = t.replace(/`([^`]+)`/g, (_, x: string) => autoLinkBacktick(x, baseDir))
   t = t.replace(/\*\*([^*]+)\*\*/g, (_, x: string) => `${BOLD}${x}${RESET}`)
   t = t.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, (_, x: string) => `${ITAL}${x}${RESET}`)
-  t = t.replace(
-    /\[([^\]]+)\]\(([^)]+)\)/g,
-    (_, label: string, url: string) => `${label}${DIM} (${url})${RESET}`,
-  )
   return t
 }
 
@@ -127,9 +200,10 @@ function mathFence(line: string, math: boolean): "open" | "close" | null {
   return null
 }
 
-export function renderMarkdown(src: string, state?: MdState): string {
+export function renderMarkdown(src: string, state?: MdState, opts?: MdOpts): string {
   const lines = src.replace(/\r\n/g, "\n").split("\n")
   const st = state ?? { fence: false, math: false }
+  const baseDir = opts?.baseDir
   const out: string[] = []
   for (const line of lines) {
     const open = line.match(/^```(\w*)\s*$/)
@@ -172,24 +246,24 @@ export function renderMarkdown(src: string, state?: MdState): string {
     }
     const h = line.match(/^(#{1,6})\s+(.*)$/)
     if (h) {
-      out.push(`${BOLD}${inline(h[2] ?? "")}${RESET}`)
+      out.push(`${BOLD}${inline(h[2] ?? "", baseDir)}${RESET}`)
       continue
     }
     const li = line.match(/^\s*[-*]\s+(.*)$/)
     if (li) {
-      out.push(`  • ${inline(li[1] ?? "")}`)
+      out.push(`  • ${inline(li[1] ?? "", baseDir)}`)
       continue
     }
     const num = line.match(/^\s*\d+\.\s+(.*)$/)
     if (num) {
-      out.push(`  ${inline(num[1] ?? "")}`)
+      out.push(`  ${inline(num[1] ?? "", baseDir)}`)
       continue
     }
     if (line.startsWith("> ")) {
-      out.push(`${DIM}${inline(line.slice(2))}${RESET}`)
+      out.push(`${DIM}${inline(line.slice(2), baseDir)}${RESET}`)
       continue
     }
-    out.push(inline(line))
+    out.push(inline(line, baseDir))
   }
   return out.join("\n")
 }

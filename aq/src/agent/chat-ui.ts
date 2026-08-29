@@ -1053,7 +1053,7 @@ export async function startChatUi(train: string, resumeId?: string): Promise<voi
       armed = false
       pick = 0
       screen = null
-      const painted = renderMarkdown(t)
+      const painted = renderMarkdown(t, undefined, { baseDir: train })
         .split("\n")
         .map((ln) => `${BOLD}${RAIL} ${ln}${RESET}`)
         .join("\n")
@@ -1093,7 +1093,7 @@ export async function startChatUi(train: string, resumeId?: string): Promise<voi
       }
       const flushPending = () => {
         if (!pending) return
-        write(renderMarkdown(pending, md) + "\n")
+        write(renderMarkdown(pending, md, { baseDir: train }) + "\n")
         pending = ""
       }
       try {
@@ -1112,7 +1112,7 @@ export async function startChatUi(train: string, resumeId?: string): Promise<voi
             pending += chunk
             const parts = pending.split("\n")
             pending = parts.pop() ?? ""
-            for (const line of parts) write(renderMarkdown(line, md) + "\n")
+            for (const line of parts) write(renderMarkdown(line, md, { baseDir: train }) + "\n")
           },
           (name) => {
             stopSpin()

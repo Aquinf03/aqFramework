@@ -62,7 +62,8 @@ export async function runTurn(
     if (!out.text.trim() && usedTools) {
       msgs.push({
         role: "user",
-        content: "Answer the user now in a few sentences. Do not only list filenames.",
+        content:
+          "Answer the user now in a few sentences. Cite files as markdown links like [recipe.yaml](recipe.yaml). Do not invent scores or pass/fail. Do not only list filenames.",
       })
       continue
     }

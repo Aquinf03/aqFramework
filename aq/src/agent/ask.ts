@@ -62,5 +62,5 @@ export async function ask(argv: string[]): Promise<void> {
     stdout.write(JSON.stringify({ text: answer, tools }) + "\n")
     return
   }
-  stdout.write(renderMarkdown(answer) + "\n")
+  stdout.write(renderMarkdown(answer, undefined, { baseDir: train }) + "\n")
 }
