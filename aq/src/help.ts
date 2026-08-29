@@ -28,7 +28,7 @@ export function help(): string {
     "  aq checkout <id>        restore that run's tree into cwd",
     "  aq checkout <id> <dest>  tree + that job in a new dir",
     "  aq data hash [dir] [--snapshot]  hash recipe data.path",
-    "  aq train [dir]          fit; write artifacts/checkpoints/last.json",
+    "  aq train [dir]          fit; write checkpoints + artifacts/metrics.jsonl",
     "  aq eval [dir] [name] [--ckpt name]  score evals/<name> (all evals/ if omitted)",
     "  aq checkpoint [dir] [--keep name]  list or copy last to name",
     "  aq serve [dir] [prompt] [--ckpt name] [--max-tokens n] [--temperature t]",

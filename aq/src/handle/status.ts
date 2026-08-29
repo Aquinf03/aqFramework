@@ -67,6 +67,33 @@ export async function status(argv: string[]): Promise<void> {
     if (s.checkpoint) console.log("  " + s.checkpoint)
   } else console.log("  (none)")
 
+  const metrics = path.join(train, "artifacts", "metrics.jsonl")
+  console.log("metrics")
+  if (existsSync(metrics)) {
+    const lines = readFileSync(metrics, "utf8").trim().split("\n").filter(Boolean)
+    console.log("  artifacts/metrics.jsonl  (" + lines.length + " events)")
+    for (const line of lines.slice(-5)) {
+      try {
+        const row = JSON.parse(line) as {
+          event?: string
+          step?: number
+          loss?: number
+          score?: number
+          metric?: string
+          elapsed_ms?: number
+        }
+        const bits = [row.event ?? "?"]
+        if (row.step != null) bits.push("step " + row.step)
+        if (row.loss != null) bits.push("loss " + row.loss)
+        if (row.metric != null) bits.push(row.metric + " " + String(row.score ?? ""))
+        if (row.elapsed_ms != null) bits.push(row.elapsed_ms + "ms")
+        console.log("  " + bits.join("  "))
+      } catch {
+        console.log("  " + line.slice(0, 80))
+      }
+    }
+  } else console.log("  (none)")
+
   const slog = path.join(train, "artifacts", "schedules")
   console.log("schedules")
   if (existsSync(slog)) {

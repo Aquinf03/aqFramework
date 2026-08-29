@@ -6,6 +6,8 @@ This is the first working LLM LoRA step: frozen weights, trained A/B, next-token
 
 from __future__ import annotations
 
+from protocol import metrics as aq_metrics
+
 import csv
 import json
 import math
@@ -114,12 +116,13 @@ def fit(csv_path: Path, rec: dict) -> dict:
     if not pairs:
         raise SystemExit("lora: texts too short")
     last = 0.0
-    for _ in range(EPOCHS):
+    for step_i in range(EPOCHS):
         rng.shuffle(pairs)
         total = 0.0
         for prev, nxt in pairs:
             total += _step(W_in, W_out, A, B, prev, nxt)
         last = total / len(pairs)
+        aq_metrics.step(step=step_i, loss=last, lr=LR)
     return {
         "kind": "lora",
         "backend": "tiny",

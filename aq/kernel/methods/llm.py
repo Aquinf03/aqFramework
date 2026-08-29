@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from protocol import metrics as aq_metrics
+
 import json
 import math
 from pathlib import Path
@@ -435,7 +437,7 @@ def _train_core(
     for blk in blks:
         params.extend(blk.values())
     last = 0.0
-    for _ in range(steps):
+    for step_i in range(steps):
         total = 0.0
         for ids in windows:
             logits = _decode(ids[:-1], tok, blks, wout)
@@ -444,6 +446,7 @@ def _train_core(
             sgd(params, lr)
             total += loss.data[0][0]
         last = total / len(windows)
+        aq_metrics.step(step=step_i, loss=last, lr=lr)
     n_pred = sum(max(len(w) - 1, 0) for w in windows)
     return {
         "kind": "llm",
@@ -531,7 +534,7 @@ def _train_fim(texts: list[str], rec: dict, size: str, sources=None, weights=Non
     for blk in blks:
         params.extend(blk.values())
     last = 0.0
-    for _ in range(steps):
+    for step_i in range(steps):
         total = 0.0
         for ids in windows:
             logits = _decode(ids[:-1], tok, blks, wout)
@@ -540,6 +543,7 @@ def _train_fim(texts: list[str], rec: dict, size: str, sources=None, weights=Non
             sgd(params, lr)
             total += loss.data[0][0]
         last = total / len(windows)
+        aq_metrics.step(step=step_i, loss=last, lr=lr)
     n_pred = sum(max(len(w) - 1, 0) for w in windows)
     return {
         "kind": "llm",
@@ -589,7 +593,7 @@ def _distill(texts: list[str], rec: dict, sources=None, weights=None) -> dict:
     steps = int(_opt(rec, "distill_steps", _opt(rec, "steps", 40)))
     lr = float(_opt(rec, "lr", 0.05))
     last = 0.0
-    for _ in range(steps):
+    for step_i in range(steps):
         total = 0.0
         for ids in windows:
             t_log = _decode_float(ids[:-1], t_tok, t_blks, t_wout)
@@ -610,6 +614,7 @@ def _distill(texts: list[str], rec: dict, sources=None, weights=None) -> dict:
             sgd(params, lr * 0.5)
             total += ce.data[0][0] + 0.5 * kl
         last = total / len(windows)
+        aq_metrics.step(step=step_i, loss=last, lr=lr)
     out = {
         "kind": "llm",
         "class": "distilled",
@@ -659,7 +664,7 @@ def _train_mtp(texts: list[str], rec: dict, size: str, sources=None, weights=Non
         params.extend(blk.values())
     last = 0.0
     n_pred = 0
-    for _ in range(steps):
+    for step_i in range(steps):
         total = 0.0
         n_pred = 0
         for ids in windows:
@@ -683,6 +688,7 @@ def _train_mtp(texts: list[str], rec: dict, size: str, sources=None, weights=Non
             total += loss.data[0][0]
             n_pred += n_here
         last = total / max(len(windows), 1)
+        aq_metrics.step(step=step_i, loss=last, lr=lr)
     return {
         "kind": "llm",
         "class": size,
@@ -738,7 +744,7 @@ def _train_mlm(texts: list[str], rec: dict, size: str, sources=None, weights=Non
         params.extend(blk.values())
     last = 0.0
     n_pred = 0
-    for _ in range(steps):
+    for step_i in range(steps):
         total = 0.0
         n_pred = 0
         for ids in windows:
@@ -750,6 +756,7 @@ def _train_mlm(texts: list[str], rec: dict, size: str, sources=None, weights=Non
             total += loss.data[0][0]
             n_pred += len(pairs)
         last = total / len(windows)
+        aq_metrics.step(step=step_i, loss=last, lr=lr)
     return {
         "kind": "llm",
         "class": size,
@@ -807,7 +814,7 @@ def _train_span(texts: list[str], rec: dict, size: str, sources=None, weights=No
     params = [tok, wout, xq, xk, xv, xo, *enc[0].values(), *dec[0].values()]
     last = 0.0
     n_pred = 0
-    for _ in range(steps):
+    for step_i in range(steps):
         total = 0.0
         n_pred = 0
         for ids in windows:
@@ -819,6 +826,7 @@ def _train_span(texts: list[str], rec: dict, size: str, sources=None, weights=No
             total += loss.data[0][0]
             n_pred += len(tgt)
         last = total / len(windows)
+        aq_metrics.step(step=step_i, loss=last, lr=lr)
     return {
         "kind": "llm",
         "class": size,
@@ -881,7 +889,7 @@ def _train_sft(
         params.extend(blk.values())
     last = 0.0
     n_pred = 0
-    for _ in range(steps):
+    for step_i in range(steps):
         total = 0.0
         n_pred = 0
         for seq, pairs in examples:
@@ -896,6 +904,7 @@ def _train_sft(
             total += loss.data[0][0]
             n_pred += len(adj)
         last = total / max(len(examples), 1)
+        aq_metrics.step(step=step_i, loss=last, lr=lr)
     return {
         "kind": "llm",
         "class": size,
@@ -1101,7 +1110,7 @@ def _train_lora(
     adapters = [A, B]
     last = 0.0
     n_pred = 0
-    for _ in range(steps):
+    for step_i in range(steps):
         total = 0.0
         n_pred = 0
         for seq, pairs in examples:
@@ -1115,6 +1124,7 @@ def _train_lora(
             total += loss.data[0][0]
             n_pred += len(adj)
         last = total / max(len(examples), 1)
+        aq_metrics.step(step=step_i, loss=last, lr=lr)
     out = {
         "kind": "llm",
         "class": size,

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from protocol import metrics as aq_metrics
+
 import math
 from pathlib import Path
 
@@ -485,7 +487,7 @@ def fit(src: Path, rec: dict) -> dict:
         if not seqs:
             raise SystemExit("transformer decoder: texts too short")
         last = 0.0
-        for _ in range(steps):
+        for step_i in range(steps):
             total = 0.0
             for ids in seqs:
                 logits = _dec_forward(ids[:-1], tok, blk, wout)
@@ -494,6 +496,7 @@ def fit(src: Path, rec: dict) -> dict:
                 sgd(params, lr)
                 total += loss.data[0][0]
             last = total / len(seqs)
+            aq_metrics.step(step=step_i, loss=last, lr=lr)
         return {
             "kind": "transformer",
             "arch": arch,
@@ -524,7 +527,7 @@ def fit(src: Path, rec: dict) -> dict:
         wcls = Var(_rand(d, ncls, 0.2, seed))
         params = [tok, wcls, *blk.values()]
         last = 0.0
-        for _ in range(steps):
+        for step_i in range(steps):
             total = 0.0
             for text, lab in pairs:
                 ids = _ids(text, stoi, cap)
@@ -534,6 +537,7 @@ def fit(src: Path, rec: dict) -> dict:
                 sgd(params, lr)
                 total += loss.data[0][0]
             last = total / len(pairs)
+            aq_metrics.step(step=step_i, loss=last, lr=lr)
         return {
             "kind": "transformer",
             "arch": arch,
@@ -567,7 +571,7 @@ def fit(src: Path, rec: dict) -> dict:
     wout = Var(_rand(d, vsz, 0.2, seed))
     params = [tok, wout, xq, xk, xv, xo, *enc.values(), *dec.values()]
     last = 0.0
-    for _ in range(steps):
+    for step_i in range(steps):
         total = 0.0
         for a, b in pairs:
             sids = _ids(a, stoi, cap)
@@ -579,6 +583,7 @@ def fit(src: Path, rec: dict) -> dict:
             sgd(params, lr)
             total += loss.data[0][0]
         last = total / len(pairs)
+        aq_metrics.step(step=step_i, loss=last, lr=lr)
     return {
         "kind": "transformer",
         "arch": arch,

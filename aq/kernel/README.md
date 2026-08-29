@@ -4,8 +4,8 @@ Python. Train, eval, serve, checkpoint, data hash. `aq` calls `run.py` with a tr
 
 ```
 run.py          worker. reads artifacts/request.json, writes artifacts/result.json
-protocol/       recipe, revision (hash), run record, method loader
-engine/         train / eval / serve / checkpoint steps
+protocol/       recipe, revision (hash), run record, metrics.jsonl writer, method loader
+engine/         train / eval / serve / checkpoint steps (append artifacts/metrics.jsonl)
 methods/        fit adapters. filename is the method (linear, logistic, ridge, lasso, elasticnet, tree, forest, boosting, gp, transformer, llm, lora)
 ```
 

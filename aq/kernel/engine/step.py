@@ -11,7 +11,8 @@ from pathlib import Path
 from methods.linear import load_xy
 from protocol.method import call_fit, load_method
 from protocol.recipe import load_recipe
-from protocol.record import update_last_run, write_run
+from protocol.record import data_hash, recipe_hash, update_last_run, write_run
+from protocol import metrics as aq_metrics
 from protocol.tokenizer import check as check_tokenizer
 from protocol.tokenizer import pin as pin_tokenizer
 
@@ -69,39 +70,62 @@ def do_train(train: Path) -> list[str]:
     rec = load_recipe(train)
     method = rec["method"]
     src = data_file(train, rec)
-    mod = load_method(train, str(method))
-    model = call_fit(mod, src, rec)
-    if not isinstance(model, dict):
-        raise SystemExit("fit() must return a dict")
-    model.setdefault("kind", str(method))
-    tok_hash = pin_tokenizer(train, model)
-    dest = ckpt_dir(train)
-    n = 1 + sum(1 for p in dest.glob("*.json") if p.name != "last.json")
-    named = dest / f"{n}.json"
-    write_json(named, model)
-    shutil.copy2(named, dest / "last.json")
-    arts = {
-        "checkpoint": "artifacts/checkpoints/" + named.name,
-        "checkpoint_last": "artifacts/checkpoints/last.json",
-    }
-    if tok_hash:
-        arts["tokenizer"] = "artifacts/tokenizer.json"
-        arts["tokenizer_sha256"] = tok_hash
-    if hasattr(mod, "write_inspect"):
-        arts["inspect"] = mod.write_inspect(train, model)
-    rid = write_run(train, {"artifacts": arts})
-    lines = [
-        "train",
-        "  artifacts/checkpoints/" + named.name,
-        "  artifacts/checkpoints/last.json",
-        "  artifacts/runs/" + rid + ".json",
-    ]
-    if arts.get("inspect"):
-        lines.append("  " + arts["inspect"])
-    if arts.get("tokenizer"):
-        lines.append("  " + arts["tokenizer"])
-        lines.append("  tokenizer sha256:" + str(arts.get("tokenizer_sha256")))
-    return lines
+    _, rh = recipe_hash(train)
+    dh = data_hash(train, rec)
+    aq_metrics.begin(
+        train,
+        op="train",
+        family=rec.get("family"),
+        method=method,
+        recipe_hash=rh,
+        data_hash=dh,
+        data_path=str((rec.get("data") or {}).get("path") or ""),
+    )
+    try:
+        mod = load_method(train, str(method))
+        model = call_fit(mod, src, rec)
+        if not isinstance(model, dict):
+            raise SystemExit("fit() must return a dict")
+        model.setdefault("kind", str(method))
+        tok_hash = pin_tokenizer(train, model)
+        dest = ckpt_dir(train)
+        n = 1 + sum(1 for p in dest.glob("*.json") if p.name != "last.json")
+        named = dest / f"{n}.json"
+        write_json(named, model)
+        shutil.copy2(named, dest / "last.json")
+        arts = {
+            "checkpoint": "artifacts/checkpoints/" + named.name,
+            "checkpoint_last": "artifacts/checkpoints/last.json",
+            "metrics": "artifacts/metrics.jsonl",
+        }
+        if tok_hash:
+            arts["tokenizer"] = "artifacts/tokenizer.json"
+            arts["tokenizer_sha256"] = tok_hash
+        if hasattr(mod, "write_inspect"):
+            arts["inspect"] = mod.write_inspect(train, model)
+        summary = aq_metrics.model_summary(model)
+        aq_metrics.end(
+            checkpoint=arts["checkpoint"],
+            **summary,
+        )
+        rid = write_run(train, {"artifacts": arts})
+        lines = [
+            "train",
+            "  artifacts/checkpoints/" + named.name,
+            "  artifacts/checkpoints/last.json",
+            "  artifacts/metrics.jsonl",
+            "  artifacts/runs/" + rid + ".json",
+        ]
+        if arts.get("inspect"):
+            lines.append("  " + arts["inspect"])
+        if arts.get("tokenizer"):
+            lines.append("  " + arts["tokenizer"])
+            lines.append("  tokenizer sha256:" + str(arts.get("tokenizer_sha256")))
+        return lines
+    except Exception as e:
+        aq_metrics.event("error", error=str(e))
+        aq_metrics.end(ok=False, error=str(e))
+        raise
 
 
 def score(metric: str, y_true: list, y_hat: list) -> float:
@@ -170,58 +194,94 @@ def do_eval(train: Path, ckpt_name: str | None, probe: str | None = None) -> lis
     if not files:
         files = [data_file(train, rec)]
     min_score = (rec.get("eval") or {}).get("min_score")
-    probes = []
-    wsum = 0.0
-    ntot = 0
-    metric = "mse"
-    all_pass: bool | None = True if min_score is not None else None
-    for src in files:
-        metric, sc, n = _score_file(train, rec, model, src)
-        try:
-            rel = str(src.relative_to(train))
-        except ValueError:
-            rel = str(src)
-        fp = _file_pass(metric, sc, min_score)
-        probes.append({"path": rel, "score": sc, "n": n, "pass": fp})
-        wsum += sc * n
-        ntot += n
-        if all_pass is True and fp is False:
-            all_pass = False
-    if ntot == 0:
-        raise SystemExit("empty eval")
-    sc = wsum / ntot
-    verdict = "skip" if min_score is None else ("pass" if all_pass else "fail")
-    out = {
-        "metric": metric,
-        "score": sc,
-        "n": ntot,
-        "pass": all_pass,
-        "min_score": min_score,
-        "checkpoint": str(ckpt.relative_to(train)),
-        "probes": probes,
-    }
-    write_json(train / "artifacts" / "eval.json", out)
-    rid = update_last_run(
+    _, rh = recipe_hash(train)
+    aq_metrics.begin(
         train,
-        {
-            "metrics": {"metric": metric, "score": sc, "n": ntot, "probes": probes},
-            "pass": all_pass,
-            "artifacts": {"eval": "artifacts/eval.json", "checkpoint": out["checkpoint"]},
-        },
+        op="eval",
+        family=rec.get("family"),
+        method=rec.get("method"),
+        recipe_hash=rh,
+        checkpoint=str(ckpt.relative_to(train)),
+        min_score=min_score,
     )
-    lines = [
-        "eval",
-        "  " + str(out["metric"]),
-        "  " + str(sc),
-        "  " + verdict,
-        "  " + out["checkpoint"],
-        "  artifacts/runs/" + rid + ".json",
-    ]
-    if len(probes) > 1 or (probes and probes[0]["path"].startswith("evals/")):
-        for p in probes:
-            lines.append("  " + p["path"] + "  " + str(p["score"]))
-    return lines
-
+    try:
+        probes = []
+        wsum = 0.0
+        ntot = 0
+        metric = "mse"
+        all_pass: bool | None = True if min_score is not None else None
+        for src in files:
+            metric, sc, n = _score_file(train, rec, model, src)
+            try:
+                rel = str(src.relative_to(train))
+            except ValueError:
+                rel = str(src)
+            fp = _file_pass(metric, sc, min_score)
+            probes.append({"path": rel, "score": sc, "n": n, "pass": fp})
+            aq_metrics.event(
+                "eval.probe",
+                path=rel,
+                metric=metric,
+                score=sc,
+                n=n,
+                **{"pass": fp},
+            )
+            wsum += sc * n
+            ntot += n
+            if all_pass is True and fp is False:
+                all_pass = False
+        if ntot == 0:
+            raise SystemExit("empty eval")
+        sc = wsum / ntot
+        verdict = "skip" if min_score is None else ("pass" if all_pass else "fail")
+        out = {
+            "metric": metric,
+            "score": sc,
+            "n": ntot,
+            "pass": all_pass,
+            "min_score": min_score,
+            "checkpoint": str(ckpt.relative_to(train)),
+            "probes": probes,
+        }
+        write_json(train / "artifacts" / "eval.json", out)
+        aq_metrics.end(
+            metric=metric,
+            score=sc,
+            n=ntot,
+            verdict=verdict,
+            checkpoint=out["checkpoint"],
+            probes=probes,
+            **{"pass": all_pass},
+        )
+        rid = update_last_run(
+            train,
+            {
+                "metrics": {"metric": metric, "score": sc, "n": ntot, "probes": probes},
+                "pass": all_pass,
+                "artifacts": {
+                    "eval": "artifacts/eval.json",
+                    "checkpoint": out["checkpoint"],
+                    "metrics": "artifacts/metrics.jsonl",
+                },
+            },
+        )
+        lines = [
+            "eval",
+            "  " + str(out["metric"]),
+            "  " + str(sc),
+            "  " + verdict,
+            "  " + out["checkpoint"],
+            "  artifacts/metrics.jsonl",
+            "  artifacts/runs/" + rid + ".json",
+        ]
+        if len(probes) > 1 or (probes and probes[0]["path"].startswith("evals/")):
+            for p in probes:
+                lines.append("  " + p["path"] + "  " + str(p["score"]))
+        return lines
+    except Exception as e:
+        aq_metrics.event("error", error=str(e))
+        aq_metrics.end(ok=False, error=str(e))
+        raise
 
 def do_serve(
     train: Path,
@@ -244,32 +304,54 @@ def do_serve(
     if not prompt:
         raise SystemExit("serve needs a prompt (argv or recipe serve.prompt)")
     kind = str(model.get("kind") or rec.get("method") or "linear")
-    mod = load_method(train, kind)
-    if not hasattr(mod, "generate"):
-        raise SystemExit(f"method {kind} has no generate()")
-    out = mod.generate(model, str(prompt), rec, max_tokens=max_tokens, temperature=temperature)
-    out["checkpoint"] = str(ckpt.relative_to(train))
-    write_json(train / "artifacts" / "serve.json", out)
-    rid = update_last_run(
+    aq_metrics.begin(
         train,
-        {
-            "artifacts": {
-                "serve": "artifacts/serve.json",
-                "checkpoint": out["checkpoint"],
-            },
-        },
+        op="serve",
+        method=kind,
+        checkpoint=str(ckpt.relative_to(train)),
+        max_tokens=max_tokens,
+        temperature=temperature,
+        prompt_chars=len(str(prompt)),
     )
-    lines = [
-        "serve",
-        "  " + str(out.get("text") or ""),
-        "  " + out["checkpoint"],
-        "  artifacts/serve.json",
-        "  artifacts/runs/" + rid + ".json",
-    ]
-    if out.get("completion") not in (None, ""):
-        lines.append("  completion: " + str(out.get("completion")))
-    lines.append("  tokens: " + str(out.get("tokens")))
-    return lines
+    try:
+        mod = load_method(train, kind)
+        if not hasattr(mod, "generate"):
+            raise SystemExit(f"method {kind} has no generate()")
+        out = mod.generate(model, str(prompt), rec, max_tokens=max_tokens, temperature=temperature)
+        out["checkpoint"] = str(ckpt.relative_to(train))
+        write_json(train / "artifacts" / "serve.json", out)
+        aq_metrics.end(
+            checkpoint=out["checkpoint"],
+            tokens=out.get("tokens"),
+            text_chars=len(str(out.get("text") or "")),
+            completion_chars=len(str(out.get("completion") or "")),
+        )
+        rid = update_last_run(
+            train,
+            {
+                "artifacts": {
+                    "serve": "artifacts/serve.json",
+                    "checkpoint": out["checkpoint"],
+                    "metrics": "artifacts/metrics.jsonl",
+                },
+            },
+        )
+        lines = [
+            "serve",
+            "  " + str(out.get("text") or ""),
+            "  " + out["checkpoint"],
+            "  artifacts/serve.json",
+            "  artifacts/metrics.jsonl",
+            "  artifacts/runs/" + rid + ".json",
+        ]
+        if out.get("completion") not in (None, ""):
+            lines.append("  completion: " + str(out.get("completion")))
+        lines.append("  tokens: " + str(out.get("tokens")))
+        return lines
+    except Exception as e:
+        aq_metrics.event("error", error=str(e))
+        aq_metrics.end(ok=False, error=str(e))
+        raise
 
 
 def do_checkpoint(train: Path, keep: str | None) -> list[str]:
