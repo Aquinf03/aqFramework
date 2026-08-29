@@ -4,7 +4,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { Check, CircleNotch, Copy, Eye, EyeSlash } from "@phosphor-icons/react";
+import { Check, CircleNotch, Copy, ArrowUpRight, Eye, EyeSlash } from "@phosphor-icons/react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AuthHeader } from "@/components/AuthHeader";
@@ -342,6 +342,24 @@ function AuthPortalInner() {
                     />
                   </div>
                 ))}
+
+                <div className="pt-2">
+                  <a
+                    href="https://aquin.app/docs"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="group inline-flex items-center gap-1.5 text-sm font-medium text-stone-800 underline decoration-stone-300 underline-offset-4 transition-colors hover:decoration-stone-800"
+                  >
+                    Documentation
+                    <ArrowUpRight
+                      className="h-3.5 w-3.5 text-stone-400 transition-colors group-hover:text-stone-800"
+                      weight="bold"
+                    />
+                  </a>
+                  <p className="mt-1.5 text-xs text-stone-400">
+                    Guides, CLI reference, and how trains work.
+                  </p>
+                </div>
               </div>
             </div>
           )}
