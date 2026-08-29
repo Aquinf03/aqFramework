@@ -32,7 +32,6 @@ This folder is the deep reference for the whole framework: philosophy, architect
 | [Install & release](./install-release.md) | curl install, git, checkout, R2 releases |
 | [Tests catalog](./tests-catalog.md) | Every `tests/` family and what it proves |
 | [Coverage & roadmap](./coverage-roadmap.md) | What actually works vs unfinished (matches COMPLETED) |
-| [PyAquin](./pyaquin.md) | Future language/runtime (destination, not next) |
 
 ---
 

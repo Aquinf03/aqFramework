@@ -99,7 +99,7 @@ The framework was built in this order; it is still the right mental stack:
 5. **Research tracking** - run records, metrics, diff, status  
 6. **Agent** - chat, tools, MCP, spawn, internal agent evals  
 7. **Coverage walk** - tabular → transformers → foundation models (see [Coverage](./coverage-roadmap.md))  
-8. **Own stack / PyAquin** - only when a family proves torch/HF is the wall  
+8. **Own neural stack (drop HF)** - see `internals/REPLACE_HF.md` 
 
 ## Dual configs (do not confuse them)
 

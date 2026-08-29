@@ -97,4 +97,4 @@ If that path is awkward, the framework is unfinished - not “needs a dashboard.
 
 ## Where this sits relative to PyTorch
 
-PyTorch already won tensors, autograd, and CUDA. Aquin does not compete there first. Aquin wins on **reproducible folders**, **fail-closed gates**, **hashed data and tokenizers**, **jobs you can checkout**, and **an agent that refuses to invent metrics**. A future language/runtime ([PyAquin](./pyaquin.md)) is a destination after the harness is boring and correct - not the next sprint.
+PyTorch already won tensors, autograd, and CUDA. Aquin does not compete there. Aquin wins on **reproducible folders**, **gates that error instead of faking**, **hashed data and tokenizers**, **jobs you can checkout**, and **an agent that refuses to invent metrics**. Leaving the Hugging Face adapter for an aq-owned neural path is next (`internals/REPLACE_HF.md`).

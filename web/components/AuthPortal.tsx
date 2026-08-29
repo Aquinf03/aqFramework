@@ -26,6 +26,47 @@ import {
 type AuthStep = "email" | "password" | "signup" | "signup-password" | "ready" | "desktop";
 type DesktopPhase = "minting" | "ready" | "error";
 
+const INSTALL_CMD = "curl -fsSL https://aq.aquin.app/framework/install.sh | bash";
+
+const NEXT_CMDS = [
+  { id: "login", label: "Sign in", cmd: "aq login" },
+  { id: "doctor", label: "Check your setup", cmd: "aq doctor" },
+  { id: "init", label: "Start a train", cmd: "aq init my-train" },
+] as const;
+
+type CopyKey = "install" | (typeof NEXT_CMDS)[number]["id"];
+
+function CmdRow({
+  cmd,
+  copied,
+  onCopy,
+}: {
+  cmd: string;
+  copied: boolean;
+  onCopy: () => void;
+}) {
+  return (
+    <div className="flex items-stretch gap-0 rounded-xl border-2 border-stone-200">
+      <code className="flex-1 min-w-0 self-center overflow-x-auto whitespace-nowrap px-3.5 py-2.5 text-[13px] leading-relaxed text-stone-800 select-all no-scrollbar">
+        {cmd}
+      </code>
+      <div className="w-0.5 shrink-0 self-stretch bg-stone-200" aria-hidden />
+      <button
+        type="button"
+        aria-label={copied ? "Copied" : `Copy ${cmd}`}
+        className="shrink-0 inline-flex items-center justify-center px-3 text-stone-500 hover:text-stone-800 transition-colors"
+        onClick={onCopy}
+      >
+        {copied ? (
+          <Check className="h-3.5 w-3.5" weight="bold" />
+        ) : (
+          <Copy className="h-3.5 w-3.5" weight="bold" />
+        )}
+      </button>
+    </div>
+  );
+}
+
 function codeFromDeepLink(link: string): string | null {
   try {
     return new URL(link).searchParams.get("code");
@@ -55,7 +96,7 @@ function AuthPortalInner() {
   const [desktopError, setDesktopError] = useState<string | null>(null);
   const [deepLink, setDeepLink] = useState<string | null>(null);
   const [code, setCode] = useState<string | null>(null);
-  const [copied, setCopied] = useState<"code" | "link" | null>(null);
+  const [copied, setCopied] = useState<CopyKey | "code" | "link" | null>(null);
   const [profileName, setProfileName] = useState<string | null>(null);
   const minted = useRef(false);
 
@@ -248,7 +289,7 @@ function AuthPortalInner() {
     setMessage(null);
   };
 
-  const copyText = async (which: "code" | "link", text: string) => {
+  const copyText = async (which: CopyKey | "code" | "link", text: string) => {
     try {
       await navigator.clipboard.writeText(text);
       setCopied(which);
@@ -274,15 +315,33 @@ function AuthPortalInner() {
       />
 
       <div className="flex min-h-screen items-center justify-center overflow-y-auto px-4 py-24">
-        <div className="w-full max-w-md">
+        <div className={cn("w-full", step === "ready" ? "max-w-xl" : "max-w-md")}>
           {step === "ready" && (
-            <div className="space-y-6">
-              <div className="flex flex-col items-stretch text-center gap-5">
-                <div>
-                  <h2 className="font-host-grotesk text-2xl font-semibold tracking-[-0.03em] text-stone-900">
-                    {timeGreeting()}, {firstName(profileName, user?.email ?? email)}
-                  </h2>
+            <div className="flex flex-col items-stretch gap-8">
+              <h2 className="font-host-grotesk text-center text-2xl font-semibold tracking-[-0.03em] text-stone-900">
+                {timeGreeting()}, {firstName(profileName, user?.email ?? email)}
+              </h2>
+
+              <div className="font-roboto space-y-5 text-left">
+                <div className="space-y-2">
+                  <p className="text-sm font-normal text-stone-500">Install the CLI</p>
+                  <CmdRow
+                    cmd={INSTALL_CMD}
+                    copied={copied === "install"}
+                    onCopy={() => void copyText("install", INSTALL_CMD)}
+                  />
                 </div>
+
+                {NEXT_CMDS.map(({ id, label, cmd }) => (
+                  <div key={id} className="space-y-2">
+                    <p className="text-sm font-normal text-stone-500">{label}</p>
+                    <CmdRow
+                      cmd={cmd}
+                      copied={copied === id}
+                      onCopy={() => void copyText(id, cmd)}
+                    />
+                  </div>
+                ))}
               </div>
             </div>
           )}
