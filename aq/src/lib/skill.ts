@@ -5,8 +5,20 @@ import path from "node:path"
 import type { McpSpec } from "./mcp.js"
 
 const DOC_EXTS = [".md", ".txt"]
-const CODE_EXTS = [".py", ".ts", ".js", ".sh"]
-const RUN_FILES = ["run.py", "run.ts", "run.js", "run.sh", "main.py", "main.ts", "main.js"]
+const CODE_EXTS = [".py", ".ts", ".js", ".mjs", ".cjs", ".sh"]
+const RUN_FILES = [
+  "run.py",
+  "run.ts",
+  "run.js",
+  "run.mjs",
+  "run.cjs",
+  "run.sh",
+  "main.py",
+  "main.ts",
+  "main.js",
+  "main.mjs",
+  "main.cjs",
+]
 
 export type Skill = {
   name: string

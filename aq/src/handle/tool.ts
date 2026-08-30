@@ -5,7 +5,7 @@ import { pythonBin } from "../core/python.js"
 import { assertTrain, isTrain } from "../core/schema.js"
 import { aqRoot } from "../core/root.js"
 
-const EXTS = [".py", ".ts", ".js", ".sh"]
+const EXTS = [".py", ".ts", ".js", ".mjs", ".cjs", ".sh"]
 
 function toolsDir(train: string): string {
   return path.join(train, "tools")
@@ -58,7 +58,7 @@ function runFile(train: string, file: string, extra: string[]): void {
     if (!existsSync(tsxCli)) throw new Error("tsx not found (need it to run .ts tools)")
     cmd = process.execPath
     args = [tsxCli, file, ...extra]
-  } else if (ext === ".js") {
+  } else if (ext === ".js" || ext === ".mjs" || ext === ".cjs") {
     cmd = process.execPath
     args = [file, ...extra]
   } else if (ext === ".sh") {
@@ -99,7 +99,7 @@ export function runFileCaptured(train: string, file: string, extra: string[] = [
     if (!existsSync(tsxCli)) throw new Error("tsx not found (need it to run .ts tools)")
     cmd = process.execPath
     args = [tsxCli, file, ...extra]
-  } else if (ext === ".js") {
+  } else if (ext === ".js" || ext === ".mjs" || ext === ".cjs") {
     cmd = process.execPath
     args = [file, ...extra]
   } else if (ext === ".sh") {
