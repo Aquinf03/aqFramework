@@ -8,11 +8,11 @@ from pathlib import Path
 
 from backends.device import (
     apply_pretrained_dtype,
-    default_dtype,
+    cuda_alloc_hygiene,
     device_kind,
     model_load_dtype,
+    resolve_train_precision,
     torch_device,
-    training_precision_flags,
 )
 from backends.deps import require_torch, require_transformers
 from backends.hf_lm import resolve_model_id
@@ -50,8 +50,9 @@ def fit(src: Path, rec: dict) -> dict:
     n = 1 + sum(1 for p in dest.glob("*.json") if p.name != "last.json")
     slot = dest / str(n)
     slot.mkdir(parents=True, exist_ok=True)
-    dtype = default_dtype(rec)
-    prec = training_precision_flags(dtype)
+    dtype = model_load_dtype(rec)
+    _, prec = resolve_train_precision(rec)
+    cuda_alloc_hygiene()
 
     if arch in ("decoder", "causal", "gpt"):
         from backends import hf_lm

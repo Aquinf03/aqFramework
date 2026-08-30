@@ -15,12 +15,13 @@ from typing import Any
 from backends import deploy as deploy_mod
 from backends.device import (
     apply_pretrained_dtype,
+    cuda_alloc_hygiene,
     default_dtype,
     device_kind,
     model_load_dtype,
     move_batch,
+    resolve_train_precision,
     supports_bnb_4bit,
-    training_precision_flags,
     torch_device,
 )
 from backends.deps import require_peft, require_torch, require_transformers
@@ -211,10 +212,11 @@ def _build_model_and_tok(rec: dict, obj: str, slot: Path, texts: list[str]):
             "Use objective/method lora without bits, or run on NVIDIA CUDA."
         )
     else:
-        # AMP (CUDA/ROCm fp16|bf16) needs FP32 params; see model_load_dtype.
+        # VRAM-safe dtypes (bf16 weights + bf16 AMP; never fp32 masters for AMP).
         apply_pretrained_dtype(load_kw, model_load_dtype(rec))
-        if kind in ("cuda", "rocm"):
-            load_kw["device_map"] = opt(rec, "device_map", "auto")
+        load_kw["low_cpu_mem_usage"] = True
+        # Single-GPU Trainer: avoid device_map=auto (can pin the whole card before step 0).
+        # QLoRA keeps device_map above.
 
     # Model class by objective
     if obj in ("mlm", "masked", "masked-lm"):
@@ -230,6 +232,8 @@ def _build_model_and_tok(rec: dict, obj: str, slot: Path, texts: list[str]):
 
     if kind == "mps" and "device_map" not in load_kw:
         model.to(torch_device())
+    elif kind in ("cuda", "rocm") and "device_map" not in load_kw:
+        model.to(torch_device())
     elif kind == "cpu" and "device_map" not in load_kw:
         model.to(torch_device())
 
@@ -243,7 +247,6 @@ def _build_model_and_tok(rec: dict, obj: str, slot: Path, texts: list[str]):
         alpha = int(opt(rec, "alpha", 32, "lora", "peft") or 32)
         dropout = float(opt(rec, "dropout", 0.05, "lora", "peft") or 0.05)
         targets = opt(rec, "target_modules", "all-linear", "lora", "peft")
-        task = "CAUSAL_LM" if obj not in ("mlm", "masked", "masked-lm") else "FEATURE_EXTRACTION"
         # FEATURE_EXTRACTION isn't ideal for MLM+LoRA; skip peft for pure MLM unless rank set
         if obj in ("mlm", "masked", "masked-lm") and not opt(rec, "rank", None, "lora", "peft"):
             model.train()
@@ -265,6 +268,23 @@ def _build_model_and_tok(rec: dict, obj: str, slot: Path, texts: list[str]):
                 ) from e
     else:
         model.train()
+
+    # Activation checkpointing after PEFT wrap — default on CUDA/ROCm (big VRAM win).
+    want_ckpt = opt(rec, "gradient_checkpointing", None, "train", "llm")
+    if want_ckpt is None:
+        want_ckpt = kind in ("cuda", "rocm")
+    if want_ckpt and hasattr(model, "gradient_checkpointing_enable"):
+        model.gradient_checkpointing_enable()
+        if hasattr(model, "config"):
+            try:
+                model.config.use_cache = False
+            except Exception:
+                pass
+        if hasattr(model, "enable_input_require_grads"):
+            try:
+                model.enable_input_require_grads()
+            except Exception:
+                pass
 
     return model, tok, model_id, want_qlora, used_lora, qlora_engine, tok_meta
 
@@ -539,10 +559,10 @@ def fit(src: Path, rec: dict, *, method_name: str | None = None) -> dict:
     transformers.set_seed(seed)
 
     ds = _build_dataset(torch, tok, texts, rec, obj, max_len, src=src)
-    dtype = default_dtype(rec)
-    prec = training_precision_flags(dtype)
+    load_dtype, prec = resolve_train_precision(rec)
+    cuda_alloc_hygiene()
 
-    training_args = transformers.TrainingArguments(
+    ta_kw: dict[str, Any] = dict(
         output_dir=str(slot / "hf" / "trainer"),
         per_device_train_batch_size=batch,
         gradient_accumulation_steps=accum,
@@ -556,8 +576,21 @@ def fit(src: Path, rec: dict, *, method_name: str | None = None) -> dict:
         remove_unused_columns=False,
         seed=seed,
         use_cpu=(device_kind() == "cpu"),
+        dataloader_pin_memory=(device_kind() in ("cuda", "rocm")),
+        gradient_checkpointing=bool(
+            opt(rec, "gradient_checkpointing", device_kind() in ("cuda", "rocm"), "train", "llm")
+        ),
         **prec,
     )
+    # Prefer fused Adam on CUDA when available (fall back if Transformers rejects it).
+    if device_kind() == "cuda":
+        ta_kw["optim"] = str(opt(rec, "optim", "adamw_torch_fused", "train", "llm") or "adamw_torch_fused")
+    try:
+        training_args = transformers.TrainingArguments(**ta_kw)
+    except (TypeError, ValueError):
+        ta_kw.pop("optim", None)
+        ta_kw.pop("dataloader_pin_memory", None)
+        training_args = transformers.TrainingArguments(**ta_kw)
 
     class _MetricsCallback(transformers.TrainerCallback):
         def on_log(self, args, state, control, logs=None, **kwargs):
@@ -575,7 +608,19 @@ def fit(src: Path, rec: dict, *, method_name: str | None = None) -> dict:
         train_dataset=ds,
         callbacks=[_MetricsCallback()],
     )
-    result = trainer.train()
+    try:
+        result = trainer.train()
+    except Exception as e:
+        msg = str(e)
+        if "out of memory" in msg.lower() or "oom" in msg.lower():
+            raise SystemExit(
+                f"{msg}\n\n"
+                "VRAM tips: set method/objective lora (or bits: 4 for QLoRA on CUDA), "
+                "lower max_seq_len, batch_size: 1, raise grad_accum, "
+                "dtype: bf16, keep gradient_checkpointing: true (default on CUDA). "
+                f"(load_dtype={load_dtype})"
+            ) from e
+        raise
     train_loss = float(result.training_loss) if result.training_loss is not None else None
 
     adapter_rel = None

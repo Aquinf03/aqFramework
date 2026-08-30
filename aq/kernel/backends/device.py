@@ -51,7 +51,6 @@ def default_dtype(rec: dict | None = None):
     if kind == "rocm":
         return torch.float16
     if kind == "mps":
-        # MPS is solid on float16 for many ops; bf16 support varies by OS
         return torch.float16
     return torch.float32
 
@@ -71,37 +70,70 @@ def move_batch(batch: dict, model) -> dict:
     return out
 
 
+def resolve_train_precision(rec: dict | None = None) -> tuple[Any, dict[str, Any]]:
+    """(load_dtype, TrainingArguments fp16/bf16 flags) — VRAM-safe.
+
+    - bf16 AMP: load weights as bf16 (no GradScaler; ~½ of fp32 masters).
+    - fp16 on CUDA with bf16 support: promote to bf16 (same stability, less VRAM than
+      fp32+GradScaler; avoids 'Attempting to unscale FP16 gradients').
+    - fp16 without bf16 (some ROCm): load fp16, do **not** enable GradScaler.
+    - fp32 / CPU / MPS: load requested dtype; no CUDA AMP flags.
+    """
+    torch = require_torch()
+    kind = device_kind()
+    compute = default_dtype(rec)
+    off = {"fp16": False, "bf16": False}
+
+    if kind not in ("cuda", "rocm"):
+        return compute, off
+
+    if compute == torch.float32:
+        return torch.float32, off
+
+    bf16_ok = kind == "cuda" and torch.cuda.is_bf16_supported()
+    if compute == torch.bfloat16 or (compute == torch.float16 and bf16_ok):
+        return torch.bfloat16, {"fp16": False, "bf16": True}
+
+    # fp16 path without bf16 hardware: pure half weights, no GradScaler
+    if compute == torch.float16:
+        return torch.float16, off
+
+    return compute, off
+
+
 def training_precision_flags(dtype) -> dict[str, Any]:
-    """HF TrainingArguments fp16/bf16 — only enable on CUDA/ROCm."""
+    """Legacy helper — prefer resolve_train_precision(rec)."""
     torch = require_torch()
     kind = device_kind()
     if kind not in ("cuda", "rocm"):
         return {"fp16": False, "bf16": False}
-    return {
-        "fp16": dtype == torch.float16,
-        "bf16": dtype == torch.bfloat16,
-    }
+    if dtype == torch.bfloat16:
+        return {"fp16": False, "bf16": True}
+    # Do not enable fp16 GradScaler with half weights
+    return {"fp16": False, "bf16": False}
 
 
 def model_load_dtype(rec: dict | None = None):
-    """Dtype for from_pretrained under HF Trainer.
-
-    When TrainingArguments enables fp16/bf16 AMP, weights must stay float32.
-    Loading the whole model as float16 + GradScaler raises:
-    'Attempting to unscale FP16 gradients.'
-    recipe.dtype still selects AMP (fp16 vs bf16) via training_precision_flags.
-    """
-    torch = require_torch()
-    compute = default_dtype(rec)
-    prec = training_precision_flags(compute)
-    if prec.get("fp16") or prec.get("bf16"):
-        return torch.float32
-    return compute
+    """Dtype for from_pretrained under HF Trainer (see resolve_train_precision)."""
+    load_dtype, _ = resolve_train_precision(rec)
+    return load_dtype
 
 
 def apply_pretrained_dtype(load_kw: dict[str, Any], dtype) -> None:
-    """Set load dtype for transformers from_pretrained (avoids deprecated torch_dtype-only)."""
+    """Set load dtype for transformers from_pretrained."""
     load_kw["dtype"] = dtype
+
+
+def cuda_alloc_hygiene() -> None:
+    """Reduce fragmentation before a heavy train."""
+    import os
+
+    os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
+    if device_kind() not in ("cuda", "rocm"):
+        return
+    torch = require_torch()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
 
 
 def supports_bnb_4bit() -> bool:
