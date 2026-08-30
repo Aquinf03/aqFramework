@@ -269,10 +269,8 @@ def _build_model_and_tok(rec: dict, obj: str, slot: Path, texts: list[str]):
     else:
         model.train()
 
-    # Activation checkpointing after PEFT wrap — default on CUDA/ROCm (big VRAM win).
-    want_ckpt = opt(rec, "gradient_checkpointing", None, "train", "llm")
-    if want_ckpt is None:
-        want_ckpt = kind in ("cuda", "rocm")
+    # Activation checkpointing after PEFT wrap (opt-in; default off for speed).
+    want_ckpt = bool(opt(rec, "gradient_checkpointing", False, "train", "llm"))
     if want_ckpt and hasattr(model, "gradient_checkpointing_enable"):
         model.gradient_checkpointing_enable()
         if hasattr(model, "config"):
@@ -402,76 +400,81 @@ def _build_dataset(torch, tok, texts: list[str], rec: dict, obj: str, max_len: i
         return DS()
 
     # causal / lora / qlora / cpt / next-token / fim (already rewritten texts)
-    enc = tok(
-        texts,
-        truncation=True,
-        max_length=max_len,
-        padding="max_length",
-        return_tensors="pt",
-    )
-    labels = enc["input_ids"].clone()
-    labels[labels == tok.pad_token_id] = -100
+    rows = []
+    for text in texts:
+        enc = tok(text, truncation=True, max_length=max_len, padding=False)
+        ids = list(enc["input_ids"])
+        rows.append(
+            {
+                "input_ids": ids,
+                "attention_mask": list(enc["attention_mask"]),
+                "labels": list(ids),
+            }
+        )
+    return _list_dataset(torch, rows)
 
+
+def _list_dataset(torch, rows: list[dict]):
     class DS(torch.utils.data.Dataset):
         def __len__(self):
-            return enc["input_ids"].shape[0]
+            return len(rows)
 
         def __getitem__(self, i):
-            return {
-                "input_ids": enc["input_ids"][i],
-                "attention_mask": enc["attention_mask"][i],
-                "labels": labels[i],
-            }
+            return rows[i]
 
     return DS()
 
 
+def _lm_collator(tok):
+    """Pad to batch max length — not max_seq_len (matches normal custom SFT scripts)."""
+    transformers = require_transformers()
+    return transformers.DataCollatorForSeq2Seq(
+        tokenizer=tok,
+        padding=True,
+        label_pad_token_id=-100,
+        return_tensors="pt",
+    )
+
+
 def _sft_dataset(torch, tok, src: Path, rec: dict, obj: str, max_len: int):
-    """SFT: loss on completion tokens only. full-ft: loss on all non-pad tokens."""
+    """SFT: loss on completion only. Variable-length; collator pads per batch.
+
+    Old path used padding='max_length' for every row → T4 spent most FLOPs on pad
+    tokens vs a normal script (~5–10× slower for short JSONL).
+    """
     data = rec.get("data") or {}
     prompt_k = data.get("prompt") or data.get("instruction")
     comp_k = data.get("completion") or data.get("output") or data.get("response")
     if not prompt_k or not comp_k:
         raise SystemExit("sft/full-ft needs data.prompt and data.completion")
-    rows = _load_rows(src)
+    rows_in = _load_rows(src)
     loss_all = obj in ("full-ft", "full-finetune", "full-fine-tune")
-    input_rows = []
-    label_rows = []
-    mask_rows = []
-    for r in rows:
+    rows: list[dict] = []
+    for r in rows_in:
         prompt = str(r.get(prompt_k) or "")
         comp = str(r.get(comp_k) or "")
         full = prompt.rstrip() + "\n" + comp.lstrip()
-        full_ids = tok(
-            full, truncation=True, max_length=max_len, padding="max_length", return_tensors="pt"
-        )
-        prompt_ids = tok(prompt, truncation=True, max_length=max_len, add_special_tokens=True)
-        plen = min(len(prompt_ids["input_ids"]), max_len)
-        labels = full_ids["input_ids"][0].clone()
+        full_enc = tok(full, truncation=True, max_length=max_len, padding=False, add_special_tokens=True)
+        prompt_enc = tok(prompt, truncation=True, max_length=max_len, add_special_tokens=True)
+        ids = list(full_enc["input_ids"])
+        plen = min(len(prompt_enc["input_ids"]), len(ids))
+        labels = list(ids)
         if not loss_all:
-            labels[:plen] = -100
-        labels[labels == tok.pad_token_id] = -100
-        input_rows.append(full_ids["input_ids"][0])
-        label_rows.append(labels)
-        mask_rows.append(full_ids["attention_mask"][0])
-    if not input_rows:
-        raise SystemExit("empty sft data")
-    input_ids = torch.stack(input_rows)
-    labels_t = torch.stack(label_rows)
-    attn = torch.stack(mask_rows)
-
-    class DS(torch.utils.data.Dataset):
-        def __len__(self):
-            return input_ids.shape[0]
-
-        def __getitem__(self, i):
-            return {
-                "input_ids": input_ids[i],
-                "attention_mask": attn[i],
-                "labels": labels_t[i],
+            for i in range(plen):
+                labels[i] = -100
+        pad_id = tok.pad_token_id
+        if pad_id is not None:
+            labels = [-100 if t == pad_id else t for t in labels]
+        rows.append(
+            {
+                "input_ids": ids,
+                "attention_mask": list(full_enc["attention_mask"]),
+                "labels": labels,
             }
-
-    return DS()
+        )
+    if not rows:
+        raise SystemExit("empty sft data")
+    return _list_dataset(torch, rows)
 
 
 def _load_parent_weights(model, rec: dict, used_lora: bool):
@@ -577,9 +580,8 @@ def fit(src: Path, rec: dict, *, method_name: str | None = None) -> dict:
         seed=seed,
         use_cpu=(device_kind() == "cpu"),
         dataloader_pin_memory=(device_kind() in ("cuda", "rocm")),
-        gradient_checkpointing=bool(
-            opt(rec, "gradient_checkpointing", device_kind() in ("cuda", "rocm"), "train", "llm")
-        ),
+        # Default off: dynamic padding + half weights usually fit; ckpt was a big T4 slowdown.
+        gradient_checkpointing=bool(opt(rec, "gradient_checkpointing", False, "train", "llm")),
         **prec,
     )
     # Prefer fused Adam on CUDA when available (fall back if Transformers rejects it).
@@ -602,10 +604,18 @@ def fit(src: Path, rec: dict, *, method_name: str | None = None) -> dict:
                 lr=float(logs.get("learning_rate") or lr),
             )
 
+    req_dtype = default_dtype(rec)
+    if str(req_dtype) != str(load_dtype):
+        print(
+            f"  dtype  recipe asked {req_dtype} → using {load_dtype} on this GPU",
+            file=__import__("sys").stderr,
+        )
+
     trainer = transformers.Trainer(
         model=model,
         args=training_args,
         train_dataset=ds,
+        data_collator=_lm_collator(tok),
         callbacks=[_MetricsCallback()],
     )
     try:
@@ -615,9 +625,9 @@ def fit(src: Path, rec: dict, *, method_name: str | None = None) -> dict:
         if "out of memory" in msg.lower() or "oom" in msg.lower():
             raise SystemExit(
                 f"{msg}\n\n"
-                "VRAM tips: set method/objective lora (or bits: 4 for QLoRA on CUDA), "
-                "lower max_seq_len, batch_size: 1, raise grad_accum, "
-                "dtype: bf16, keep gradient_checkpointing: true (default on CUDA). "
+                "VRAM tips: method/objective lora (or bits: 4 QLoRA), lower max_seq_len, "
+                "batch_size: 1, raise grad_accum, dtype: fp16, "
+                "gradient_checkpointing: true. "
                 f"(load_dtype={load_dtype})"
             ) from e
         raise

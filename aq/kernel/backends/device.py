@@ -71,13 +71,10 @@ def move_batch(batch: dict, model) -> dict:
 
 
 def resolve_train_precision(rec: dict | None = None) -> tuple[Any, dict[str, Any]]:
-    """(load_dtype, TrainingArguments fp16/bf16 flags) — VRAM-safe.
+    """(load_dtype, TrainingArguments fp16/bf16 flags) — VRAM-safe + hardware-honest.
 
-    - bf16 AMP: load weights as bf16 (no GradScaler; ~½ of fp32 masters).
-    - fp16 on CUDA with bf16 support: promote to bf16 (same stability, less VRAM than
-      fp32+GradScaler; avoids 'Attempting to unscale FP16 gradients').
-    - fp16 without bf16 (some ROCm): load fp16, do **not** enable GradScaler.
-    - fp32 / CPU / MPS: load requested dtype; no CUDA AMP flags.
+    Never enables bf16 on GPUs that do not support it (e.g. T4). Emulated bf16 is
+    many× slower than fp16 and is a common “aq is slow vs my script” footgun.
     """
     torch = require_torch()
     kind = device_kind()
@@ -90,11 +87,24 @@ def resolve_train_precision(rec: dict | None = None) -> tuple[Any, dict[str, Any
     if compute == torch.float32:
         return torch.float32, off
 
-    bf16_ok = kind == "cuda" and torch.cuda.is_bf16_supported()
-    if compute == torch.bfloat16 or (compute == torch.float16 and bf16_ok):
+    bf16_ok = False
+    if kind == "cuda":
+        try:
+            bf16_ok = bool(torch.cuda.is_bf16_supported())
+        except Exception:
+            bf16_ok = False
+
+    # Explicit bf16 on non-bf16 hardware → fp16 (do not emulate).
+    if compute == torch.bfloat16 and not bf16_ok:
+        return torch.float16, off
+
+    if compute == torch.bfloat16 and bf16_ok:
         return torch.bfloat16, {"fp16": False, "bf16": True}
 
-    # fp16 path without bf16 hardware: pure half weights, no GradScaler
+    # fp16 recipe: promote to bf16 only when hardware supports it.
+    if compute == torch.float16 and bf16_ok:
+        return torch.bfloat16, {"fp16": False, "bf16": True}
+
     if compute == torch.float16:
         return torch.float16, off
 
@@ -108,8 +118,12 @@ def training_precision_flags(dtype) -> dict[str, Any]:
     if kind not in ("cuda", "rocm"):
         return {"fp16": False, "bf16": False}
     if dtype == torch.bfloat16:
-        return {"fp16": False, "bf16": True}
-    # Do not enable fp16 GradScaler with half weights
+        try:
+            if kind == "cuda" and torch.cuda.is_bf16_supported():
+                return {"fp16": False, "bf16": True}
+        except Exception:
+            pass
+        return {"fp16": False, "bf16": False}
     return {"fp16": False, "bf16": False}
 
 
