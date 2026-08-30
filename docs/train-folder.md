@@ -99,11 +99,11 @@ artifacts/
     last.json / last.md
   eval.json                last eval summary
   serve.json               last serve output
-  chats/<id>/              agent chat sessions
   agents/<id>/             spawned worker agents
   schedules/               schedule run logs (as implemented)
 ```
 
+Agent **chats** live in `~/.aq/chats/` (not in the train), so experiments stay lean.
 ## Data revision
 
 `aq data hash [dir] [--snapshot]` asks the kernel to hash `recipe.data.path` and write `data/revision.json`. Optional `--snapshot` copies the hashed tree under `data/revisions/{digest}/`. Run records prefer this hash when present so “what data did this checkpoint see?” is answerable from disk.

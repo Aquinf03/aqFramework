@@ -1,7 +1,8 @@
-/** Chats live in artifacts/chats/<id>/. Directory is the session. */
+/** Chats live in ~/.aq/chats/<id>/ (global). Spec records which train they belong to. */
 
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs"
 import { randomBytes } from "node:crypto"
+import { homedir } from "node:os"
 import path from "node:path"
 import type { ChatMsg } from "./provider.js"
 import { streamTurn } from "./provider.js"
@@ -11,18 +12,63 @@ export type ChatSpec = {
   name: string
   created: string
   updated: string
+  /** Absolute train path this chat was opened from. */
+  train?: string
 }
 
-function root(cwd: string): string {
+function aqHome(): string {
+  return path.join(homedir(), ".aq")
+}
+
+function root(): string {
+  return path.join(aqHome(), "chats")
+}
+
+function trainKey(cwd: string): string {
+  return path.resolve(cwd)
+}
+
+function legacyRoot(cwd: string): string {
   return path.join(cwd, "artifacts", "chats")
 }
 
-function specPath(cwd: string, id: string): string {
-  return path.join(root(cwd), id, "spec.json")
+function specPath(id: string): string {
+  return path.join(root(), id, "spec.json")
 }
 
-function msgsPath(cwd: string, id: string): string {
-  return path.join(root(cwd), id, "messages.json")
+function msgsPath(id: string): string {
+  return path.join(root(), id, "messages.json")
+}
+
+/** One-time: move train-local artifacts/chats into ~/.aq/chats. */
+function migrateLegacy(cwd: string): void {
+  const legacy = legacyRoot(cwd)
+  if (!existsSync(legacy)) return
+  mkdirSync(root(), { recursive: true })
+  const train = trainKey(cwd)
+  for (const name of readdirSync(legacy)) {
+    const from = path.join(legacy, name)
+    const to = path.join(root(), name)
+    if (existsSync(to)) continue
+    try {
+      renameSync(from, to)
+      const sp = path.join(to, "spec.json")
+      if (existsSync(sp)) {
+        const spec = JSON.parse(readFileSync(sp, "utf8")) as ChatSpec
+        if (!spec.train) {
+          spec.train = train
+          writeFileSync(sp, JSON.stringify(spec, null, 2) + "\n")
+        }
+      }
+    } catch {
+      /* leave legacy entry if move fails */
+    }
+  }
+  try {
+    if (readdirSync(legacy).length === 0) rmSync(legacy, { recursive: true, force: true })
+  } catch {
+    /* ignore */
+  }
 }
 
 export function setTabTitle(name: string): void {
@@ -32,23 +78,32 @@ export function setTabTitle(name: string): void {
 }
 
 export function createChat(cwd: string): ChatSpec {
+  migrateLegacy(cwd)
   const id = randomBytes(4).toString("hex")
   const now = new Date().toISOString()
-  const spec: ChatSpec = { id, name: "new chat", created: now, updated: now }
-  mkdirSync(path.join(root(cwd), id), { recursive: true })
-  writeFileSync(specPath(cwd, id), JSON.stringify(spec, null, 2) + "\n")
-  writeFileSync(msgsPath(cwd, id), "[]\n")
+  const spec: ChatSpec = {
+    id,
+    name: "new chat",
+    created: now,
+    updated: now,
+    train: trainKey(cwd),
+  }
+  mkdirSync(path.join(root(), id), { recursive: true })
+  writeFileSync(specPath(id), JSON.stringify(spec, null, 2) + "\n")
+  writeFileSync(msgsPath(id), "[]\n")
   return spec
 }
 
 export function loadSpec(cwd: string, id: string): ChatSpec {
-  const p = specPath(cwd, id)
+  migrateLegacy(cwd)
+  const p = specPath(id)
   if (!existsSync(p)) throw new Error(`no chat ${id}`)
   return JSON.parse(readFileSync(p, "utf8")) as ChatSpec
 }
 
 export function loadMessages(cwd: string, id: string): ChatMsg[] {
-  const p = msgsPath(cwd, id)
+  migrateLegacy(cwd)
+  const p = msgsPath(id)
   if (!existsSync(p)) return []
   try {
     const j = JSON.parse(readFileSync(p, "utf8")) as ChatMsg[]
@@ -59,18 +114,19 @@ export function loadMessages(cwd: string, id: string): ChatMsg[] {
 }
 
 export function saveChat(cwd: string, spec: ChatSpec, msgs: ChatMsg[]): void {
+  if (!spec.train) spec.train = trainKey(cwd)
   spec.updated = new Date().toISOString()
-  mkdirSync(path.join(root(cwd), spec.id), { recursive: true })
-  writeFileSync(specPath(cwd, spec.id), JSON.stringify(spec, null, 2) + "\n")
-  writeFileSync(msgsPath(cwd, spec.id), JSON.stringify(msgs, null, 2) + "\n")
+  mkdirSync(path.join(root(), spec.id), { recursive: true })
+  writeFileSync(specPath(spec.id), JSON.stringify(spec, null, 2) + "\n")
+  writeFileSync(msgsPath(spec.id), JSON.stringify(msgs, null, 2) + "\n")
 }
 
-export function listChats(cwd: string): ChatSpec[] {
-  const dir = root(cwd)
+function readAllSpecs(): ChatSpec[] {
+  const dir = root()
   if (!existsSync(dir)) return []
   const out: ChatSpec[] = []
   for (const name of readdirSync(dir)) {
-    const p = specPath(cwd, name)
+    const p = specPath(name)
     if (!existsSync(p)) continue
     try {
       out.push(JSON.parse(readFileSync(p, "utf8")) as ChatSpec)
@@ -80,6 +136,18 @@ export function listChats(cwd: string): ChatSpec[] {
   }
   out.sort((a, b) => (a.updated < b.updated ? 1 : -1))
   return out
+}
+
+/** Chats for this train (default). Storage is still under ~/.aq. */
+export function listChats(cwd: string): ChatSpec[] {
+  migrateLegacy(cwd)
+  const key = trainKey(cwd)
+  return readAllSpecs().filter((c) => !c.train || path.resolve(c.train) === key)
+}
+
+/** Every chat on this machine. */
+export function listAllChats(): ChatSpec[] {
+  return readAllSpecs()
 }
 
 export function latestChat(cwd: string): ChatSpec | null {
@@ -94,7 +162,8 @@ export function renameChat(cwd: string, spec: ChatSpec, name: string, msgs: Chat
 }
 
 export function deleteChat(cwd: string, id: string): void {
-  const dir = path.join(root(cwd), id)
+  migrateLegacy(cwd)
+  const dir = path.join(root(), id)
   if (existsSync(dir)) rmSync(dir, { recursive: true, force: true })
 }
 

@@ -77,7 +77,7 @@ Tools run with cwd = train and `AQ_TRAIN` set to the train absolute path.
 | `aq ask [dir] <prompt>` | One-shot answer (no UI) |
 | `aq ask -y …` / `--yes` | Auto-approve shell `run` |
 | `aq ask --json …` | Emit `{ text, tools }` |
-| `aq chat list` | Previous chats under `artifacts/chats/` |
+| `aq chat list` | Previous chats for this train under `~/.aq/chats/` (`--all` for every chat) |
 | `aq chat last` | Resume latest |
 | `aq chat <id>` | Resume that id |
 | `aq spawn run [dir] -- <prompt>` | Background worker agent (as a job) |

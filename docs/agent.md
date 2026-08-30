@@ -12,7 +12,7 @@ Code: `aq/src/agent/` (`agent.ts`, `agent-loop.ts`, `agent-tools.ts`, `chat-ui.t
 | `aq ask [dir] <prompt>` | One-shot turn; prints answer |
 | `aq ask --json` | `{ text, tools }` for scripts / spawn |
 | `aq ask -y` | Auto-approve shell `run` |
-| `aq chat list\|last\|<id>` | Resume sessions under `artifacts/chats/` |
+| `aq chat list\|last\|<id>` | Resume sessions under `~/.aq/chats/` (per-train view; `--all` for every chat) |
 | `aq spawn …` | Background workers (jobs + `artifacts/agents/`) |
 
 ## Tool rounds
@@ -55,7 +55,9 @@ Path operations stay inside the train (path jail).
 
 ## Chat persistence
 
-`artifacts/chats/<id>/{spec.json,messages.json}`  
+`~/.aq/chats/<id>/{spec.json,messages.json}`  
+
+Spec includes `train` (absolute path). Listing in a train shows that train’s chats only; `aq chat list --all` shows every chat on the machine. Old `artifacts/chats/` are migrated into `~/.aq` on first access. Spawn workers stay under the train (`artifacts/agents/` + `jobs/`).
 
 Slash / menu commands in the UI cover provider, model, key, sound, compact, context, etc.
 

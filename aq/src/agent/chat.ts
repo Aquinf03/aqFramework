@@ -1,5 +1,6 @@
 import { startChatUi } from "./chat-ui.js"
-import { latestChat, listChats, loadSpec } from "./chat-store.js"
+import { latestChat, listAllChats, listChats, loadSpec } from "./chat-store.js"
+import { shortPath } from "../core/paths.js"
 
 export async function chatCmd(argv: string[]): Promise<void> {
   const cwd = process.cwd()
@@ -9,13 +10,15 @@ export async function chatCmd(argv: string[]): Promise<void> {
     return
   }
   if (sub === "list" || sub === "ls") {
-    const chats = listChats(cwd)
+    const all = argv.includes("--all")
+    const chats = all ? listAllChats() : listChats(cwd)
     if (!chats.length) {
-      console.log("no chats")
+      console.log(all ? "no chats" : "no chats for this train (aq chat list --all for all)")
       return
     }
     for (const c of chats) {
-      console.log(`${c.id}  ${c.name}`)
+      const where = all && c.train ? `  ${shortPath(c.train)}` : ""
+      console.log(`${c.id}  ${c.name}${where}`)
     }
     return
   }
