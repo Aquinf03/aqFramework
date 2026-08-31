@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
 # Install aq (CLI + bundled kernel). Use bash: curl … | bash
+# Never needs sudo — links into ~/.local (not /usr/local).
 set -euo pipefail
 
 INSTALL_DIR="${AQUIN_INSTALL_DIR:-$HOME/.local/share/aquin-framework}"
 BRANCH="${AQUIN_BRANCH:-main}"
 DEFAULT_RELEASE_URL="https://aq.aquin.app/releases/aq-latestv.tar.gz"
+# User-writable npm global prefix (avoids EACCES on /usr/local/lib/node_modules)
+NPM_PREFIX="${AQUIN_NPM_PREFIX:-$HOME/.local}"
 
 # BASH_SOURCE is unset when the script is piped: curl … | bash
 script_dir() {
@@ -24,6 +27,32 @@ command -v node >/dev/null || { echo "Node.js required (>=18)"; exit 1; }
 command -v npm >/dev/null || { echo "npm required"; exit 1; }
 command -v python3 >/dev/null || { echo "python3 required"; exit 1; }
 
+ensure_path_hint() {
+  local bin="$NPM_PREFIX/bin"
+  mkdir -p "$bin"
+  if ! echo ":$PATH:" | grep -q ":$bin:"; then
+    echo ""
+    echo "Add this to your shell profile (~/.bashrc or ~/.zshrc) if 'aq' is not found:"
+    echo "  export PATH=\"$bin:\$PATH\""
+    echo "Then: source ~/.bashrc   # or open a new terminal"
+  fi
+}
+
+link_aq() {
+  local root="$1"
+  mkdir -p "$NPM_PREFIX/bin" "$NPM_PREFIX/lib/node_modules"
+  # Prefer npm link into user prefix (no sudo). Fall back to a plain symlink.
+  if npm link --prefix "$NPM_PREFIX" >/dev/null 2>&1; then
+    return 0
+  fi
+  # Some npm versions dislike link --prefix; install the package globally under prefix.
+  if npm install -g --prefix "$NPM_PREFIX" "$root/aq" >/dev/null 2>&1; then
+    return 0
+  fi
+  ln -sfn "$root/aq/bin/aq" "$NPM_PREFIX/bin/aq"
+  chmod +x "$root/aq/bin/aq" 2>/dev/null || true
+}
+
 install_from_dir() {
   local root="$1"
   if [ ! -f "$root/aq/package.json" ] || [ ! -f "$root/aq/kernel/run.py" ]; then
@@ -32,11 +61,38 @@ install_from_dir() {
   fi
   cd "$root/aq"
   npm install
-  npm link
-  echo "Installed. Run: aq help"
-  if ! command -v aq >/dev/null; then
-    echo "Add npm's global bin to PATH if needed:"
-    echo "  export PATH=\"\$(npm config get prefix)/bin:\$PATH\""
+  link_aq "$root"
+  if [ -f "$root/aq/kernel/requirements.txt" ]; then
+    echo "Installing kernel Python deps (venv)…"
+    python3 -m venv "$root/aq/kernel/.venv"
+    # shellcheck disable=SC1091
+    "$root/aq/kernel/.venv/bin/pip" install -U pip
+    "$root/aq/kernel/.venv/bin/pip" install -r "$root/aq/kernel/requirements.txt"
+  fi
+  echo "Installed under $root (npm prefix: $NPM_PREFIX)"
+  echo "Run: aq help"
+  echo "LLM/LoRA needs recipe.model (hub id). QLoRA needs CUDA + bitsandbytes."
+  ensure_path_hint
+  export PATH="$NPM_PREFIX/bin:$PATH"
+  if command -v aq >/dev/null; then
+    aq help >/dev/null 2>&1 && echo "OK: aq is on PATH for this shell." || true
+  fi
+  if [ -e /usr/local/lib/node_modules/aq ]; then
+    echo ""
+    echo "Note: an old global install exists at /usr/local/lib/node_modules/aq."
+    echo "If 'aq' still fails or points at a stale build, remove it once:"
+    echo "  sudo npm unlink -g aq    # or: sudo rm -rf /usr/local/lib/node_modules/aq"
+  fi
+}
+
+extract_release() {
+  local archive="$1"
+  local dest="$2"
+  # Ignore macOS libarchive xattr noise when unpacking on Linux.
+  if tar --help 2>&1 | grep -q -- '--warning='; then
+    tar xzf "$archive" -C "$dest" --warning=no-unknown-keyword
+  else
+    tar xzf "$archive" -C "$dest" 2>/dev/null || tar xzf "$archive" -C "$dest"
   fi
 }
 
@@ -52,7 +108,7 @@ install_from_release() {
     echo "Install unavailable. Try again later." >&2
     exit 1
   fi
-  tar xzf "$archive" -C "$INSTALL_DIR" --strip-components=0
+  extract_release "$archive" "$INSTALL_DIR"
   rm -f "$archive"
 
   install_from_dir "$INSTALL_DIR"
