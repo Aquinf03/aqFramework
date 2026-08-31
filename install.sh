@@ -30,27 +30,53 @@ command -v python3 >/dev/null || { echo "python3 required"; exit 1; }
 ensure_path_hint() {
   local bin="$NPM_PREFIX/bin"
   mkdir -p "$bin"
+  # Bash may have cached a deleted path from a prior install.
+  hash -r 2>/dev/null || true
   if ! echo ":$PATH:" | grep -q ":$bin:"; then
     echo ""
-    echo "Add this to your shell profile (~/.bashrc or ~/.zshrc) if 'aq' is not found:"
+    echo "Add this to your shell profile (~/.bashrc or ~/.zshrc):"
     echo "  export PATH=\"$bin:\$PATH\""
-    echo "Then: source ~/.bashrc   # or open a new terminal"
+    echo "Then: hash -r && source ~/.bashrc"
   fi
 }
 
+# Always leave a real executable at $NPM_PREFIX/bin/aq (never a dangling symlink).
 link_aq() {
   local root="$1"
-  mkdir -p "$NPM_PREFIX/bin" "$NPM_PREFIX/lib/node_modules"
-  # Prefer npm link into user prefix (no sudo). Fall back to a plain symlink.
-  if npm link --prefix "$NPM_PREFIX" >/dev/null 2>&1; then
-    return 0
+  local bin_dir="$NPM_PREFIX/bin"
+  local pkg="$root/aq"
+  local cli="$pkg/dist/cli.js"
+  local launcher="$bin_dir/aq"
+  local node_bin
+
+  mkdir -p "$bin_dir" "$NPM_PREFIX/lib/node_modules"
+  node_bin="$(command -v node)"
+  if [ ! -f "$cli" ]; then
+    echo "build missing: $cli (npm install / prepare should have created it)" >&2
+    exit 1
   fi
-  # Some npm versions dislike link --prefix; install the package globally under prefix.
-  if npm install -g --prefix "$NPM_PREFIX" "$root/aq" >/dev/null 2>&1; then
-    return 0
+
+  # Best-effort: register the package under the user npm prefix (deps / doctor).
+  npm install -g --prefix "$NPM_PREFIX" "$pkg" >/dev/null 2>&1 || true
+
+  # Stable launcher — survives npm link quirks and broken global bins.
+  # Absolute paths so it works even if cwd / PATH change.
+  cat >"$launcher" <<EOF
+#!/usr/bin/env bash
+exec "$node_bin" "$cli" "\$@"
+EOF
+  chmod +x "$launcher"
+
+  if [ ! -x "$launcher" ]; then
+    echo "failed to write $launcher" >&2
+    exit 1
   fi
-  ln -sfn "$root/aq/bin/aq" "$NPM_PREFIX/bin/aq"
-  chmod +x "$root/aq/bin/aq" 2>/dev/null || true
+  # Smoke-check with the full path (avoids bash hash of a missing file).
+  if ! "$launcher" version >/dev/null 2>&1 && ! "$launcher" help >/dev/null 2>&1; then
+    echo "installed $launcher but it failed to run" >&2
+    exit 1
+  fi
+  echo "linked  $launcher"
 }
 
 install_kernel_venv() {
@@ -96,14 +122,24 @@ install_from_dir() {
   echo "LLM/LoRA needs recipe.model (hub id). QLoRA needs CUDA + bitsandbytes."
   ensure_path_hint
   export PATH="$NPM_PREFIX/bin:$PATH"
-  if command -v aq >/dev/null; then
-    aq help >/dev/null 2>&1 && echo "OK: aq is on PATH for this shell." || true
+  hash -r 2>/dev/null || true
+  if [ -x "$NPM_PREFIX/bin/aq" ]; then
+    if "$NPM_PREFIX/bin/aq" version >/dev/null 2>&1 || "$NPM_PREFIX/bin/aq" help >/dev/null 2>&1; then
+      echo "OK: $NPM_PREFIX/bin/aq"
+    fi
+  else
+    echo "WARNING: $NPM_PREFIX/bin/aq missing after install" >&2
   fi
-  if [ -e /usr/local/lib/node_modules/aq ]; then
+  if command -v aq >/dev/null 2>&1; then
+    :
+  else
+    echo "This shell cannot see 'aq' yet. Run: export PATH=\"$NPM_PREFIX/bin:\$PATH\" && hash -r"
+  fi
+  if [ -e /usr/local/lib/node_modules/aq ] || [ -L /usr/local/bin/aq ]; then
     echo ""
-    echo "Note: an old global install exists at /usr/local/lib/node_modules/aq."
-    echo "If 'aq' still fails or points at a stale build, remove it once:"
-    echo "  sudo npm unlink -g aq    # or: sudo rm -rf /usr/local/lib/node_modules/aq"
+    echo "Note: an old global install may still shadow PATH."
+    echo "  sudo npm unlink -g aq 2>/dev/null || sudo rm -f /usr/local/bin/aq"
+    echo "  sudo rm -rf /usr/local/lib/node_modules/aq"
   fi
 }
 
