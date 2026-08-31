@@ -90,7 +90,7 @@ export const SLASH = [
   { name: "/rename", hint: "rename this chat" },
   { name: "/chats", hint: "list chats" },
   { name: "/open", hint: "open a chat by name or id" },
-  { name: "/delete", hint: "delete this chat" },
+  { name: "/delete", hint: "delete this chat · /delete all" },
   { name: "/compact", hint: "summarize older messages" },
   { name: "/undo", hint: "undo last agent turn" },
   { name: "/image", hint: "attach an image by path" },
@@ -532,7 +532,7 @@ export function applyChoice(c: Choice): {
         "  compact    summarize older chat",
         "  sound      click + message cues",
         "",
-        "slash: /new /rename /open /delete /compact /undo /image /status /doctor /spawn /provider /model /key /sound",
+        "slash: /new /rename /open /delete [/delete all] /compact /undo /image /status /doctor /spawn /provider /model /key /sound",
         "",
         "keys: aq provider openai",
         "now: " + activeLabel(),
@@ -579,6 +579,7 @@ export type SlashResult = {
   chats?: boolean
   open?: string
   delete?: true | string
+  deleteAll?: boolean
   context?: boolean
   status?: boolean
   doctor?: boolean
@@ -714,7 +715,10 @@ export function runSlash(line: string): SlashResult {
   if (cmd === "/rename") return { rename: arg || true }
   if (cmd === "/chats") return { chats: true }
   if (cmd === "/open") return arg ? { open: arg } : { chats: true }
-  if (cmd === "/delete") return { delete: arg || true }
+  if (cmd === "/delete") {
+    if (arg && /^(all|\*)$/i.test(arg.trim())) return { deleteAll: true }
+    return { delete: arg || true }
+  }
   if (cmd === "/context") return { context: true }
   if (cmd === "/status") return { status: true }
   if (cmd === "/doctor") return { doctor: true }

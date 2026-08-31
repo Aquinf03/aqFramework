@@ -167,6 +167,13 @@ export function deleteChat(cwd: string, id: string): void {
   if (existsSync(dir)) rmSync(dir, { recursive: true, force: true })
 }
 
+/** Delete every chat for this train (same set as listChats). Returns how many removed. */
+export function deleteAllChats(cwd: string): number {
+  const chats = listChats(cwd)
+  for (const c of chats) deleteChat(cwd, c.id)
+  return chats.length
+}
+
 function stubName(text: string): string {
   const s = text.replace(/\s+/g, " ").trim().slice(0, 48)
   return s || "new chat"

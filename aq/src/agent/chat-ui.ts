@@ -31,6 +31,7 @@ import { listTools } from "../handle/tool.js"
 import { isTrain } from "../core/schema.js"
 import {
   createChat,
+  deleteAllChats,
   deleteChat,
   listChats,
   loadMessages,
@@ -807,9 +808,9 @@ export async function startChatUi(train: string, resumeId?: string): Promise<voi
       paintComposer()
     }
 
-    const askDelete = (): Promise<boolean> =>
+    const askDelete = (label = "delete this chat?"): Promise<boolean> =>
       new Promise((resolve) => {
-        write(`\r\x1b[K${DIM}delete this chat?${RESET}\n`)
+        write(`\r\x1b[K${DIM}${label}${RESET}\n`)
         compactAsk = {
           pick: 0,
           yes: "delete",
@@ -890,6 +891,32 @@ export async function startChatUi(train: string, resumeId?: string): Promise<voi
           return
         }
         switchChat(hits[0]!.id)
+        return
+      }
+      if (r.deleteAll) {
+        const n = listChats(train).length
+        if (!n) {
+          note("no chats")
+          paintComposer()
+          return
+        }
+        const ok = await askDelete(`delete all ${n} chat${n === 1 ? "" : "s"} for this train?`)
+        if (!ok) {
+          note("kept")
+          paintComposer()
+          return
+        }
+        saveChat(train, spec, history)
+        const gone = deleteAllChats(train)
+        spec = createChat(train)
+        history.length = 0
+        named = false
+        chatFocus = spec.id
+        setTabTitle(spec.name)
+        playCue("click")
+        note(`deleted  ${gone} chat${gone === 1 ? "" : "s"}`)
+        paintHeader()
+        paintComposer()
         return
       }
       if (r.delete) {
