@@ -1,11 +1,19 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
-import { spawnSync } from "node:child_process"
+import { spawn, spawnSync, type ChildProcess } from "node:child_process"
 import path from "node:path"
 import { assertTrain, isTrain } from "./schema.js"
 import { kernelRoot } from "./root.js"
 
 const kernelDir = kernelRoot()
 const runPy = path.join(kernelDir, "run.py")
+
+export class InterruptedError extends Error {
+  readonly exitCode = 130
+  constructor(message = "interrupted") {
+    super(message)
+    this.name = "InterruptedError"
+  }
+}
 
 export function pythonBin(): string {
   const venvPy = path.join(kernelRoot(), ".venv", "bin", "python")
@@ -31,28 +39,79 @@ export type KernelReq = {
   temperature?: number
 }
 
-export function runKernel(train: string, req: KernelReq): void {
+/** Kill the kernel and any Trainer / dataloader workers in one shot. */
+function killProcessTree(pid: number, signal: NodeJS.Signals = "SIGKILL"): void {
+  if (process.platform === "win32") {
+    spawnSync("taskkill", ["/pid", String(pid), "/T", "/F"], { stdio: "ignore" })
+    return
+  }
+  try {
+    // Negative pid = process group (kernel was spawned detached).
+    process.kill(-pid, signal)
+  } catch {
+    try {
+      process.kill(pid, signal)
+    } catch {
+      /* already gone */
+    }
+  }
+}
+
+function waitChild(child: ChildProcess): Promise<{ code: number | null; signal: NodeJS.Signals | null }> {
+  return new Promise((resolve, reject) => {
+    child.once("error", reject)
+    child.once("exit", (code, signal) => resolve({ code, signal }))
+  })
+}
+
+/**
+ * Run the Python kernel. The child is its own process group so Ctrl+C hits
+ * Node only — we then SIGKILL the whole tree. Avoids HF Trainer's
+ * "first SIGINT = soft stop, second = exit" dance.
+ */
+export async function runKernel(train: string, req: KernelReq): Promise<void> {
   const art = path.join(train, "artifacts")
   mkdirSync(art, { recursive: true })
   writeFileSync(path.join(art, "request.json"), JSON.stringify(req, null, 2) + "\n")
-  const r = spawnSync(pythonBin(), [runPy, train], {
-    encoding: "utf8",
+
+  const child = spawn(pythonBin(), [runPy, train], {
     cwd: kernelDir,
-    // live kernel progress (metrics steps) must stream; result still in result.json
     stdio: ["ignore", "inherit", "inherit"],
+    // Own process group on Unix: terminal SIGINT goes to Node, not HF Trainer.
+    detached: process.platform !== "win32",
+    env: process.env,
   })
-  const resultPath = path.join(art, "result.json")
-  let result: { ok?: boolean; lines?: string[]; error?: string }
+
+  let interrupted = false
+  const onInterrupt = () => {
+    if (interrupted) return
+    interrupted = true
+    process.stderr.write("\ninterrupted\n")
+    if (child.pid != null) killProcessTree(child.pid, "SIGKILL")
+  }
+  process.on("SIGINT", onInterrupt)
+  process.on("SIGTERM", onInterrupt)
+
   try {
-    result = JSON.parse(readFileSync(resultPath, "utf8"))
-  } catch {
-    throw new Error((r.stderr || r.stdout || "kernel failed").trim())
+    await waitChild(child)
+    if (interrupted) throw new InterruptedError()
+
+    const resultPath = path.join(art, "result.json")
+    let result: { ok?: boolean; lines?: string[]; error?: string }
+    try {
+      result = JSON.parse(readFileSync(resultPath, "utf8"))
+    } catch {
+      throw new Error("kernel failed")
+    }
+    if (!result.ok) {
+      throw new Error(result.error || "kernel failed")
+    }
+    const lines = result.lines ?? []
+    process.stdout.write(lines.join("\n") + (lines.length ? "\n" : ""))
+  } finally {
+    process.off("SIGINT", onInterrupt)
+    process.off("SIGTERM", onInterrupt)
   }
-  if (!result.ok) {
-    throw new Error(result.error || "kernel failed")
-  }
-  const lines = result.lines ?? []
-  process.stdout.write(lines.join("\n") + (lines.length ? "\n" : ""))
 }
 
 function popFlag(rest: string[], flag: string): { value?: string; rest: string[] } {
@@ -66,7 +125,7 @@ function popFlag(rest: string[], flag: string): { value?: string; rest: string[]
   }
 }
 
-export function kernelStep(step: string, argv: string[]): void {
+export async function kernelStep(step: string, argv: string[]): Promise<void> {
   let rest = argv
   const ck = popFlag(rest, "--ckpt")
   rest = ck.rest
@@ -112,5 +171,5 @@ export function kernelStep(step: string, argv: string[]): void {
   if (prompt) req.prompt = prompt
   if (mt.value !== undefined) req.max_tokens = Number(mt.value)
   if (temp.value !== undefined) req.temperature = Number(temp.value)
-  runKernel(train, req)
+  await runKernel(train, req)
 }

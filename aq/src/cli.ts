@@ -20,6 +20,7 @@ import { doctorCmd } from "./agent/doctor.js"
 import { spawnCmd } from "./agent/spawn.js"
 import { loginCmd, logoutCmd, switchCmd } from "./handle/login.js"
 import { versionReport } from "./core/version.js"
+import { InterruptedError } from "./core/python.js"
 
 async function main(): Promise<void> {
   const argv = process.argv.slice(2)
@@ -179,6 +180,10 @@ async function main(): Promise<void> {
 }
 
 main().catch((err: unknown) => {
+  if (err instanceof InterruptedError) {
+    process.exitCode = err.exitCode
+    return
+  }
   const msg = err instanceof Error ? err.message : String(err)
   console.error(msg)
   process.exitCode = 1

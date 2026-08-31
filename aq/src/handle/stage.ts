@@ -72,7 +72,7 @@ export async function stage(argv: string[]): Promise<void> {
     } else {
       throw new Error("usage: aq stage eval [dir] <name>")
     }
-    kernelStep("eval", [stageTrain(train, name)])
+    await kernelStep("eval", [stageTrain(train, name)])
     return
   }
 
@@ -108,5 +108,5 @@ export async function stage(argv: string[]): Promise<void> {
   } else {
     throw new Error("usage: aq stage [dir] [name]")
   }
-  kernelStep("train", [stageTrain(train, name)])
+  await kernelStep("train", [stageTrain(train, name)])
 }

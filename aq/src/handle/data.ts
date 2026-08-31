@@ -17,5 +17,5 @@ export async function data(argv: string[]): Promise<void> {
   const rest = argv.slice(1).filter((a) => a !== "--snapshot")
   if (rest.length > 1) throw new Error(USAGE)
   const train = assertTrain(rest[0] ?? ".")
-  runKernel(train, { op: "hash", snapshot })
+  await runKernel(train, { op: "hash", snapshot })
 }
