@@ -39,6 +39,7 @@ aq help
 aq
 aq agent
 aq init my-train
+# or: aq init  →  aq-experiment / aq-experiment-new1 …
 cd my-train
 aq train
 aq job run -- echo hello

@@ -30,6 +30,8 @@ type Saved = { key?: string; base?: string; model?: string }
 type Config = {
   active?: ProviderId
   sound?: boolean
+  /** Sampling temperature for agent turns. Omitted → provider default. */
+  temperature?: number
   providers: Partial<Record<ProviderId, Saved>>
 }
 
@@ -209,6 +211,47 @@ export function setSound(on: boolean): string {
   cfg.sound = on
   save(cfg)
   return on ? "sound on" : "sound off"
+}
+
+const TEMP_MIN = 0
+const TEMP_MAX = 2
+
+/** Current temperature, or undefined = provider default (not sent). */
+export function temperature(): number | undefined {
+  const t = load().temperature
+  if (t == null || Number.isNaN(t)) return undefined
+  return t
+}
+
+export function temperatureLabel(): string {
+  const t = temperature()
+  return t == null ? "default" : String(t)
+}
+
+/** Body field for API calls — empty object if unset. */
+export function temperatureBody(): { temperature?: number } {
+  const t = temperature()
+  return t == null ? {} : { temperature: t }
+}
+
+export function setTemperature(raw: string): string {
+  const s = raw.trim().toLowerCase()
+  if (!s || s === "show" || s === "get" || s === "?") {
+    return `temperature  ${temperatureLabel()}`
+  }
+  if (s === "reset" || s === "clear" || s === "default" || s === "off") {
+    const cfg = load()
+    delete cfg.temperature
+    save(cfg)
+    return "temperature  default (provider)"
+  }
+  const n = Number(s)
+  if (!Number.isFinite(n)) return "usage: /temp <0–2> | /temp | /temp reset"
+  if (n < TEMP_MIN || n > TEMP_MAX) return `temperature must be ${TEMP_MIN}–${TEMP_MAX}`
+  const cfg = load()
+  cfg.temperature = Math.round(n * 1000) / 1000
+  save(cfg)
+  return `temperature  ${cfg.temperature}`
 }
 
 export function setActive(id: ProviderId): string {
@@ -532,7 +575,7 @@ export function applyChoice(c: Choice): {
         "  compact    summarize older chat",
         "  sound      click + message cues",
         "",
-        "slash: /new /rename /open /delete [/delete all] /compact /undo /image /status /doctor /spawn /provider /model /key /sound",
+        "slash: /new /rename /open /delete [/delete all] /compact /undo /image /status /doctor /spawn /provider /model /temp /key /sound",
         "",
         "keys: aq provider openai",
         "now: " + activeLabel(),
@@ -777,6 +820,9 @@ export function runSlash(line: string): SlashResult {
     cfg.providers[id] = { ...cfg.providers[id], model: arg }
     save(cfg)
     return { text: "active  " + activeLabel() }
+  }
+  if (cmd === "/temp") {
+    return { text: setTemperature(arg) }
   }
   const hits = slashMatches(raw ?? "")
   if (hits.length > 1) {
@@ -1034,6 +1080,7 @@ async function streamResponses(
       stream: true,
       instructions: system,
       input: responsesInput(history),
+      ...temperatureBody(),
       ...(tools.length ? { tools } : {}),
       ...(id === "openai" && fns.length && /^gpt-5/i.test(model) ? { reasoning: { effort: "none" } } : {}),
     }),
@@ -1123,6 +1170,7 @@ export async function streamTurn(
         stream: true,
         system,
         messages: anthropicMessages(history),
+        ...temperatureBody(),
         ...(fns.length || wantsWebSearch(tools)
           ? {
               tools: [
@@ -1195,6 +1243,7 @@ export async function streamTurn(
       model,
       stream: true,
       messages: openaiMessages(system, history),
+      ...temperatureBody(),
       ...(fns.length ? { tools: openaiTools(fns) } : {}),
     }),
     signal: AbortSignal.timeout(120_000),

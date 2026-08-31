@@ -7,7 +7,9 @@ A **train** is any directory that contains both:
 
 Authority: `aq/src/core/schema.ts` (`isTrain` / `assertTrain`).
 
-`aq init [dir]` copies templates from `aq/templates/` and creates optional slots with `.keep` files. It refuses to initialize inside the `aq` package tree itself.
+`aq init` creates a **new folder** (`aq-experiment`, or `aq-experiment-new1` if that exists, then `-new2`, …). `aq init my-name` does the same with your name. It never dumps files into the current directory. Rename the folder anytime — a train is identified by `instructions.md` + `recipe.yaml` inside, not by the folder name.
+
+`aq init` copies templates from `aq/templates/` and creates optional slots with `.keep` files. It refuses to initialize inside the `aq` package tree itself. `aq stage init <name>` still writes exactly under `stages/<name>/`.
 
 ## Canonical layout
 

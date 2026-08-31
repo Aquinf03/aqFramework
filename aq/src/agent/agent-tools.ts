@@ -27,7 +27,7 @@ export type AgentToolDef = {
 
 function nativeAqTools(): AgentToolDef[] {
   const verbs: [string, string][] = [
-    ["init", "Create or fill a train skeleton here (or in args dir). No separate SDK: the folder is the API."],
+    ["init", "Create a new train folder (aq-experiment or args name; -newN if taken). Does not dump into cwd."],
     ["help", "CLI help text."],
     ["status", "Jobs, last run, eval, schedule logs."],
     ["train", "Fit. Writes artifacts/checkpoints/last.json."],

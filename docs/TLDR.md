@@ -18,6 +18,7 @@ Needs Node ≥ 18, npm, python3. Then: `aq help` · `aq doctor`
 
 ```bash
 aq init my-train && cd my-train
+# bare `aq init` → aq-experiment (or aq-experiment-new1, …)
 # recipe: method: linear, data.path, data.target
 aq train && aq eval
 ```

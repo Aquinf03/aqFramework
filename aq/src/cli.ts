@@ -3,7 +3,7 @@
 import path from "node:path"
 import { checkout, parseCheckoutArgs } from "./handle/checkout.js"
 import { fork, parseForkArgs } from "./handle/fork.js"
-import { init } from "./handle/init.js"
+import { init, resolveInitRoot } from "./handle/init.js"
 import { diffRuns } from "./handle/diff.js"
 import { data } from "./handle/data.js"
 import { job } from "./job/job.js"
@@ -36,8 +36,12 @@ async function main(): Promise<void> {
   }
 
   if (cmd === "init") {
-    const dir = argv[1] ?? "."
-    const { created, skipped } = await init(dir)
+    const root = resolveInitRoot(argv[1])
+    const { created, skipped } = await init(root)
+    const rel = path.relative(process.cwd(), root) || root
+    console.log("train")
+    console.log("  " + rel)
+    console.log("  rename this folder anytime — aq only needs instructions.md + recipe.yaml inside")
     if (created.length) {
       console.log("created")
       for (const f of created) console.log("  " + f)
@@ -49,6 +53,7 @@ async function main(): Promise<void> {
     if (!created.length && skipped.length) {
       console.log("skeleton already complete. grow it by editing files.")
     }
+    console.log("next:  cd " + rel)
     return
   }
 

@@ -30,7 +30,8 @@ Keys for models live in `~/.aq/config.json`. Aquin account tokens live in `~/.aq
 
 | Command | Purpose |
 |---------|---------|
-| `aq init [dir]` | Skeleton from templates (cwd if omitted) |
+| `aq init` | New folder `aq-experiment` (or `aq-experiment-new1`, …) with skeleton |
+| `aq init <name>` | Same with that name (also `-newN` if taken). Rename the folder anytime. |
 | `aq fork <new-dir>` | Copy cwd train; skip `jobs/` + `artifacts/` |
 | `aq fork <src> <dest>` | Copy that train |
 | `aq checkout <id>` | Restore job tree into cwd |
