@@ -102,6 +102,7 @@ export const SLASH = [
   { name: "/spawn", hint: "worker agents" },
   { name: "/provider", hint: "openai · anthropic · grok · ollama" },
   { name: "/model", hint: "set model id" },
+  { name: "/temp", hint: "sampling temperature 0–2 · /temp show|reset" },
   { name: "/key", hint: "paste an api key" },
   { name: "/sound", hint: "on · off" },
   { name: "/exit", hint: "leave" },
@@ -113,6 +114,7 @@ const SLASH_ALIAS: Record<string, string> = {
   "/chat": "/open",
   "/newchat": "/new",
   "/img": "/image",
+  "/temperature": "/temp",
 }
 
 const SYSTEM =
