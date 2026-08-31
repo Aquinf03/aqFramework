@@ -11,6 +11,7 @@ import { startMcp } from "../lib/mcp.js"
 import { extraTools } from "../lib/skill-runtime.js"
 import { activeId, activeLabel, entry, hasCreds } from "./provider.js"
 import { pythonBin } from "../core/python.js"
+import { frameworkVersion } from "../core/version.js"
 
 export type Check = { ok: "ok" | "warn" | "fail"; name: string; detail: string }
 
@@ -57,6 +58,7 @@ export async function runDoctor(cwd: string): Promise<{ checks: Check[]; ok: boo
   const checks: Check[] = []
   const add = (ok: Check["ok"], name: string, detail: string) => checks.push({ ok, name, detail })
 
+  add("ok", "aq", frameworkVersion().version)
   add("ok", "node", process.version)
   add(Number(process.versions.node.split(".")[0]) >= 18 ? "ok" : "fail", "node.major", "need node >= 18")
 

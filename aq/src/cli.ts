@@ -19,10 +19,17 @@ import { providerCmd } from "./agent/provider.js"
 import { doctorCmd } from "./agent/doctor.js"
 import { spawnCmd } from "./agent/spawn.js"
 import { loginCmd, logoutCmd, switchCmd } from "./handle/login.js"
+import { versionReport } from "./core/version.js"
 
 async function main(): Promise<void> {
   const argv = process.argv.slice(2)
   const cmd = argv[0]
+  if (cmd === "version" || cmd === "-v" || cmd === "--version") {
+    const verbose =
+      cmd === "version" && (argv.includes("--verbose") || argv.includes("-V") || argv.slice(1).includes("-v"))
+    console.log(versionReport(verbose))
+    return
+  }
   if (!cmd || cmd === "agent" || cmd === "help" || cmd === "-h" || cmd === "--help") {
     await runAgent(argv, process.cwd())
     return

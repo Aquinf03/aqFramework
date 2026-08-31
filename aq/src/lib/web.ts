@@ -1,6 +1,8 @@
 /** Client web fallback for providers without native search (Ollama). Fetch is always local. */
 
-const UA = "aq/0.0.1 (local agent; +https://github.com/aquin)"
+import { frameworkVersion } from "../core/version.js"
+
+const UA = `aq/${frameworkVersion().version} (local agent; +https://github.com/aquin)`
 const FETCH_MAX = 24_000
 const SEARCH_MAX = 8
 const TIMEOUT_MS = 20_000

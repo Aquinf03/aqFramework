@@ -12,6 +12,7 @@ After TypeScript changes: `cd aq && npm run build`.
 
 | Command | Purpose |
 |---------|---------|
+| `aq version` | Framework version (`-v` / `--version`; `aq version --verbose` → node + install paths) |
 | `aq login` | Open auth portal desktop/CLI handoff; paste code |
 | `aq login --token aq-…` | Install an existing CLI token |
 | `aq login --check` | Who is signed in |

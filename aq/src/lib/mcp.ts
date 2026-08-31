@@ -1,6 +1,7 @@
 /** Stdio MCP client. Skills start servers; aq talks JSON-RPC. */
 
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process"
+import { frameworkVersion } from "../core/version.js"
 
 export type McpSpec = {
   command: string
@@ -46,7 +47,7 @@ export class McpClient {
     await this.request("initialize", {
       protocolVersion: "2024-11-05",
       capabilities: {},
-      clientInfo: { name: "aq", version: "0.0.1" },
+      clientInfo: { name: "aq", version: frameworkVersion().version },
     })
     this.notify("notifications/initialized", {})
   }

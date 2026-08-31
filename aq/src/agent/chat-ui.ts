@@ -41,13 +41,15 @@ import {
   setTabTitle,
   type ChatSpec,
 } from "./chat-store.js"
+import { frameworkVersion } from "../core/version.js"
 
 const RESET = "\x1b[0m"
 const BOLD = "\x1b[1;38;5;255m"
 const DIM = "\x1b[38;5;245m"
 const PREFIX = "❯ "
 const RAIL = "┃"
-const VERSION = "0.0.1"
+
+const VERSION = frameworkVersion().version
 
 const ENABLE = "\x1b[?2004h"
 const DISABLE = "\x1b[?2004l\x1b[?25h"

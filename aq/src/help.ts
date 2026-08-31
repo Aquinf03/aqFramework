@@ -14,6 +14,7 @@ export function help(): string {
     "  aq ask [dir] <prompt>   one-shot answer (no chat UI)",
     "  aq ask --json [dir] <prompt>",
     "  aq help                 this text",
+    "  aq version              framework version (-v / --version; version --verbose for paths)",
     "  aq login                open aq.aquin.app/?view=desktop&client=cli, then paste the code",
     "  aq login --token <aq-…>  paste an existing CLI token",
     "  aq login --check        who is signed in",
