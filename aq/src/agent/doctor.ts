@@ -100,7 +100,12 @@ export async function runDoctor(cwd: string): Promise<{ checks: Check[]; ok: boo
       add(existsSync(path.join(train, f)) ? "ok" : "fail", `train.${f}`, f)
     }
     const art = path.join(train, "artifacts")
-    add(writable(art) || writable(train) ? "ok" : "fail", "artifacts", writable(art) ? "writable" : "not writable")
+    // artifacts/ is created by train/eval — not by the agent (chats are in ~/.aq)
+    if (existsSync(art)) {
+      add(writable(art) ? "ok" : "fail", "artifacts", writable(art) ? "writable" : "not writable")
+    } else {
+      add("ok", "artifacts", "absent (ok until aq train)")
+    }
 
     const tools = listTools(train)
     add("ok", "tools", tools.length ? tools.join(" ") : "none")

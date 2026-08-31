@@ -1,9 +1,12 @@
-/** Chats live in ~/.aq/chats/<id>/ (global). Spec records which train they belong to. */
+/** Chats live in ~/.aq/chats/<id>/ (global). Spec records which train they belong to.
+ * Agent start must never mkdir train-local artifacts/ (that is for train/eval only).
+ */
 
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs"
 import { randomBytes } from "node:crypto"
 import { homedir } from "node:os"
 import path from "node:path"
+import { isTrain } from "../core/schema.js"
 import type { ChatMsg } from "./provider.js"
 import { streamTurn } from "./provider.js"
 
@@ -40,35 +43,69 @@ function msgsPath(id: string): string {
   return path.join(root(), id, "messages.json")
 }
 
-/** One-time: move train-local artifacts/chats into ~/.aq/chats. */
-function migrateLegacy(cwd: string): void {
+function isJunkName(name: string): boolean {
+  return name === ".keep" || name === ".DS_Store" || name === "Thumbs.db"
+}
+
+/** Drop empty leftover artifacts/chats (and empty artifacts outside a train). */
+function pruneChatResidue(cwd: string): void {
+  const art = path.join(cwd, "artifacts")
   const legacy = legacyRoot(cwd)
-  if (!existsSync(legacy)) return
-  mkdirSync(root(), { recursive: true })
-  const train = trainKey(cwd)
-  for (const name of readdirSync(legacy)) {
-    const from = path.join(legacy, name)
-    const to = path.join(root(), name)
-    if (existsSync(to)) continue
+  if (existsSync(legacy)) {
     try {
-      renameSync(from, to)
-      const sp = path.join(to, "spec.json")
-      if (existsSync(sp)) {
-        const spec = JSON.parse(readFileSync(sp, "utf8")) as ChatSpec
-        if (!spec.train) {
-          spec.train = train
-          writeFileSync(sp, JSON.stringify(spec, null, 2) + "\n")
+      const left = readdirSync(legacy).filter((n) => !isJunkName(n))
+      if (left.length === 0) rmSync(legacy, { recursive: true, force: true })
+    } catch {
+      /* ignore */
+    }
+  }
+  // Agent in a random cwd must not leave an empty artifacts/ behind.
+  if (!isTrain(cwd) && existsSync(art)) {
+    try {
+      const names = readdirSync(art).filter((n) => !isJunkName(n))
+      if (names.length === 0) {
+        rmSync(art, { recursive: true, force: true })
+        return
+      }
+      if (names.length === 1 && names[0] === "chats") {
+        const chats = path.join(art, "chats")
+        if (!existsSync(chats) || readdirSync(chats).filter((n) => !isJunkName(n)).length === 0) {
+          rmSync(art, { recursive: true, force: true })
         }
       }
     } catch {
-      /* leave legacy entry if move fails */
+      /* ignore */
     }
   }
-  try {
-    if (readdirSync(legacy).length === 0) rmSync(legacy, { recursive: true, force: true })
-  } catch {
-    /* ignore */
+}
+
+/** One-time: move train-local artifacts/chats into ~/.aq/chats. Never creates artifacts/. */
+function migrateLegacy(cwd: string): void {
+  const legacy = legacyRoot(cwd)
+  if (existsSync(legacy)) {
+    mkdirSync(root(), { recursive: true })
+    const train = trainKey(cwd)
+    for (const name of readdirSync(legacy)) {
+      if (isJunkName(name)) continue
+      const from = path.join(legacy, name)
+      const to = path.join(root(), name)
+      if (existsSync(to)) continue
+      try {
+        renameSync(from, to)
+        const sp = path.join(to, "spec.json")
+        if (existsSync(sp)) {
+          const spec = JSON.parse(readFileSync(sp, "utf8")) as ChatSpec
+          if (!spec.train) {
+            spec.train = train
+            writeFileSync(sp, JSON.stringify(spec, null, 2) + "\n")
+          }
+        }
+      } catch {
+        /* leave legacy entry if move fails */
+      }
+    }
   }
+  pruneChatResidue(cwd)
 }
 
 export function setTabTitle(name: string): void {
