@@ -53,6 +53,34 @@ link_aq() {
   chmod +x "$root/aq/bin/aq" 2>/dev/null || true
 }
 
+install_kernel_venv() {
+  local root="$1"
+  local req="$root/aq/kernel/requirements.txt"
+  local venv="$root/aq/kernel/.venv"
+  [ -f "$req" ] || return 0
+
+  echo "Installing kernel Python deps (venv)…"
+  # Stale/partial venv (e.g. missing bin/python3) breaks pip shebangs — always recreate.
+  rm -rf "$venv"
+  if ! python3 -m venv "$venv"; then
+    echo "Failed to create venv. On Debian/Ubuntu install: sudo apt-get install -y python3-venv python3-pip" >&2
+    exit 1
+  fi
+  local py=""
+  if [ -x "$venv/bin/python" ]; then
+    py="$venv/bin/python"
+  elif [ -x "$venv/bin/python3" ]; then
+    py="$venv/bin/python3"
+  else
+    echo "venv has no python binary at $venv/bin" >&2
+    echo "On Debian/Ubuntu: sudo apt-get install -y python3-venv" >&2
+    exit 1
+  fi
+  # Use python -m pip (not bin/pip) so a missing python3 symlink cannot break the shebang.
+  "$py" -m pip install -U pip
+  "$py" -m pip install -r "$req"
+}
+
 install_from_dir() {
   local root="$1"
   if [ ! -f "$root/aq/package.json" ] || [ ! -f "$root/aq/kernel/run.py" ]; then
@@ -62,13 +90,7 @@ install_from_dir() {
   cd "$root/aq"
   npm install
   link_aq "$root"
-  if [ -f "$root/aq/kernel/requirements.txt" ]; then
-    echo "Installing kernel Python deps (venv)…"
-    python3 -m venv "$root/aq/kernel/.venv"
-    # shellcheck disable=SC1091
-    "$root/aq/kernel/.venv/bin/pip" install -U pip
-    "$root/aq/kernel/.venv/bin/pip" install -r "$root/aq/kernel/requirements.txt"
-  fi
+  install_kernel_venv "$root"
   echo "Installed under $root (npm prefix: $NPM_PREFIX)"
   echo "Run: aq help"
   echo "LLM/LoRA needs recipe.model (hub id). QLoRA needs CUDA + bitsandbytes."
