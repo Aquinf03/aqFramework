@@ -61,7 +61,7 @@ export async function compactHistory(
     [
       {
         role: "user",
-        content: `Write a compact recap of this earlier chat so the same conversation can continue. Keep decisions, paths, commands, errors, names, and open tasks. No preamble.\n\n${blob}`,
+        content: `Write a compact recap so the same lab session can continue. Keep the user's open objective, train folder paths, files created, commands run, errors, and what is still unfinished. Do not drop a train that was already inited. No preamble.\n\n${blob}`,
       },
     ],
     () => {},
@@ -72,7 +72,7 @@ export async function compactHistory(
 
   const build = (rest: ChatMsg[]): ChatMsg[] => [
     { role: "user", content: `Earlier in this chat (compacted):\n${recap}` },
-    { role: "assistant", content: "Continuing from that recap and the recent messages." },
+    { role: "assistant", content: "Continuing. The recap is true; I will not re-discover or deny work already done." },
     ...rest,
   ]
 

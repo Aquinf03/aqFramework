@@ -1,0 +1,16 @@
+family: llm
+method: llm
+model: hf-internal-testing/tiny-random-gpt2
+size: tiny
+objective: next-token
+tokenizer: byte
+context: 48
+steps: 80
+lr: 0.03
+seed: 7
+data:
+  path: data.jsonl
+  text: text
+eval:
+  metric: loss
+  min_score: null

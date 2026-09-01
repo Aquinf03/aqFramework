@@ -9,7 +9,7 @@ import { find as findPaths, glob as globPaths, grep as grepFiles, ls, readPath }
 import { cpAt, editFileAt, mkdirAt, mvAt, rmAt, writeFileAt } from "../lib/files.js"
 import { searchSkills, skillsDigest } from "../lib/skill.js"
 import { activateSkill, callMcpTool, extraTools, runSkillCode } from "../lib/skill-runtime.js"
-import { isTrain } from "../core/schema.js"
+import { childTrains, isTrain, trainInArgv } from "../core/schema.js"
 import { runToolCaptured } from "../handle/tool.js"
 import { enqueueJob, waitForPid } from "../job/job.js"
 import { agentLog, cancelAgent, formatAgents, startAgent } from "./spawn.js"
@@ -27,13 +27,13 @@ export type AgentToolDef = {
 
 function nativeAqTools(): AgentToolDef[] {
   const verbs: [string, string][] = [
-    ["init", "Create a new train folder (aq-experiment or args name; -newN if taken). Does not dump into cwd."],
+    ["init", "Create a train subfolder (args = name, or aq-experiment). Does not dump into cwd. After this, pass that folder to aq_train / aq_status."],
     ["help", "CLI help text."],
-    ["status", "Jobs, last run, eval, schedule logs."],
-    ["train", "Fit. Writes artifacts/checkpoints/last.json."],
-    ["eval", "Score evals/. Humans own the gate."],
-    ["checkpoint", "List or keep a checkpoint."],
-    ["serve", "Generate from last checkpoint. Prompt on argv or recipe serve.prompt."],
+    ["status", "Jobs, last run, eval. If cwd is not a train, args MUST be the train folder."],
+    ["train", "Fit. If cwd is not a train, args MUST be the train folder. Writes artifacts/checkpoints/last.json."],
+    ["eval", "Score evals/. If cwd is not a train, args starts with the train folder. Humans own the gate."],
+    ["checkpoint", "List or keep a checkpoint. If cwd is not a train, pass the train folder in args."],
+    ["serve", "Generate from last checkpoint. If cwd is not a train, args starts with the train folder, then the prompt."],
     ["data", "Hash recipe data.path. Extra args after data."],
     ["job", "Run, list, log, cancel jobs."],
     ["fork", "Copy this train; skip jobs/ and artifacts/. args is dest."],
@@ -376,8 +376,33 @@ function jsonArg(args: Record<string, unknown>, key: string): string {
   return v
 }
 
+export function workspaceLines(train: string): string[] {
+  const kids = childTrains(train)
+  const lines = [
+    `Workspace path: ${train}`,
+    `This folder is a train: ${isTrain(train) ? "yes" : "no"}`,
+  ]
+  if (!isTrain(train)) {
+    if (kids.length) {
+      lines.push(`Child trains: ${kids.join(", ")}`)
+      lines.push(`Use aq_* with args set to one of those names. Example: aq_train args "${kids[0]}"`)
+    } else {
+      lines.push("No child trains. aq_init a subfolder, then pass that name to aq_train / aq_status.")
+    }
+  } else if (kids.length) {
+    lines.push(`Nested trains: ${kids.join(", ")}`)
+  }
+  return lines
+}
+
 export function contextBlock(train: string): string {
-  return ["", memoryDigest(train), skillsDigest(train), toolsDigest(train)].filter(Boolean).join("\n")
+  const bits = [
+    workspaceLines(train).join("\n"),
+    memoryDigest(train),
+    skillsDigest(train),
+    toolsDigest(train),
+  ]
+  return ["", ...bits].filter(Boolean).join("\n")
 }
 
 export function toolsForTrain(train: string): AgentToolDef[] {
@@ -474,7 +499,13 @@ export async function runAgentTool(train: string, name: string, rawArgs: string)
 function runAq(train: string, parts: string[]): string {
   const head = parts[0]
   if (!head || !ALLOW.has(head)) throw new Error(`blocked aq ${head ?? "(empty)"}`)
-  if (head !== "init" && head !== "help" && !isTrain(train)) throw new Error("cwd is not a train")
+  if (head !== "init" && head !== "help" && !isTrain(train) && !trainInArgv(train, parts)) {
+    const kids = childTrains(train)
+    const hint = kids.length
+      ? `pass a train folder in args (e.g. "${kids[0]}") or cd into it`
+      : "use aq_init first, then pass that folder in args"
+    throw new Error(`cwd is not a train; ${hint}`)
+  }
   const r = spawnSync(aqBin(), parts, {
     cwd: train,
     encoding: "utf8",
