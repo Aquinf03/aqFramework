@@ -17,7 +17,7 @@ eval:
 # lambda / l1_ratio / trees / depth / library (boosting: auto|xgboost|lightgbm|catboost|sklearn)
 ```
 
-Backed by **scikit-learn** (and XGBoost/LightGBM/CatBoost when installed for boosting).
+Backed by **scikit-learn**, **XGBoost**, **LightGBM**, and **CatBoost** (all installed with the kernel by default).
 
 ## LLM / LoRA / QLoRA
 
