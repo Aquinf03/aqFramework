@@ -150,7 +150,7 @@ async function runAgents(train: string, name: string, spec: Sched): Promise<stri
   const kids: Promise<string[]>[] = []
   for (let i = 1; i <= n; i++) {
     const dest = path.join(train, "artifacts", "agents", String(i))
-    if (!existsSync(dest)) await fork(train, dest)
+    if (!existsSync(dest)) await fork({ src: train, dest, force: true })
     kids.push(runPipeline(dest, name, spec).then((ls) => ls.map((l) => "agent" + i + "  " + l)))
   }
   for (const ls of await Promise.all(kids)) lines.push(...ls)

@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs"
 import path from "node:path"
 import { assertTrain } from "../core/schema.js"
+import { formatLab } from "../core/forecast.js"
 
 export async function status(argv: string[]): Promise<void> {
   const train = assertTrain(argv[0] ?? ".")
@@ -101,4 +102,6 @@ export async function status(argv: string[]): Promise<void> {
     if (!logs.length) console.log("  (none)")
     else for (const f of logs) console.log("  artifacts/schedules/" + f)
   } else console.log("  (none)")
+
+  console.log(formatLab(train))
 }

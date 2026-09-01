@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { randomBytes } from "node:crypto"
 import path from "node:path"
 import { cancelJob, enqueueJob, jobLogPath, waitForPid } from "../job/job.js"
+import { KILLER_PREAMBLE } from "../core/forecast.js"
 import { assertTrain } from "../core/schema.js"
 import { aqRoot } from "../core/root.js"
 
@@ -90,12 +91,13 @@ export function listAgents(train: string): AgentSpec[] {
 export async function startAgent(
   train: string,
   prompt: string,
-  opts?: { name?: string },
+  opts?: { name?: string; kill?: boolean },
 ): Promise<AgentSpec> {
-  const text = prompt.trim()
-  if (!text) throw new Error("need a prompt")
+  const raw = prompt.trim()
+  const text = (opts?.kill ? KILLER_PREAMBLE + "\n\n" : "") + raw
+  if (!raw) throw new Error("need a prompt")
   const id = newId(train)
-  const name = (opts?.name ?? text).replace(/\s+/g, " ").trim().slice(0, 48) || id
+  const name = (opts?.name ?? (opts?.kill ? "kill: " + raw : raw)).replace(/\s+/g, " ").trim().slice(0, 48) || id
   mkdirSync(path.join(agentsDir(train), id), { recursive: true })
   writeFileSync(path.join(agentsDir(train), id, "prompt.txt"), text + "\n")
   const cmd = aqArgv(["ask", "-y", "--json", train, text])
@@ -147,7 +149,7 @@ export function spawnHelp(): string {
   return [
     "aq spawn",
     "",
-    "  aq spawn run [dir] [--name NAME] -- <prompt>",
+    "  aq spawn run [dir] [--name NAME] [--kill] -- <prompt>",
     "  aq spawn list [dir]",
     "  aq spawn log [dir] <id>",
     "  aq spawn cancel [dir] <id>",
@@ -187,6 +189,7 @@ export async function spawnCmd(argv: string[]): Promise<void> {
     const rest = argv.slice(1)
     let dir = "."
     let name: string | undefined
+    let kill = false
     let i = 0
     if (rest[0] && !rest[0].startsWith("-") && existsSync(path.resolve(rest[0], "instructions.md"))) {
       dir = rest[0]
@@ -196,7 +199,7 @@ export async function spawnCmd(argv: string[]): Promise<void> {
       if (rest[i] === "--") {
         const prompt = rest.slice(i + 1).join(" ").trim()
         const train = assertTrain(dir)
-        const spec = await startAgent(train, prompt, { name })
+        const spec = await startAgent(train, prompt, { name, kill })
         console.log("spawned")
         console.log("  " + spec.id + "  " + spec.status + "  " + spec.name)
         return
@@ -206,14 +209,19 @@ export async function spawnCmd(argv: string[]): Promise<void> {
         i += 2
         continue
       }
+      if (rest[i] === "--kill") {
+        kill = true
+        i += 1
+        continue
+      }
       const prompt = rest.slice(i).join(" ").trim()
       const train = assertTrain(dir)
-      const spec = await startAgent(train, prompt, { name })
+      const spec = await startAgent(train, prompt, { name, kill })
       console.log("spawned")
       console.log("  " + spec.id + "  " + spec.status + "  " + spec.name)
       return
     }
-    throw new Error("usage: aq spawn run [dir] [--name NAME] -- <prompt>")
+    throw new Error("usage: aq spawn run [dir] [--name NAME] [--kill] -- <prompt>")
   }
   throw new Error(`unknown spawn command: ${sub}\n${spawnHelp()}`)
 }

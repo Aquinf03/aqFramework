@@ -13,7 +13,7 @@ Code: `aq/src/agent/` (`agent.ts`, `agent-loop.ts`, `agent-tools.ts`, `chat-ui.t
 | `aq ask --json` | `{ text, tools }` for scripts / spawn |
 | `aq ask -y` | Auto-approve shell `run` |
 | `aq chat list\|last\|<id>` | Resume sessions under `~/.aq/chats/` (per-train view; `--all` for every chat) |
-| `aq spawn …` | Background workers (jobs + `artifacts/agents/`) |
+| `aq spawn …` | Background workers (jobs + `artifacts/agents/`). `--kill` = cheapest-disproof critic |
 
 ## Tool rounds
 
@@ -21,10 +21,11 @@ Code: `aq/src/agent/` (`agent.ts`, `agent-loop.ts`, `agent-tools.ts`, `chat-ui.t
 
 Prompt (`prompt.ts`) emphasizes:
 
-- The folder is the API  
+- Conversation first: a wish is not permission; tools stay off until the human says go  
+- One heavy step per turn (create files **or** train **or** eval), then ask  
 - Cite real files (paths)  
 - **Do not invent metrics or eval results** - humans own `aq eval`  
-- Prefer `aq` verbs and train tools over hallucinated state  
+- The agent writes predicted ranges itself; after eval, predicted vs actual is the trust signal 
 
 ## Providers
 
@@ -65,6 +66,7 @@ Slash / menu commands in the UI cover provider, model, key, sound, compact, cont
 
 ```bash
 aq spawn run -- "investigate why eval failed"
+aq spawn run --kill -- "this fork cannot be better than parent; prove it cheaply"
 aq spawn list
 aq spawn log <id>
 aq spawn cancel <id>

@@ -71,6 +71,10 @@ The same path (train, then eval, then inspect) must work across families (tabula
 
 Aquin does not ship “ImageNet but smaller” or a blessed benchmark suite as product. **You** put probes in `evals/`. Humans own the gate (`aq eval`). The agent must not invent scores.
 
+### 10. Predictions constrain freedom
+
+Autonomy is not a fixed ceremony. When the agent makes a bet (`forecast.yaml`), `aq eval` scores that bet. Calibration of those bets retunes how much fork budget it has left. Failures compound into `memory/` when useful. Search trees and roles are plumbing for that constraint — not a checklist to march through.
+
 ## What “working” means
 
 A stranger should be able to:

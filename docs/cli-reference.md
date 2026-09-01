@@ -33,6 +33,9 @@ Keys for models live in `~/.aq/config.json`. Aquin account tokens live in `~/.aq
 | `aq init` | New folder `aq-experiment` (or `aq-experiment-new1`, …) with skeleton |
 | `aq init <name>` | Same with that name (also `-newN` if taken). Rename the folder anytime. |
 | `aq fork <new-dir>` | Copy cwd train; skip `jobs/` + `artifacts/` |
+| `aq fork … --lo --hi --why` | Same, with a predicted metric range written to dest `forecast.yaml` |
+| `aq forecast [dir]` | Show calibration / budget, or write `forecast.yaml` with `--lo --hi --why` |
+| `aq learn [dir]` | Ack `memory/heuristics.md` (clears overdue-heuristics tax) |
 | `aq fork <src> <dest>` | Copy that train |
 | `aq checkout <id>` | Restore job tree into cwd |
 | `aq checkout <id> <dest>` | New dir with tree + that job |
@@ -49,6 +52,7 @@ Keys for models live in `~/.aq/config.json`. Aquin account tokens live in `~/.aq
 
 - Opt-in fail-closed watches: set `guard.safety` / `guard.leak` in `recipe.yaml` (see [Metrics & guard](./metrics-and-guard.md)).
 - `aq eval` is the **human gate**. When `eval.min_score` is set, results are pass/fail; otherwise scores are reported without inventing a verdict.
+- Predicted vs actual is a separate signal: write `forecast.yaml` (`aq forecast --lo --hi --why`) before a fork; `aq eval` fills `artifacts/calibration.jsonl` and retunes fork budget. Tiny `evals/` get an auto critique (`artifacts/eval-critique.json`).
 - Serve requires a method that implements `generate(...)`.
 
 ---
@@ -83,6 +87,7 @@ Tools run with cwd = train and `AQ_TRAIN` set to the train absolute path.
 | `aq chat last` | Resume latest |
 | `aq chat <id>` | Resume that id |
 | `aq spawn run [dir] -- <prompt>` | Background worker agent (as a job) |
+| `aq spawn run --kill -- <prompt>` | Critic worker (cheapest disproof) |
 | `aq spawn list [dir]` | Workers |
 | `aq spawn log [dir] <id>` | Worker log |
 | `aq spawn cancel [dir] <id>` | Cancel worker |
@@ -122,10 +127,13 @@ aq status
 ### Fork a variant
 
 ```bash
-aq fork ../clinic-ridge
+aq forecast --lo 0.1 --hi 2.0 --why "ridge should beat linear on this collinear set"
+# or fold the prediction into the fork:
+aq fork ../clinic-ridge --lo 0.1 --hi 2.0 --why "ridge should beat linear" --novelty method
 cd ../clinic-ridge
 # change method: ridge, set lambda
-aq train && aq eval
+aq train && aq eval   # fills predicted vs actual + calibration
+aq forecast           # coverage / sharpness / budget
 aq diff <run-a> <run-b>
 ```
 

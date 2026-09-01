@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { spawn, spawnSync, type ChildProcess } from "node:child_process"
 import path from "node:path"
+import { recordEval } from "./forecast.js"
 import { assertTrain, isTrain } from "./schema.js"
 import { kernelRoot } from "./root.js"
 
@@ -172,4 +173,8 @@ export async function kernelStep(step: string, argv: string[]): Promise<void> {
   if (mt.value !== undefined) req.max_tokens = Number(mt.value)
   if (temp.value !== undefined) req.temperature = Number(temp.value)
   await runKernel(train, req)
+  if (step === "eval") {
+    const extra = recordEval(train)
+    if (extra.length) console.log(extra.join("\n"))
+  }
 }

@@ -10,6 +10,7 @@ import { cpAt, editFileAt, mkdirAt, mvAt, rmAt, writeFileAt } from "../lib/files
 import { searchSkills, skillsDigest } from "../lib/skill.js"
 import { activateSkill, callMcpTool, extraTools, runSkillCode } from "../lib/skill-runtime.js"
 import { childTrains, isTrain, trainInArgv } from "../core/schema.js"
+import { labDigest, parseLabFlags, readForecast } from "../core/forecast.js"
 import { runToolCaptured } from "../handle/tool.js"
 import { enqueueJob, waitForPid } from "../job/job.js"
 import { agentLog, cancelAgent, formatAgents, startAgent } from "./spawn.js"
@@ -36,7 +37,9 @@ function nativeAqTools(): AgentToolDef[] {
     ["serve", "Generate from last checkpoint. If cwd is not a train, args starts with the train folder, then the prompt."],
     ["data", "Hash recipe data.path. Extra args after data."],
     ["job", "Run, list, log, cancel jobs."],
-    ["fork", "Copy this train; skip jobs/ and artifacts/. args is dest."],
+    ["fork", "Copy this train. You (the agent) must pass --lo --hi --why yourself. Never ask the human for those."],
+    ["forecast", "You write the predicted metric range. Never ask the human for lo/hi/why."],
+    ["learn", "Ack memory/heuristics.md when you have compressed failure patterns. Optional; overdue learn taxes budget on the next forecast-fork."],
     ["checkout", "Restore a run tree. args is id and optional dest."],
     ["diff", "Compare run records."],
     ["schedule", "Sweeps, cron, resume-on-fail."],
@@ -291,12 +294,13 @@ export const AGENT_TOOLS: AgentToolDef[] = [
   {
     name: "spawn",
     description:
-      "Start a worker aq agent on this train. It runs in the background as a job (artifacts/agents/<id>/). Use spawn_list and spawn_log to follow.",
+      "Start a worker aq agent on this train. It runs in the background as a job (artifacts/agents/<id>/). Use spawn_list and spawn_log to follow. kill true = cheapest-disproof critic, not a cheerleader.",
     parameters: {
       type: "object",
       properties: {
         prompt: { type: "string", description: "what the worker should do" },
         name: { type: "string", description: "optional short name" },
+        kill: { type: "boolean", description: "true: critic whose job is cheapest disproof" },
       },
       required: ["prompt"],
     },
@@ -364,6 +368,8 @@ const ALLOW = new Set([
   "stage",
   "provider",
   "spawn",
+  "forecast",
+  "learn",
 ])
 
 function aqBin(): string {
@@ -391,6 +397,10 @@ export function workspaceLines(train: string): string[] {
     }
   } else if (kids.length) {
     lines.push(`Nested trains: ${kids.join(", ")}`)
+  }
+  if (isTrain(train)) {
+    const lab = labDigest(train)
+    if (lab) lines.push(lab)
   }
   return lines
 }
@@ -479,6 +489,7 @@ export async function runAgentTool(train: string, name: string, rawArgs: string)
   if (name === "spawn") {
     const spec = await startAgent(train, jsonArg(args, "prompt"), {
       name: typeof args.name === "string" ? args.name : undefined,
+      kill: args.kill === true,
     })
     return `spawned ${spec.id}  ${spec.status}  ${spec.name}\njob ${spec.jobId}`
   }
@@ -506,6 +517,14 @@ function runAq(train: string, parts: string[]): string {
       : "use aq_init first, then pass that folder in args"
     throw new Error(`cwd is not a train; ${hint}`)
   }
+  if (head === "fork") {
+    const { force, input } = parseLabFlags(parts.slice(1))
+    if (!force && (input.lo == null || input.hi == null || !String(input.why || "").trim())) {
+      throw new Error(
+        `agent fork needs a predicted range before you copy: aq_fork args "<dest> --lo n --hi n --why \\"one sentence\\""`,
+      )
+    }
+  }
   const r = spawnSync(aqBin(), parts, {
     cwd: train,
     encoding: "utf8",
@@ -514,7 +533,15 @@ function runAq(train: string, parts: string[]): string {
   })
   const out = `${r.stdout ?? ""}${r.stderr ?? ""}`.trim()
   if (r.status !== 0) throw new Error(out || `aq ${head} exit ${r.status}`)
-  return out || "ok"
+  let text = out || "ok"
+  if (head === "train") {
+    const t = trainInArgv(train, parts) || train
+    if (isTrain(t) && !readForecast(t)) {
+      text +=
+        "\nnote: no forecast.yaml — write aq_forecast --lo --hi --why before the next train so eval can score predicted vs actual"
+    }
+  }
+  return text
 }
 
 export function parseRunCommand(rawArgs: string): { command: string; detach: boolean } {

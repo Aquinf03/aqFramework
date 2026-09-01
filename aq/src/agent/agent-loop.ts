@@ -17,19 +17,69 @@ export { type ChatMsg }
 
 const MAX_ROUNDS = 16
 
-function lastUserRequest(history: ChatMsg[]): string {
+const GO =
+  /\b(yeah|yep|yes|ok|okay|sure|fine|go ahead|go on|do it|do that|try it|train it|build it|fix it|proceed|please do|let'?s go|ship it|run it)\b/i
+const ACT =
+  /\b(train|eval|fork|fix|generate|init|write|change|run|serve|forecast|learn|spawn)\b/i
+const WISH =
+  /\b(wanna|want to|want a|what'?s a|what is|how do i|could we|maybe|idk|i don'?t know|thinking|curious)\b/i
+
+function isInjectedUser(c: string): boolean {
+  return (
+    c.startsWith("Earlier in this chat") ||
+    c.startsWith("Answer the user now") ||
+    c.startsWith("Recover:") ||
+    c.startsWith("Stop calling tools.")
+  )
+}
+
+function lastHumanText(history: ChatMsg[]): string {
   for (let i = history.length - 1; i >= 0; i--) {
     const m = history[i]!
     if (m.role !== "user") continue
     const c = m.content.trim()
-    if (!c) continue
-    if (c.startsWith("Earlier in this chat")) continue
-    if (c.startsWith("Answer the user now")) continue
-    if (c.startsWith("Recover:")) continue
-    if (c.startsWith("Stop calling tools.")) continue
-    return c.length > 2000 ? c.slice(0, 2000) + "…" : c
+    if (!c || isInjectedUser(c)) continue
+    return c
   }
   return ""
+}
+
+function humanTurns(history: ChatMsg[]): number {
+  return history.filter((m) => m.role === "user" && m.content.trim() && !isInjectedUser(m.content.trim())).length
+}
+
+/** Vague wishes stay in conversation until the human clearly says go. */
+export function toolsAllowed(history: ChatMsg[]): boolean {
+  const text = lastHumanText(history)
+  if (!text) return false
+  if (GO.test(text) || ACT.test(text)) return true
+  if (humanTurns(history) <= 1 || WISH.test(text)) return false
+  return true
+}
+
+function lastUserRequest(history: ChatMsg[]): string {
+  const c = lastHumanText(history)
+  return c.length > 2000 ? c.slice(0, 2000) + "…" : c
+}
+
+function aqVerb(name: string, args: string): string {
+  if (name === "aq") {
+    try {
+      const j = JSON.parse(args || "{}") as { args?: string }
+      return (j.args ?? "").trim().split(/\s+/)[0] ?? ""
+    } catch {
+      return ""
+    }
+  }
+  if (name.startsWith("aq_")) return name.slice(3)
+  return ""
+}
+
+function toolKind(name: string, args: string): "create" | "run" | "other" {
+  const v = aqVerb(name, args)
+  if (v === "init" || name === "write" || name === "edit" || name === "mkdir") return "create"
+  if (v === "train" || v === "eval" || v === "fork" || v === "serve") return "run"
+  return "other"
 }
 
 function clip(s: string, n = 240): string {
@@ -52,10 +102,13 @@ export async function runTurn(
   const objective = lastUserRequest(history)
   const msgs: ChatMsg[] = history.map((m) => ({ ...m }))
   const progress: string[] = []
+  const kinds: Array<"create" | "run" | "other"> = []
   let usedTools = false
   let lastFailed = false
   let recovered = false
+  let paused = false
 
+  const act = toolsAllowed(history)
   const system = () =>
     systemPrompt(train, {
       extra: contextBlock(train),
@@ -64,7 +117,10 @@ export async function runTurn(
     })
 
   for (let i = 0; i < MAX_ROUNDS; i++) {
-    const out = await streamTurn(msgs, onDelta, { system: system(), tools: toolsForTrain(train) })
+    const out = await streamTurn(msgs, onDelta, {
+      system: system(),
+      tools: act ? toolsForTrain(train) : [],
+    })
     if (out.toolCalls.length) {
       usedTools = true
       msgs.push({
@@ -76,6 +132,18 @@ export async function runTurn(
       for (const call of out.toolCalls) {
         let result: string
         let failed = false
+        const kind = toolKind(call.name, call.args)
+        const created = kinds.includes("create")
+        const ran = kinds.includes("run")
+        if (kind === "run" && (created || ran)) {
+          result =
+            "paused for the human: finish this step in chat and wait. Do not train/eval/fork in the same breath as creating files, and do not chain train then eval. Ask what they want next."
+          failed = true
+          paused = true
+          progress.push(`${call.name} paused`)
+          msgs.push({ role: "tool", content: result, tool_call_id: call.id })
+          continue
+        }
         try {
           if (call.name === "run") {
             const spec = parseRunCommand(call.args)
@@ -98,6 +166,7 @@ export async function runTurn(
           failed = true
           result = err instanceof Error ? err.message : String(err)
         }
+        kinds.push(kind)
         lastFailed = lastFailed || (failed && isRecoverable(result))
         progress.push(
           failed
@@ -106,6 +175,15 @@ export async function runTurn(
         )
         msgs.push({ role: "tool", content: result, tool_call_id: call.id })
       }
+      continue
+    }
+    if (paused) {
+      msgs.push({
+        role: "user",
+        content:
+          "You hit a human-in-the-loop pause. Stop tools. Tell them what is ready in a few sentences and ask whether to train, eval, or change something. Do not invent scores.",
+      })
+      paused = false
       continue
     }
     if (!out.text.trim() && usedTools) {
