@@ -80,6 +80,14 @@ def train_tokenizer(texts: list[str], rec: dict, dest: Path) -> dict:
     return meta
 
 
+def ensure_mask_token(tok) -> bool:
+    """Add [MASK] when missing (needed for mlm on causal tokenizers). Returns True if vocab grew."""
+    if tok.mask_token is not None and tok.mask_token_id is not None:
+        return False
+    tok.add_special_tokens({"mask_token": "[MASK]"})
+    return True
+
+
 def ensure_pad_token(tok) -> bool:
     """Ensure tokenizer can pad batches. Returns True if vocab grew (caller should resize embeddings)."""
     if tok.pad_token is not None:

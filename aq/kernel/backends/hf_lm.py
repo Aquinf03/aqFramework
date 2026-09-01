@@ -9,6 +9,7 @@ from __future__ import annotations
 import csv
 import json
 import random
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -26,7 +27,7 @@ from backends.device import (
 )
 from backends.deps import require_peft, require_torch, require_transformers
 from backends.recipe_opt import opt
-from backends.tok_train import ensure_pad_token, load_hf_tokenizer, train_tokenizer
+from backends.tok_train import ensure_mask_token, ensure_pad_token, load_hf_tokenizer, train_tokenizer
 from protocol import metrics as aq_metrics
 
 
@@ -171,6 +172,21 @@ def _use_qlora_flag(rec: dict) -> bool:
     return False
 
 
+def _load_mlm_model(transformers, model_id: str, load_kw: dict[str, Any]) -> tuple[Any, bool]:
+    """Load encoder MLM or fall back to causal LM with masked-token loss."""
+    try:
+        return transformers.AutoModelForMaskedLM.from_pretrained(model_id, **load_kw), False
+    except Exception as e:
+        msg = str(e).lower()
+        if "maskedlm" in msg.replace("_", "") or "not supported" in msg:
+            print(
+                f"  mlm  {model_id!r} has no MaskedLM head — causal LM + masked-token loss",
+                file=sys.stderr,
+            )
+            return transformers.AutoModelForCausalLM.from_pretrained(model_id, **load_kw), True
+        raise SystemExit(f"objective mlm failed to load {model_id!r}: {e}") from e
+
+
 def _build_model_and_tok(rec: dict, obj: str, slot: Path, texts: list[str]):
     torch = require_torch()
     transformers = require_transformers()
@@ -189,6 +205,7 @@ def _build_model_and_tok(rec: dict, obj: str, slot: Path, texts: list[str]):
         local_tok = tok_dir
 
     tok, resize_emb = load_hf_tokenizer(model_id, local_tok)
+    mlm_causal = False
 
     load_kw: dict[str, Any] = {"trust_remote_code": True}
     qlora_engine = None
@@ -218,13 +235,9 @@ def _build_model_and_tok(rec: dict, obj: str, slot: Path, texts: list[str]):
 
     # Model class by objective
     if obj in ("mlm", "masked", "masked-lm"):
-        try:
-            model = transformers.AutoModelForMaskedLM.from_pretrained(model_id, **load_kw)
-        except Exception as e:
-            raise SystemExit(
-                f"objective mlm needs a MaskedLM-capable recipe.model (e.g. a BERT). "
-                f"Failed to load {model_id!r}: {e}"
-            ) from e
+        if ensure_mask_token(tok):
+            resize_emb = True
+        model, mlm_causal = _load_mlm_model(transformers, model_id, load_kw)
     else:
         model = transformers.AutoModelForCausalLM.from_pretrained(model_id, **load_kw)
 
@@ -285,7 +298,7 @@ def _build_model_and_tok(rec: dict, obj: str, slot: Path, texts: list[str]):
             except Exception:
                 pass
 
-    return model, tok, model_id, want_qlora, used_lora, qlora_engine, tok_meta
+    return model, tok, model_id, want_qlora, used_lora, qlora_engine, tok_meta, mlm_causal
 
 
 def _fim_texts(texts: list[str], rng: random.Random) -> list[str]:
@@ -546,7 +559,7 @@ def fit(src: Path, rec: dict, *, method_name: str | None = None) -> dict:
     texts = _pack_mixture(texts, sources, rec, max_len, None)
 
     slot = _ckpt_slot(rec)
-    model, tok, model_id, want_qlora, used_lora, qlora_engine, tok_meta = _build_model_and_tok(
+    model, tok, model_id, want_qlora, used_lora, qlora_engine, tok_meta, mlm_causal = _build_model_and_tok(
         rec, obj, slot, texts
     )
     model = _load_parent_weights(model, rec, used_lora)
@@ -653,6 +666,10 @@ def fit(src: Path, rec: dict, *, method_name: str | None = None) -> dict:
         "backend": "transformers",
         "task": "lm",
         "objective": "qlora" if want_qlora else obj,
+        "mlm_causal": mlm_causal if obj in ("mlm", "masked", "masked-lm") else None,
+        "mask_rate": float(opt(rec, "mask_rate", 0.15, "llm") or 0.15)
+        if obj in ("mlm", "masked", "masked-lm")
+        else None,
         "model_id": model_id,
         "size": size,
         "device": device_kind(),
@@ -718,7 +735,10 @@ def _load_for_infer(train: Path, model: dict):
         load_kw["device_map"] = "auto"
 
     if model.get("objective") in ("mlm", "masked", "masked-lm") and full:
-        m = transformers.AutoModelForMaskedLM.from_pretrained(str(train / str(full)), **load_kw)
+        if model.get("mlm_causal"):
+            m = transformers.AutoModelForCausalLM.from_pretrained(str(train / str(full)), **load_kw)
+        else:
+            m = transformers.AutoModelForMaskedLM.from_pretrained(str(train / str(full)), **load_kw)
         tok = transformers.AutoTokenizer.from_pretrained(str(train / str(full)), trust_remote_code=True)
     elif full:
         m = transformers.AutoModelForCausalLM.from_pretrained(str(train / str(full)), **load_kw)
@@ -808,14 +828,21 @@ def write_inspect(train: Path, model: dict) -> str:
         f"model_id: {model.get('model_id')}",
         f"size: {model.get('size')}",
         f"objective: {model.get('objective')}",
-        f"qlora_engine: {model.get('qlora_engine')}",
-        f"train_loss: {model.get('train_loss')}",
-        f"adapter_path: {model.get('adapter_path')}",
-        f"model_path: {model.get('model_path')}",
-        f"tokenizer: {model.get('tokenizer')}",
-        f"deploy: {model.get('deploy')}",
-        "",
     ]
+    if model.get("objective") in ("mlm", "masked", "masked-lm"):
+        lines.append(f"causal: {model.get('mlm_causal')}")
+        lines.append(f"mask_rate: {model.get('mask_rate')}")
+    lines.extend(
+        [
+            f"qlora_engine: {model.get('qlora_engine')}",
+            f"train_loss: {model.get('train_loss')}",
+            f"adapter_path: {model.get('adapter_path')}",
+            f"model_path: {model.get('model_path')}",
+            f"tokenizer: {model.get('tokenizer')}",
+            f"deploy: {model.get('deploy')}",
+            "",
+        ]
+    )
     rel = "artifacts/inspect.md"
     (train / rel).write_text("\n".join(lines), encoding="utf-8")
     return rel

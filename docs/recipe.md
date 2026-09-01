@@ -51,7 +51,7 @@ Rules:
 
 - **`model:` is required.** `size:` is only a label (`llm`/`slm`/`edge`).
 - **SFT** masks prompt tokens (loss on completion only). **full-ft** trains all non-pad tokens.
-- **mlm** needs a MaskedLM-capable model (e.g. BERT).
+- **mlm** needs a MaskedLM-capable model for true bidirectional MLM (e.g. BERT). Causal models (Llama, GPT) also work — aq uses masked-token loss on the causal backbone.
 - **QLoRA** fails on MPS/CPU/ROCm without CUDA bitsandbytes.
 - These **fail closed** (not faked): `formats: true`, `speculative: true`, `paged_kv: true`, `objective: mtp`.
 
