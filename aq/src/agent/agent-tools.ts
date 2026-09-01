@@ -35,11 +35,10 @@ function nativeAqTools(): AgentToolDef[] {
     ["checkpoint", "List or keep a checkpoint. If cwd is not a train, pass the train folder in args."],
     ["serve", "Generate from last checkpoint. If cwd is not a train, args starts with the train folder, then the prompt."],
     ["data", "Hash recipe data.path. Extra args after data."],
-    ["job", "Run, list, log, cancel jobs."],
+    ["job", "Run, list, log, cancel jobs; job plan for cron/sweeps/pipelines."],
     ["fork", "Copy this train to try a variant without mutating the original."],
     ["checkout", "Restore a run tree. args is id and optional dest."],
     ["diff", "Compare run records."],
-    ["schedule", "Sweeps, cron, resume-on-fail."],
     ["stage", "Nested trains."],
     ["plot", "Generate charts from artifacts: loss/lr (metrics), job status (jobs), run comparison (runs), or all. Writes artifacts/plots/*.png. Use when the user asks for a graph, chart, or plot."],
     ["provider", "List or set model providers."],
@@ -59,7 +58,7 @@ function nativeAqTools(): AgentToolDef[] {
 export const AGENT_TOOLS: AgentToolDef[] = [
   {
     name: "memory_search",
-    description: "Search memory/ notes by keywords.",
+    description: "Search memory for this train (~/.aq/memory, keyed like chats).",
     parameters: {
       type: "object",
       properties: { query: { type: "string", description: "keywords" } },
@@ -68,7 +67,7 @@ export const AGENT_TOOLS: AgentToolDef[] = [
   },
   {
     name: "memory_read",
-    description: "Read one memory note by name.",
+    description: "Read one memory entry by title (~/.aq/memory for this train).",
     parameters: {
       type: "object",
       properties: { name: { type: "string", description: "note stem" } },
@@ -77,7 +76,7 @@ export const AGENT_TOOLS: AgentToolDef[] = [
   },
   {
     name: "memory_write",
-    description: "Write a durable memory note (markdown). One topic per name.",
+    description: "Save a durable memory entry for this train (~/.aq/memory). Like pinning a chat note — not a file in the experiment folder.",
     parameters: {
       type: "object",
       properties: {
@@ -152,7 +151,7 @@ export const AGENT_TOOLS: AgentToolDef[] = [
   },
   {
     name: "write",
-    description: "Create or overwrite a file in the train. Makes parent dirs. Use for tools/, skills/, methods/, recipe, train.ts, anything in this folder.",
+    description: "Create or overwrite a file in the train. Makes parent dirs. Use for tools/, skills/, recipe, anything in this folder.",
     parameters: {
       type: "object",
       properties: {
@@ -376,7 +375,6 @@ const ALLOW = new Set([
   "checkout",
   "diff",
   "tool",
-  "schedule",
   "stage",
   "plot",
   "provider",
@@ -444,7 +442,7 @@ export async function runAgentTool(train: string, name: string, rawArgs: string)
   if (name === "memory_read") return readMemory(train, jsonArg(args, "name"))
   if (name === "memory_write") {
     const n = writeMemory(train, jsonArg(args, "name"), jsonArg(args, "body"))
-    return `wrote memory/${n}.md`
+    return `wrote memory entry "${n}" (~/.aq/memory)`
   }
   if (name === "tools_search") return formatCards(searchTools(train, jsonArg(args, "query")))
   if (name === "ls") {

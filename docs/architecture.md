@@ -26,9 +26,9 @@
                             │
 ┌───────────────────────────▼─────────────────────────────────┐
 │  Disk (source of truth)                                     │
-│    recipe.yaml  data/  evals/  methods/                     │
+│    recipe.yaml  data/  evals/  tools/                     │
 │    artifacts/{checkpoints,metrics.jsonl,runs,eval,serve,…}   │
-│    jobs/  skills/  tools/  schedules/  stages/              │
+│    jobs/  skills/  tools/  stages/                          │
 └─────────────────────────────────────────────────────────────┘
 
 Optional: web/ auth portal (identity, CLI tokens) - does not own trains.
@@ -66,7 +66,7 @@ aqfw/
 
 Implementation: `aq/src/core/python.ts` + `aq/kernel/run.py`.
 
-1. Resolve train with `assertTrain` (`instructions.md` + `recipe.yaml` required).
+1. Resolve train with `assertTrain` (`experiment.md` + `recipe.yaml` required).
 2. Ensure `artifacts/` exists.
 3. Write `artifacts/request.json` with allowed keys only:
  - `op`: `hash` | `train` | `eval` | `checkpoint` | `serve`

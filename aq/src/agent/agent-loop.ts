@@ -89,7 +89,7 @@ function clip(s: string, n = 240): string {
 
 function isRecoverable(result: string): boolean {
   const m = result.toLowerCase()
-  return m.includes("not a train") || m.includes("need instructions.md") || m.includes("outside train")
+  return m.includes("not a train") || m.includes("need experiment.md") || m.includes("outside train")
 }
 
 export async function runTurn(

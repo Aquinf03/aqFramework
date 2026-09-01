@@ -17,17 +17,17 @@ export const BUILTINS: ToolCard[] = [
   {
     name: "memory_search",
     source: "builtin",
-    description: "Search memory/ notes by keywords. Use before guessing facts about this train.",
+    description: "Search memory notes for this train (~/.aq/memory, like chats).",
   },
   {
     name: "memory_read",
     source: "builtin",
-    description: "Read one memory note by name (stem, no path).",
+    description: "Read one memory entry by title (from ~/.aq/memory for this train).",
   },
   {
     name: "memory_write",
     source: "builtin",
-    description: "Write or replace a memory note. Short markdown. One topic per name.",
+    description: "Append or update a memory entry for this train (~/.aq/memory). Short markdown.",
   },
   {
     name: "tools_search",
@@ -62,7 +62,7 @@ export const BUILTINS: ToolCard[] = [
   {
     name: "write",
     source: "builtin",
-    description: "Create or overwrite a file in the train (tools/, skills/, methods/, recipe, ...).",
+    description: "Create or overwrite a file in the train (tools/, skills/, recipe, ...).",
   },
   {
     name: "edit",
@@ -149,16 +149,15 @@ export const BUILTINS: ToolCard[] = [
 export const CLI_VERBS: ToolCard[] = [
   { name: "aq_help", source: "cli", description: "CLI help text. Native aq help." },
   { name: "aq_init", source: "cli", description: "Create a new train folder (aq-experiment or named); does not dump into cwd." },
-  { name: "aq_status", source: "cli", description: "Jobs, last run, eval, schedule logs." },
+  { name: "aq_status", source: "cli", description: "Jobs, job plans, last run, eval." },
   { name: "aq_train", source: "cli", description: "Fit. Writes artifacts/checkpoints/last.json." },
   { name: "aq_eval", source: "cli", description: "Score evals/. Human-owned gate." },
   { name: "aq_checkpoint", source: "cli", description: "List or keep a checkpoint." },
   { name: "aq_data", source: "cli", description: "Hash recipe data.path." },
-  { name: "aq_job", source: "cli", description: "Run, list, log, cancel jobs." },
-  { name: "aq_fork", source: "cli", description: "Copy this train; skip jobs/ and artifacts/." },
+  { name: "aq_job", source: "cli", description: "Run/list/log jobs; job plan for cron/sweeps/pipelines." },
+  { name: "aq_fork", source: "cli", description: "Copy this train; skip jobs/ runs and artifacts/." },
   { name: "aq_checkout", source: "cli", description: "Restore a run tree." },
   { name: "aq_diff", source: "cli", description: "Compare run records." },
-  { name: "aq_schedule", source: "cli", description: "Sweeps, cron, resume-on-fail, spawn agents." },
   { name: "aq_spawn", source: "cli", description: "Start/list/log/cancel worker agents." },
   { name: "aq_stage", source: "cli", description: "Nested trains." },
   { name: "aq_plot", source: "cli", description: "Charts from artifacts (metrics, jobs, runs). Same as plot tool." },

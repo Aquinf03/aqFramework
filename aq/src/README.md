@@ -6,7 +6,8 @@ TypeScript CLI. The current directory is the train.
 cli.ts          entry. routes verbs.
 help.ts
 core/           schema, paths, kernel bridge, package roots
-handle/         train verbs: init fork checkout status diff data step stage schedule tool
+handle/         train verbs: init fork checkout status diff data step stage tool
+job/            runs + plans (cron/sweep/pipeline)
 job/            queue, waiter, resources
 agent/          chat, ask, spawn, doctor, provider
 lib/            files, explore, memory, skills, mcp, web, registry

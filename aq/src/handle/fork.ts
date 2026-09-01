@@ -27,7 +27,9 @@ export async function fork(plan: ForkPlan): Promise<{ src: string; dest: string 
     filter: (file) => {
       const rel = path.relative(src, file)
       if (!rel || rel === ".") return true
-      return !rel.split(path.sep).some((p) => FORK_SKIP.has(p))
+      const parts = rel.split(path.sep)
+      if (parts[0] === "jobs") return parts[1] === "plans"
+      return !parts.some((p) => FORK_SKIP.has(p))
     },
   })
   for (const name of ["jobs", "artifacts"] as const) {

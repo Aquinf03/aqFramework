@@ -1,13 +1,14 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs"
 import path from "node:path"
 import { assertTrain } from "../core/schema.js"
+import { listPlanFiles, listPlanLogFiles } from "../job/plans.js"
 export async function status(argv: string[]): Promise<void> {
   const train = assertTrain(argv[0] ?? ".")
   const jobs = path.join(train, "jobs")
   const rows: string[] = []
   if (existsSync(jobs)) {
     for (const id of readdirSync(jobs).sort()) {
-      if (id.startsWith(".")) continue
+      if (id.startsWith(".") || id === "plans") continue
       const specPath = path.join(jobs, id, "spec.json")
       if (!existsSync(specPath)) continue
       const spec = JSON.parse(readFileSync(specPath, "utf8")) as {
@@ -93,11 +94,13 @@ export async function status(argv: string[]): Promise<void> {
     }
   } else console.log("  (none)")
 
-  const slog = path.join(train, "artifacts", "schedules")
-  console.log("schedules")
-  if (existsSync(slog)) {
-    const logs = readdirSync(slog).filter((f) => f.endsWith(".log"))
-    if (!logs.length) console.log("  (none)")
-    else for (const f of logs) console.log("  artifacts/schedules/" + f)
-  } else console.log("  (none)")
+  const plans = listPlanFiles(train)
+  console.log("job plans")
+  if (!plans.length) console.log("  (none)")
+  else for (const { name, file } of plans) console.log("  jobs/plans/" + path.basename(file))
+
+  const logs = listPlanLogFiles(train)
+  console.log("job plan logs")
+  if (!logs.length) console.log("  (none)")
+  else for (const f of logs) console.log("  artifacts/jobs/plans/" + f)
 }

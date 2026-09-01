@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { randomBytes } from "node:crypto"
 import path from "node:path"
 import { cancelJob, enqueueJob, jobLogPath, waitForPid } from "../job/job.js"
-import { assertTrain } from "../core/schema.js"
+import { assertTrain, isTrain } from "../core/schema.js"
 import { aqRoot } from "../core/root.js"
 
 const KILLER_PREAMBLE = [
@@ -196,7 +196,7 @@ export async function spawnCmd(argv: string[]): Promise<void> {
     let name: string | undefined
     let kill = false
     let i = 0
-    if (rest[0] && !rest[0].startsWith("-") && existsSync(path.resolve(rest[0], "instructions.md"))) {
+    if (rest[0] && !rest[0].startsWith("-") && isTrain(path.resolve(rest[0]))) {
       dir = rest[0]
       i = 1
     }

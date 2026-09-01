@@ -104,7 +104,7 @@ Writes `artifacts/serve.json` (completion, tokens, …).
 | `revision.py` | SHA-256 of file/tree; optional snapshots; `hash_train` |
 | `record.py` | Run JSON/MD under `artifacts/runs/` with recipe/data/code hashes |
 | `tokenizer.py` | Pin / verify `artifacts/tokenizer.json` |
-| `method.py` | Resolve `methods/<name>.py` (train first, then kernel) |
+| `method.py` | Resolve `tools/<name>.py` (train first, then kernel) |
 | `metrics.py` | Append-only JSONL + live stderr formatting |
 | `guard.py` | Opt-in safety + leak; raises `GuardAbort` |
 
@@ -112,7 +112,7 @@ Writes `artifacts/serve.json` (completion, tokens, …).
 
 1. Normalize name (`-` → `_`).
 2. Reject reserved names (`connection`, `method`, `recipe`, …).
-3. Prefer `{train}/methods/{name}.py`, else `{kernel}/methods/{name}.py`.
+3. Prefer `{train}/tools/{name}.py`, else `{kernel}/methods/{name}.py`.
 4. `call_fit`:
  - if `fit` has ≥3 parameters → `fit(src, target, metric)` (linear, logistic)
  - else → `fit(src, rec)`

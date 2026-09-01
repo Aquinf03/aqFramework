@@ -1,11 +1,13 @@
-# Custom methods
+# Custom methods (via `tools/`)
 
-Put `methods/<name>.py` in the train. Set `recipe.method: <name>`. The loader prefers the train path over the kernel.
+Custom **fit** adapters live in **`tools/<name>.py`**, same folder as other train scripts. Set `recipe.method: <name>`. On `aq train`, the kernel loads `tools/<name>.py` if it defines `fit()`; otherwise it uses `aq/kernel/methods/<name>.py`.
+
+You can also run the same file with `aq tool <name>` — one file, two entry points.
 
 ## Minimal example
 
 ```python
-# methods/watchdemo.py
+# tools/watchdemo.py
 from __future__ import annotations
 from pathlib import Path
 
@@ -42,4 +44,4 @@ If you call `aq_metrics.step(..., loss=…)`, users see live steps and can enabl
 
 ## Reference
 
-`tests/guard-safety/*/methods/watchdemo.py` is a full custom method that emits steps and can settle or blow up based on `recipe.demo`.
+`tests/guard-safety/*/tools/watchdemo.py` is a full custom fit adapter that emits steps and can settle or blow up based on `recipe.demo`.

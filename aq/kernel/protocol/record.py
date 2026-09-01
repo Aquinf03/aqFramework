@@ -46,7 +46,7 @@ def code_hash(train: Path) -> str:
             digest, _ = hash_file(f)
             h.update(str(f.relative_to(kernel_root)).encode())
             h.update(digest.encode())
-    for rel in ("train.ts", "recipe.yaml"):
+    for rel in ("recipe.yaml",):
         p = train / rel
         if p.is_file():
             digest, _ = hash_file(p)

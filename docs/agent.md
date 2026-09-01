@@ -24,7 +24,7 @@ Prompt (`prompt.ts`) emphasizes:
 
 - Conversation first: a wish is not permission; tools stay off until the human says go  
 - One heavy step per turn (create files **or** train **or** eval), then ask  
-- Use `memory_write` for durable lessons; read `memory/` and `skills/` before repeating a failure  
+- Use `memory_write` for durable lessons (`~/.aq/memory`, like chats); `memory_search` / `memory_read` before repeating a failure  
 - Cite real files (paths)  
 - **Do not invent metrics or eval results** — humans own `aq eval`
 
@@ -45,7 +45,7 @@ Config: `~/.aq/config.json` (mode `0600`). This is separate from `aq login` / `~
 | Group | Tools |
 |-------|-------|
 | Filesystem | `ls`, `find`, `glob`, `grep`, `read`, `write`, `edit`, `mkdir`, `mv`, `cp`, `rm` |
-| Memory | `memory_search`, `memory_read`, `memory_write` → `memory/*.md` |
+| Memory | `memory_search`, `memory_read`, `memory_write` → `~/.aq/memory/<id>/entries.json` |
 | Web | `web_search`, `web_fetch` (native search on some providers) |
 | Skills | `skill_load`, `skill_run`, `skills_search` |
 | Shell | `run` (needs approval unless `-y`; `detach` → job) |

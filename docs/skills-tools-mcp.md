@@ -23,7 +23,7 @@ aq tool summarize -- --limit 10
 - env: `AQ_TRAIN` = absolute train path  
 - Agent tool name: `tool`
 
-Use tools for deterministic helpers you do not want the model to reimplement every turn.
+Use tools for deterministic helpers and custom fit adapters (`tools/<method>.py` with `fit()` for `aq train`).
 
 ## Skills (`skills/`)
 
@@ -50,14 +50,10 @@ Client: `aq/src/lib/mcp.ts` - stdio JSON-RPC with `Content-Length` framing (`too
 
 Skills are the preferred way to attach MCP to a train: keep the server definition next to the skill that needs it. `aq doctor` can probe MCP health.
 
-## Memory (`memory/`)
+## Memory (`~/.aq/memory/`)
 
-Markdown notes the agent can search/read/write. Persistent across chats in the same train. Good for “what we already tried” without polluting `instructions.md`.
-
-## Connections (`connections/`)
-
-Slot for connection definitions (external systems). Convention exists in `aq init`; grow it as the product needs without inventing a second protocol outside the folder.
+Like chats, memory lives **outside the train** under `~/.aq/memory/<id>/` — one thread per train path, with `entries.json` (title + markdown body + timestamp). The agent uses `memory_search`, `memory_read`, and `memory_write`. Survives chat deletion; does not fork with `aq fork` (same as chats). Old `train/memory/*.md` files migrate on first access.
 
 ## Design rule
 
-If something should exist for every clone of the train, put it under the train. If it is an account secret, put it in `~/.aq` or `~/.aquin`. Do not invent a global registry of tools/skills.
+If something should exist for every clone of the train, put it under the train. Agent chats and memory live in `~/.aq` (like provider keys). Account tokens live in `~/.aquin`. Do not invent a global registry of tools/skills.

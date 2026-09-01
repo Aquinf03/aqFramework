@@ -42,11 +42,11 @@ Quiet. Current working directory is the workspace. Help is short. The agent (whe
 
 Drop a file in the right folder and it exists:
 
-- `methods/foo.py` → method `foo`
+- `tools/foo.py` with `fit()` → custom method `foo` on `aq train`; same file can be `aq tool foo`
 - `tools/bar.py` → `aq tool bar`
 - `evals/holdout.csv` → probe for `aq eval`
 - `skills/…` → agent skills / MCP
-- `schedules/nightly.yaml` → `aq schedule`
+- `jobs/plans/nightly.yaml` → `aq job plan run nightly`
 
 There is no central registry to update.
 
@@ -73,7 +73,7 @@ Aquin does not ship “ImageNet but smaller” or a blessed benchmark suite as p
 
 ### 10. Memory and skills
 
-Drop notes in `memory/` and `skills/` when a train teaches you something. The agent can read and write them; they fork with the train. No separate “harness” CLI — just files.
+Drop notes via **`memory_write`** (stored in `~/.aq/memory`, keyed by train — like chats) and procedures in `skills/` when a train teaches you something. Memory does not live in the experiment folder; it forks with your machine session, not `aq fork`.
 
 ## What “working” means
 

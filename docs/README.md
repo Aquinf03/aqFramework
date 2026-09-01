@@ -39,8 +39,8 @@ This folder is the deep reference for the whole framework: philosophy, architect
 
 ```
 cwd = train/
-  instructions.md + recipe.yaml     identity; recipe is the train API
-  data/  evals/  methods/  tools/   your science (methods/ only if custom)
+  experiment.md + recipe.yaml     identity; recipe is the train API
+  data/  evals/  tools/   your science (+ custom fit in tools/<method>.py)
   artifacts/                        checkpoints, metrics, runs
 
 aq (TypeScript) → kernel (Python: HF / sklearn)

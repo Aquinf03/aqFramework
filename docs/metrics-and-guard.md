@@ -71,4 +71,4 @@ guard:
 
 `tests/guard-safety/good` settles under safety.  
 `tests/guard-safety/bad` aborts mid-run on blow-up.  
-Both use a train-local `methods/watchdemo.py`.
+Both use a train-local `tools/watchdemo.py`.

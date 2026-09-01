@@ -39,7 +39,7 @@ function copyTrain(id) {
 }
 
 function snapshot(train) {
-  const files = ["instructions.md", "recipe.yaml", "data.csv"]
+  const files = ["experiment.md", "recipe.yaml", "data.csv"]
   const out = {}
   for (const rel of files) {
     const p = path.join(train, rel)

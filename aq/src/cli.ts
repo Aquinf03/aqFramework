@@ -9,7 +9,6 @@ import { data } from "./handle/data.js"
 import { plot } from "./handle/plot.js"
 import { job } from "./job/job.js"
 import { checkpoint, evalCmd, serve, train } from "./handle/step.js"
-import { schedule } from "./handle/schedule.js"
 import { status } from "./handle/status.js"
 import { stage } from "./handle/stage.js"
 import { tool } from "./handle/tool.js"
@@ -43,7 +42,7 @@ async function main(): Promise<void> {
     const rel = path.relative(process.cwd(), root) || root
     console.log("train")
     console.log("  " + rel)
-    console.log("  rename this folder anytime — aq only needs instructions.md + recipe.yaml inside")
+    console.log("  rename this folder anytime — aq only needs experiment.md + recipe.yaml inside")
     if (created.length) {
       console.log("created")
       for (const f of created) console.log("  " + f)
@@ -105,11 +104,6 @@ async function main(): Promise<void> {
     return
   }
 
-  if (cmd === "schedule") {
-    await schedule(argv.slice(1))
-    return
-  }
-
   if (cmd === "stage") {
     await stage(argv.slice(1))
     return
@@ -122,6 +116,11 @@ async function main(): Promise<void> {
 
   if (cmd === "status") {
     await status(argv.slice(1))
+    return
+  }
+
+  if (cmd === "schedule") {
+    await job(["plan", ...argv.slice(1)])
     return
   }
 

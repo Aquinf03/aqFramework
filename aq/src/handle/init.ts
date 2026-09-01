@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile, copyFile } from "node:fs/promises"
 import { existsSync, readdirSync } from "node:fs"
 import path from "node:path"
-import { OPTIONAL_DIRS, OPTIONAL_FILES, REQUIRED } from "../core/schema.js"
+import { OPTIONAL_DIRS, REQUIRED } from "../core/schema.js"
 import { aqRoot } from "../core/root.js"
 
 const templates = path.join(aqRoot(), "templates")
@@ -118,15 +118,6 @@ export async function init(dir: string): Promise<InitResult> {
   for (const name of REQUIRED) {
     const dest = path.join(root, name)
     const body = await readFile(path.join(templates, name), "utf8")
-    await writeNew(dest, body, created, skipped, cwd)
-  }
-
-  for (const name of OPTIONAL_FILES) {
-    const dest = path.join(root, name)
-    const src = path.join(templates, name)
-    const body = existsSync(src)
-      ? await readFile(src, "utf8")
-      : "// optional runtime for this train. aq does not read this yet.\n"
     await writeNew(dest, body, created, skipped, cwd)
   }
 

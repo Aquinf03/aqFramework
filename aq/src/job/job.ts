@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url"
 import { FORK_SKIP } from "../handle/fork.js"
 import { clampAsk, detectHost, parseBytes, type HostResources, type ResourceAsk } from "./resources.js"
 import { assertTrain, isTrain } from "../core/schema.js"
+import { jobPlan, planHelp } from "./plans.js"
 
 export type JobStatus = "queued" | "starting" | "running" | "exited" | "canceled" | "error"
 
@@ -38,11 +39,12 @@ const TREE_USAGE = "usage: aq job tree [dir] <id>"
 export function jobHelp(): string {
   return [
     "  aq job run [dir] [--cpu N] [--ram SIZE] [--disk SIZE] [--gpu N] -- <cmd>",
-    "  aq job list [dir]            jobs in this train",
+    "  aq job list [dir]            running and queued jobs",
     "  aq job log [dir] <id>       print jobs/<id>/log",
     "  aq job cancel [dir] <id>    stop a running or queued job",
     "  aq job resume [dir] <id>    queue that job again (same id)",
     "  aq job tree [dir] <id>     process tree for that job",
+    planHelp(),
   ].join("\n")
 }
 
@@ -59,6 +61,7 @@ export async function job(argv: string[]): Promise<void> {
   if (sub === "cancel") return cancel(argv.slice(1))
   if (sub === "resume") return resume(argv.slice(1))
   if (sub === "tree") return tree(argv.slice(1))
+  if (sub === "plan") return jobPlan(argv.slice(1))
   throw new Error(`unknown job command: ${sub}\n${jobHelp()}`)
 }
 
@@ -144,7 +147,7 @@ async function listIds(train: string): Promise<string[]> {
   if (!existsSync(root)) return []
   const entries = await readdir(root, { withFileTypes: true })
   return entries
-    .filter((e) => e.isDirectory() && !e.name.startsWith("."))
+    .filter((e) => e.isDirectory() && !e.name.startsWith(".") && e.name !== "plans")
     .map((e) => e.name)
     .sort()
 }

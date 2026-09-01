@@ -22,7 +22,11 @@ def load_method(train: Path, name: str):
     if not name or name in RESERVED or name.startswith("_"):
         raise SystemExit(f"bad method name: {name}")
     kernel = Path(__file__).resolve().parent.parent
-    for p in (train / "methods" / f"{name}.py", kernel / "methods" / f"{name}.py"):
+    for p in (
+        train / "tools" / f"{name}.py",
+        train / "methods" / f"{name}.py",  # legacy — use tools/
+        kernel / "methods" / f"{name}.py",
+    ):
         if p.is_file():
             spec = importlib.util.spec_from_file_location(f"aq_method_{name}", p)
             if spec is None or spec.loader is None:
@@ -31,7 +35,7 @@ def load_method(train: Path, name: str):
             spec.loader.exec_module(mod)
             return mod
     raise SystemExit(
-        f"no method {name} (add methods/{name}.py in this train, or kernel/methods/{name}.py)"
+        f"no method {name} (add tools/{name}.py in this train, or kernel/methods/{name}.py)"
     )
 
 

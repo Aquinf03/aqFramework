@@ -41,10 +41,10 @@ Keys for models live in `~/.aq/config.json`. Aquin account tokens live in `~/.aq
 | `aq eval [dir] [name] [--ckpt name]` | Score `evals/` (all if name omitted) |
 | `aq checkpoint [dir] [--keep name]` | List or name a copy of `last` |
 | `aq serve [dir] [prompt] [--ckpt name] [--max-tokens n] [--temperature t]` | Generate |
-| `aq status [dir]` | Jobs, last run, eval, recent metrics, schedules |
+| `aq status [dir]` | Jobs, job plans, last run, eval, recent metrics |
 | `aq diff [dir] [<a> <b>]` | List runs or diff two run records |
 | `aq plot [dir] [metrics\|jobs\|runs\|all]` | Matplotlib charts from artifacts → `artifacts/plots/` |
-| `aq status [dir]` | Jobs, last run, eval, recent metrics, schedules |
+| `aq status [dir]` | Jobs, job plans, last run, eval, recent metrics |
 | `aq doctor [dir]` | Health: node, python, kernel, provider, train, skills, MCP |
 
 ### Train notes
@@ -56,15 +56,12 @@ Keys for models live in `~/.aq/config.json`. Aquin account tokens live in `~/.aq
 
 ---
 
-## Tools, schedules, stages
+## Tools, stages
 
 | Command | Purpose |
 |---------|---------|
 | `aq tool [dir]` | List `tools/` |
 | `aq tool [dir] <name> [-- args]` | Run `tools/<name>.{py,ts,js,sh}` |
-| `aq schedule [dir]` | List schedules |
-| `aq schedule tick` | Run due cron/resume entries |
-| `aq schedule run <name>` | Fire one now |
 | `aq stage [dir]` | List nested trains under `stages/` |
 | `aq stage init <name>` | Scaffold nested train |
 | `aq stage <name>` | Train that stage |
@@ -104,6 +101,10 @@ aq job log [dir] <id>
 aq job cancel [dir] <id>
 aq job resume [dir] <id>
 aq job tree [dir] <id>
+aq job plan [dir]              list plans in jobs/plans/
+aq job plan tick [dir]         run due cron/resume plans
+aq job plan run [dir] <name>   fire a plan now
+aq schedule …                  alias for aq job plan …
 ```
 
 See [Jobs](./jobs.md).

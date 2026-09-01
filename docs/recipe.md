@@ -1,6 +1,6 @@
 # Recipe (`recipe.yaml`)
 
-The recipe is the **full train spec** for built-in methods. You do not write Python unless you add `methods/<name>.py`.
+The recipe is the **full train spec** for built-in methods. Custom fit code goes in **`tools/<name>.py`** (same folder as `aq tool` scripts).
 
 Install backends: `pip install -r aq/kernel/requirements.txt`
 
@@ -81,4 +81,4 @@ guard:
 
 ## Custom methods
 
-Only if you need something not built in: `methods/<name>.py` with `fit(src, rec)`.
+Only if you need something not built in: `tools/<name>.py` with `fit(src, rec)`.

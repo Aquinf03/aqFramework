@@ -11,7 +11,7 @@ Install: `pip install -r aq/kernel/requirements.txt`
 | llm, lora, qlora | Hugging Face + PEFT | **`model:` required** |
 | transformer | Hugging Face | **`model:` required**; arch encoder/decoder/enc-dec |
 
-Custom override: `{train}/methods/<name>.py` wins if present.
+Custom override: `{train}/tools/<name>.py` with a `fit()` function wins over the kernel built-in.
 
 - [Tabular](./tabular.md)
 - [Transformers](./transformers.md)

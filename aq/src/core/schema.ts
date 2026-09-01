@@ -1,29 +1,46 @@
-import { existsSync, readdirSync, statSync } from "node:fs"
+import { existsSync, readdirSync, renameSync, statSync } from "node:fs"
 import path from "node:path"
 
 /** A train is a directory. These two files are enough. The rest is optional. */
 
-export const REQUIRED = ["instructions.md", "recipe.yaml"] as const
+export const LEGACY_IDENTITY = "instructions.md" as const
+export const REQUIRED = ["experiment.md", "recipe.yaml"] as const
 
 export const OPTIONAL_DIRS = [
   "data",
   "skills",
-  "memory",
   "tools",
-  "sandbox",
   "jobs",
   "evals",
   "artifacts",
-  "connections",
-  "schedules",
   "stages",
-  "methods",
 ] as const
 
-export const OPTIONAL_FILES = ["train.ts"] as const
+function hasRecipe(root: string): boolean {
+  return existsSync(path.join(root, "recipe.yaml"))
+}
+
+function hasIdentity(root: string): boolean {
+  return (
+    existsSync(path.join(root, "experiment.md")) ||
+    existsSync(path.join(root, LEGACY_IDENTITY))
+  )
+}
+
+/** Rename legacy `instructions.md` to `experiment.md` when present. */
+export function migrateLegacyIdentity(dir: string): void {
+  const root = path.resolve(dir)
+  const exp = path.join(root, "experiment.md")
+  const leg = path.join(root, LEGACY_IDENTITY)
+  if (!existsSync(exp) && existsSync(leg)) {
+    renameSync(leg, exp)
+  }
+}
 
 export function isTrain(dir: string): boolean {
-  return REQUIRED.every((name) => existsSync(path.join(dir, name)))
+  const root = path.resolve(dir)
+  if (!existsSync(root) || !statSync(root).isDirectory()) return false
+  return hasRecipe(root) && hasIdentity(root)
 }
 
 export function assertTrain(dir: string): string {
@@ -31,6 +48,7 @@ export function assertTrain(dir: string): string {
   if (!existsSync(root) || !statSync(root).isDirectory()) {
     throw new Error(`not a directory: ${root}`)
   }
+  migrateLegacyIdentity(root)
   if (!isTrain(root)) {
     throw new Error(`not a train (need ${REQUIRED.join(" and ")}): ${root}`)
   }

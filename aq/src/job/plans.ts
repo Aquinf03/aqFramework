@@ -1,12 +1,14 @@
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs"
+/** Job plans: cron, sweep, pipeline, resume, agents. Lives in jobs/plans/ (forks); state in artifacts/jobs/plans/. */
+
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs"
 import path from "node:path"
-import { fork } from "./fork.js"
-import { enqueueJob, waitForJob } from "../job/job.js"
+import { fork } from "../handle/fork.js"
+import { enqueueJob, waitForJob } from "./job.js"
 import { startAgent } from "../agent/spawn.js"
 import { assertTrain, isTrain } from "../core/schema.js"
 import { aqRoot } from "../core/root.js"
 
-export type Sched = {
+export type JobPlan = {
   kind: "sweep" | "cron" | "resume" | "pipeline" | "agents"
   run?: string
   ask?: string
@@ -18,9 +20,41 @@ export type Sched = {
   max?: number
 }
 
-type State = { last?: string; count: number; retries: number }
+type PlanState = { last?: string; count: number; retries: number }
 
-function parseSched(text: string): Sched {
+function plansDir(train: string): string {
+  return path.join(train, "jobs", "plans")
+}
+
+function legacySchedDir(train: string): string {
+  return path.join(train, "schedules")
+}
+
+function migrateLegacyPlans(train: string): void {
+  const legacy = legacySchedDir(train)
+  if (!existsSync(legacy)) return
+  mkdirSync(plansDir(train), { recursive: true })
+  for (const f of readdirSync(legacy)) {
+    if (f.startsWith(".")) continue
+    if (!f.endsWith(".yaml") && !f.endsWith(".yml") && !f.endsWith(".json")) continue
+    const dest = path.join(plansDir(train), f)
+    if (!existsSync(dest)) {
+      try {
+        renameSync(path.join(legacy, f), dest)
+      } catch {
+        /* leave legacy copy if move fails */
+      }
+    }
+  }
+  try {
+    const left = readdirSync(legacy).filter((n) => n !== ".keep")
+    if (!left.length) rmSync(legacy, { recursive: true, force: true })
+  } catch {
+    /* ignore */
+  }
+}
+
+function parsePlanYaml(text: string): JobPlan {
   const rec: Record<string, string> = {}
   for (const line of text.split("\n")) {
     const s = line.split("#", 1)[0].trim()
@@ -28,26 +62,44 @@ function parseSched(text: string): Sched {
     const [k, ...rest] = s.split(":")
     rec[k.trim()] = rest.join(":").trim()
   }
-  const kind = rec.kind as Sched["kind"]
-  if (kind !== "sweep" && kind !== "cron" && kind !== "resume" && kind !== "pipeline" && kind !== "agents") {
-    throw new Error("schedule: kind must be sweep, cron, resume, pipeline, or agents")
-  }
-  const steps = rec.steps
-    ? rec.steps.split(",").map((s) => s.trim()).filter(Boolean)
-    : undefined
-  if (kind === "agents") {
-    if (!rec.ask && !rec.run) throw new Error("schedule: agents need ask")
-  } else if (kind !== "pipeline" && !rec.run) throw new Error("schedule: need run")
-  if (kind === "pipeline" && !steps?.length) throw new Error("schedule: pipeline needs steps")
-  const n = rec.n != null ? Number(rec.n) : undefined
-  const every = rec.every != null ? Number(rec.every) : undefined
-  const max = rec.max != null ? Number(rec.max) : undefined
-  const agents = rec.agents != null ? Number(rec.agents) : undefined
-  return { kind, run: rec.run, ask: rec.ask, steps, agents, n, every, on: rec.on, max }
+  return validatePlan(rec as unknown as JobPlan, "yaml")
 }
 
-function listFiles(train: string): { name: string; file: string }[] {
-  const dir = path.join(train, "schedules")
+function validatePlan(raw: JobPlan, src: string): JobPlan {
+  const kind = raw.kind
+  if (kind !== "sweep" && kind !== "cron" && kind !== "resume" && kind !== "pipeline" && kind !== "agents") {
+    throw new Error(`job plan: kind must be sweep, cron, resume, pipeline, or agents (${src})`)
+  }
+  const steps = raw.steps
+    ? (Array.isArray(raw.steps)
+        ? raw.steps
+        : String(raw.steps)
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean))
+    : undefined
+  if (kind === "agents") {
+    if (!raw.ask && !raw.run) throw new Error("job plan: agents need ask")
+  } else if (kind !== "pipeline" && !raw.run) {
+    throw new Error("job plan: need run")
+  }
+  if (kind === "pipeline" && !steps?.length) throw new Error("job plan: pipeline needs steps")
+  return {
+    kind,
+    run: raw.run,
+    ask: raw.ask,
+    steps,
+    agents: raw.agents != null ? Number(raw.agents) : undefined,
+    n: raw.n != null ? Number(raw.n) : undefined,
+    every: raw.every != null ? Number(raw.every) : undefined,
+    on: raw.on,
+    max: raw.max != null ? Number(raw.max) : undefined,
+  }
+}
+
+export function listPlanFiles(train: string): { name: string; file: string }[] {
+  migrateLegacyPlans(train)
+  const dir = plansDir(train)
   if (!existsSync(dir)) return []
   const out: { name: string; file: string }[] = []
   for (const f of readdirSync(dir)) {
@@ -59,32 +111,25 @@ function listFiles(train: string): { name: string; file: string }[] {
   return out.sort((a, b) => a.name.localeCompare(b.name))
 }
 
-function readSched(file: string): Sched {
+export function readPlan(file: string): JobPlan {
   const text = readFileSync(file, "utf8")
   if (file.endsWith(".json")) {
-    const j = JSON.parse(text) as Sched
-    if (!j.kind) throw new Error("schedule: need kind")
-    if (j.kind === "pipeline") {
-      if (!j.steps?.length) throw new Error("schedule: pipeline needs steps")
-    } else if (j.kind === "agents") {
-      if (!j.ask && !j.run) throw new Error("schedule: agents need ask")
-    } else if (!j.run) throw new Error("schedule: need run")
-    return j
+    return validatePlan(JSON.parse(text) as JobPlan, file)
   }
-  return parseSched(text)
+  return parsePlanYaml(text)
 }
 
 function statePath(train: string, name: string): string {
-  return path.join(train, "artifacts", "schedules", name + ".json")
+  return path.join(train, "artifacts", "jobs", "plans", name + ".json")
 }
 
-function loadState(train: string, name: string): State {
+function loadState(train: string, name: string): PlanState {
   const p = statePath(train, name)
   if (!existsSync(p)) return { count: 0, retries: 0 }
-  return JSON.parse(readFileSync(p, "utf8")) as State
+  return JSON.parse(readFileSync(p, "utf8")) as PlanState
 }
 
-function saveState(train: string, name: string, st: State): void {
+function saveState(train: string, name: string, st: PlanState): void {
   const p = statePath(train, name)
   mkdirSync(path.dirname(p), { recursive: true })
   writeFileSync(p, JSON.stringify(st, null, 2) + "\n")
@@ -108,11 +153,11 @@ function runCmd(train: string, run: string): string[] {
     const cmd = run === "hash" ? ["data", "hash", train] : [run, train]
     return aqArgv(cmd)
   }
-  throw new Error(`schedule: unknown run ${run} (train, eval, hash, tool:name, stage:name)`)
+  throw new Error(`job plan: unknown run ${run} (train, eval, hash, tool:name, stage:name)`)
 }
 
 function logPath(train: string, name: string): string {
-  return path.join(train, "artifacts", "schedules", name + ".log")
+  return path.join(train, "artifacts", "jobs", "plans", name + ".log")
 }
 
 function logLine(train: string, name: string, line: string): void {
@@ -121,7 +166,7 @@ function logLine(train: string, name: string, line: string): void {
   writeFileSync(p, new Date().toISOString() + "  " + line + "\n", { flag: "a" })
 }
 
-async function runPipeline(train: string, name: string, spec: Sched): Promise<string[]> {
+async function runPipeline(train: string, name: string, spec: JobPlan): Promise<string[]> {
   const steps = spec.steps ?? []
   const lines: string[] = []
   for (const step of steps) {
@@ -143,7 +188,7 @@ async function runPipeline(train: string, name: string, spec: Sched): Promise<st
   return lines
 }
 
-async function runAgents(train: string, name: string, spec: Sched): Promise<string[]> {
+async function runAgents(train: string, name: string, spec: JobPlan): Promise<string[]> {
   const n = spec.agents ?? 1
   if (n <= 1) return runPipeline(train, name, spec)
   const lines: string[] = []
@@ -157,8 +202,8 @@ async function runAgents(train: string, name: string, spec: Sched): Promise<stri
   return lines
 }
 
-async function fire(train: string, name: string, spec: Sched): Promise<string> {
-  if (!spec.run) throw new Error("schedule: need run")
+async function fire(train: string, name: string, spec: JobPlan): Promise<string> {
+  if (!spec.run) throw new Error("job plan: need run")
   const id = await enqueueJob(train, runCmd(train, spec.run))
   const st = loadState(train, name)
   st.last = new Date().toISOString()
@@ -167,13 +212,13 @@ async function fire(train: string, name: string, spec: Sched): Promise<string> {
   return id
 }
 
-function label(spec: Sched): string {
+function label(spec: JobPlan): string {
   if (spec.kind === "agents") return (spec.ask ?? spec.run ?? "") + (spec.n || spec.agents ? `  x${spec.n ?? spec.agents}` : "")
   if (spec.steps?.length) return spec.steps.join(",")
   return spec.run ?? ""
 }
 
-function dueCron(spec: Sched, st: State): boolean {
+function dueCron(spec: JobPlan, st: PlanState): boolean {
   const every = spec.every ?? 60
   if (!st.last) return true
   return Date.now() - new Date(st.last).getTime() >= every * 60 * 1000
@@ -189,7 +234,7 @@ function evalFailed(train: string): boolean {
 async function tickOne(
   train: string,
   name: string,
-  spec: Sched,
+  spec: JobPlan,
   force: boolean,
 ): Promise<string[]> {
   const lines: string[] = []
@@ -250,37 +295,46 @@ async function tickOne(
   return lines
 }
 
-export async function schedule(argv: string[]): Promise<void> {
+export function planHelp(): string {
+  return [
+    "  aq job plan [dir]              list job plans (jobs/plans/*.yaml)",
+    "  aq job plan tick [dir]         run due cron/resume plans",
+    "  aq job plan run [dir] <name>   fire that plan now",
+  ].join("\n")
+}
+
+export async function jobPlan(argv: string[]): Promise<void> {
   const sub = argv[0]
-  if (sub === "help" || sub === "-h") {
-    console.log("aq schedule\n")
-    console.log("  aq schedule [dir]           list")
-    console.log("  aq schedule tick [dir]     run due cron/resume")
-    console.log("  aq schedule run [dir] <name>  fire that file now")
+  if (sub === "help" || sub === "-h" || sub === "--help") {
+    console.log("aq job plan\n")
+    console.log(planHelp())
     return
   }
-  if (!sub) {
-    const train = assertTrain(".")
-    const files = listFiles(train)
+  if (!sub || sub === "list") {
+    let trainDir = "."
+    if (sub === "list") trainDir = argv[1] ?? "."
+    else if (argv[0] && isTrain(path.resolve(argv[0]))) trainDir = argv[0]
+    const train = assertTrain(trainDir)
+    const files = listPlanFiles(train)
     if (!files.length) {
-      console.log("no schedules")
+      console.log("no job plans")
       return
     }
     for (const { name, file } of files) {
-      const spec = readSched(file)
+      const spec = readPlan(file)
       console.log(name + "  " + spec.kind + "  " + label(spec))
     }
     return
   }
   if (sub === "tick") {
     const train = assertTrain(argv[1] ?? ".")
-    const files = listFiles(train)
+    const files = listPlanFiles(train)
     if (!files.length) {
-      console.log("no schedules")
+      console.log("no job plans")
       return
     }
     for (const { name, file } of files) {
-      const spec = readSched(file)
+      const spec = readPlan(file)
       if (spec.kind === "sweep" || spec.kind === "pipeline") continue
       const lines = await tickOne(train, name, spec, false)
       for (const l of lines) console.log(l)
@@ -298,39 +352,21 @@ export async function schedule(argv: string[]): Promise<void> {
       train = assertTrain(rest[0])
       name = rest[1]
     } else {
-      throw new Error("usage: aq schedule run [dir] <name>")
+      throw new Error("usage: aq job plan run [dir] <name>")
     }
-    const hit = listFiles(train).find((x) => x.name === name)
-    if (!hit) throw new Error(`no schedule ${name}`)
-    const spec = readSched(hit.file)
+    const hit = listPlanFiles(train).find((x) => x.name === name)
+    if (!hit) throw new Error(`no job plan ${name}`)
+    const spec = readPlan(hit.file)
     const lines = await tickOne(train, name, spec, true)
     for (const l of lines) console.log(l)
     return
   }
-  if (isTrain(path.resolve(sub)) && argv.length === 1) {
-    const train = assertTrain(sub)
-    const files = listFiles(train)
-    if (!files.length) {
-      console.log("no schedules")
-      return
-    }
-    for (const { name, file } of files) {
-      const spec = readSched(file)
-      console.log(name + "  " + spec.kind + "  " + label(spec))
-    }
-    return
-  }
-  const train = assertTrain(".")
-  if (sub !== "list") {
-    throw new Error("usage: aq schedule [dir] | tick | run <name>")
-  }
-  const files = listFiles(train)
-  if (!files.length) {
-    console.log("no schedules")
-    return
-  }
-  for (const { name, file } of files) {
-    const spec = readSched(file)
-    console.log(name + "  " + spec.kind + "  " + label(spec))
-  }
+  throw new Error(`unknown job plan command: ${sub}\n${planHelp()}`)
+}
+
+export function listPlanLogFiles(train: string): string[] {
+  migrateLegacyPlans(train)
+  const dir = path.join(train, "artifacts", "jobs", "plans")
+  if (!existsSync(dir)) return []
+  return readdirSync(dir).filter((f) => f.endsWith(".log")).sort()
 }
