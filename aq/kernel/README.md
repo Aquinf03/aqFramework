@@ -21,7 +21,7 @@ pip install -r aq/kernel/requirements.txt
 - `recipe.model` **required** for llm / lora / qlora / transformer.
 - `size:` is a label only.
 - QLoRA = CUDA + bitsandbytes only (errors elsewhere).
-- Unsupported: `formats`, `speculative`, `paged_kv`, `objective: mtp` (errors, not faked).
+- Unsupported: `formats`, `speculative`, `paged_kv` (errors, not faked). `objective: mtp` needs `n_predict >= 2`.
 - Devices: CUDA, MPS, ROCm, CPU.
 
 See [docs/recipe.md](../../docs/recipe.md) and [internals/COMPLETED.md](../../internals/COMPLETED.md).

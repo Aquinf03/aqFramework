@@ -335,10 +335,11 @@ def _build_dataset(torch, tok, texts: list[str], rec: dict, obj: str, max_len: i
     mask_rate = float(opt(rec, "mask_rate", 0.15, "llm") or 0.15)
 
     if obj in ("mtp", "multi-token", "multi-token-prediction"):
-        raise SystemExit(
-            "objective mtp is not implemented as multi-token prediction heads. "
-            "Use next-token, or contribute a real MTP head."
-        )
+        from backends.mtp import build_mtp_rows, n_predict_from_rec
+
+        n_p = n_predict_from_rec(rec)
+        rows = build_mtp_rows(tok, texts, max_len, n_p)
+        return _list_dataset(torch, rows)
 
     if obj in ("fim", "fill-in-the-middle", "fill-in-middle"):
         texts = _fim_texts(texts, rng)
@@ -564,6 +565,13 @@ def fit(src: Path, rec: dict, *, method_name: str | None = None) -> dict:
     )
     model = _load_parent_weights(model, rec, used_lora)
 
+    if obj in ("mtp", "multi-token", "multi-token-prediction"):
+        if want_qlora or used_lora:
+            raise SystemExit("objective mtp does not support QLoRA/LoRA yet")
+        from backends.mtp import n_predict_from_rec, wrap_mtp
+
+        model = wrap_mtp(model, n_predict_from_rec(rec))
+
     steps = opt(rec, "steps", None, "train", "llm")
     epochs = opt(rec, "epochs", None, "train", "llm")
     if steps is None and epochs is None:
@@ -625,11 +633,19 @@ def fit(src: Path, rec: dict, *, method_name: str | None = None) -> dict:
             file=__import__("sys").stderr,
         )
 
+    from backends.mtp import mtp_collator
+
+    collator = (
+        mtp_collator(tok)
+        if obj in ("mtp", "multi-token", "multi-token-prediction")
+        else _lm_collator(tok)
+    )
+
     trainer = transformers.Trainer(
         model=model,
         args=training_args,
         train_dataset=ds,
-        data_collator=_lm_collator(tok),
+        data_collator=collator,
         callbacks=[_MetricsCallback()],
     )
     try:
@@ -656,7 +672,12 @@ def fit(src: Path, rec: dict, *, method_name: str | None = None) -> dict:
         adapter_rel = str(adapter_dir.relative_to(_train_root(rec)))
     else:
         model_dir = slot / "model"
-        model.save_pretrained(str(model_dir))
+        if obj in ("mtp", "multi-token", "multi-token-prediction"):
+            from backends.mtp import save_mtp
+
+            save_mtp(model_dir, model)
+        else:
+            model.save_pretrained(str(model_dir))
         tok.save_pretrained(str(model_dir))
         model_rel = str(model_dir.relative_to(_train_root(rec)))
 
@@ -682,7 +703,9 @@ def fit(src: Path, rec: dict, *, method_name: str | None = None) -> dict:
         "bits": 4 if want_qlora else None,
         "max_seq_len": max_len,
         "n_docs": len(texts),
-        "n_predict": int(opt(rec, "n_predict", 1) or 1) if "mtp" in obj or obj == "mtp" else None,
+        "n_predict": int(opt(rec, "n_predict", 2) or 2)
+        if obj in ("mtp", "multi-token", "multi-token-prediction")
+        else None,
         "adapter_path": adapter_rel,
         "model_path": model_rel,
         "weights_dir": str(slot.relative_to(_train_root(rec))),
@@ -709,7 +732,8 @@ def fit(src: Path, rec: dict, *, method_name: str | None = None) -> dict:
 
     # Deploy knobs that we actually support (prune / aquant)
     if opt(rec, "prune", None) is not None or opt(rec, "quant", None) is not None:
-        deploy_mod.apply_deploy(model, tok, slot, rec, manifest)
+        deploy_target = model.inner if hasattr(model, "inner") else model
+        deploy_mod.apply_deploy(deploy_target, tok, slot, rec, manifest)
 
     return manifest
 
@@ -734,7 +758,14 @@ def _load_for_infer(train: Path, model: dict):
     elif device_kind() in ("cuda", "rocm"):
         load_kw["device_map"] = "auto"
 
-    if model.get("objective") in ("mlm", "masked", "masked-lm") and full:
+    model_dir = (train / str(full)) if full else None
+
+    if model_dir is not None and (model_dir / "mtp_meta.json").is_file():
+        from backends.mtp import load_mtp
+
+        m = load_mtp(model_dir)
+        tok = transformers.AutoTokenizer.from_pretrained(str(model_dir), trust_remote_code=True)
+    elif model.get("objective") in ("mlm", "masked", "masked-lm") and full:
         if model.get("mlm_causal"):
             m = transformers.AutoModelForCausalLM.from_pretrained(str(train / str(full)), **load_kw)
         else:
@@ -759,6 +790,18 @@ def _load_for_infer(train: Path, model: dict):
     return m, tok
 
 
+def _mtp_eval_loss(m, tok, texts: list[str], n_predict: int, max_len: int) -> list[float]:
+    torch = require_torch()
+    from backends.mtp import build_mtp_rows, mtp_collator
+
+    rows = build_mtp_rows(tok, texts, max_len, n_predict)
+    batch = mtp_collator(tok)(rows)
+    batch = move_batch(batch, m)
+    with torch.no_grad():
+        out = m(**batch)
+    return [float(out.loss)] if out.loss is not None else [0.0]
+
+
 def evaluate(model: dict, src: Path, rec: dict) -> tuple[float, int]:
     torch = require_torch()
     train = Path(rec["_train"]) if rec.get("_train") else src.parent
@@ -769,6 +812,13 @@ def evaluate(model: dict, src: Path, rec: dict) -> tuple[float, int]:
     m, tok = _load_for_infer(train, model)
     texts, _ = _texts_from_data(src, rec)
     max_len = int(model.get("max_seq_len") or 512)
+    if model.get("objective") in ("mtp", "multi-token", "multi-token-prediction"):
+        losses = _mtp_eval_loss(
+            m, tok, texts, int(model.get("n_predict") or 2), max_len
+        )
+        if not losses:
+            return 0.0, 0
+        return sum(losses) / len(losses), len(texts)
     losses = []
     with torch.no_grad():
         for t in texts:
@@ -832,6 +882,8 @@ def write_inspect(train: Path, model: dict) -> str:
     if model.get("objective") in ("mlm", "masked", "masked-lm"):
         lines.append(f"causal: {model.get('mlm_causal')}")
         lines.append(f"mask_rate: {model.get('mask_rate')}")
+    if model.get("objective") in ("mtp", "multi-token", "multi-token-prediction"):
+        lines.append(f"n_predict: {model.get('n_predict')}")
     lines.extend(
         [
             f"qlora_engine: {model.get('qlora_engine')}",

@@ -33,5 +33,5 @@ eval:
   metric: loss
   min_score: null
 
-# Unsupported (errors on purpose): formats, speculative, paged_kv, objective: mtp
+# Unsupported (errors on purpose): formats, speculative, paged_kv
 # Optional: guard.safety / guard.leak

@@ -53,7 +53,8 @@ Rules:
 - **SFT** masks prompt tokens (loss on completion only). **full-ft** trains all non-pad tokens.
 - **mlm** needs a MaskedLM-capable model for true bidirectional MLM (e.g. BERT). Causal models (Llama, GPT) also work — aq uses masked-token loss on the causal backbone.
 - **QLoRA** fails on MPS/CPU/ROCm without CUDA bitsandbytes.
-- These **fail closed** (not faked): `formats: true`, `speculative: true`, `paged_kv: true`, `objective: mtp`.
+- **`objective: mtp`** — multi-token prediction; set **`n_predict: 2`** (or higher). Auxiliary heads on a causal LM.
+- These **fail closed** (not faked): `formats: true`, `speculative: true`, `paged_kv: true`.
 
 ## Transformer
 
