@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -57,20 +58,56 @@ def apply_deploy(model, tok, slot: Path, rec: dict, manifest: dict) -> dict:
 
 
 def _reject_unsupported(rec: dict) -> None:
+    """Hard failures for knobs that would fake export/deploy work."""
     if opt(rec, "formats", False, "deploy", "llm"):
         raise SystemExit(
             "recipe formats: true is not supported yet "
             "(no real GPTQ/AWQ/GGUF/EXL2 exporter). Remove it or implement a converter."
         )
-    if opt(rec, "speculative", False, "deploy", "serve", "llm"):
-        raise SystemExit(
-            "recipe speculative: true is not supported yet "
-            "(no draft model). Remove it."
-        )
+
+
+def note_serve_intent(rec: dict, manifest: dict) -> None:
+    """Serve-time recipe flags — safe to set during train; recorded, not faked."""
+    intent: dict[str, Any] = {}
     if opt(rec, "paged_kv", False, "deploy", "serve", "llm"):
-        raise SystemExit(
-            "recipe paged_kv: true is not supported yet "
-            "(HF use_cache is default; not paged attention). Remove it."
+        intent["paged_kv"] = {
+            "requested": True,
+            "active": False,
+            "note": "aq serve uses Hugging Face use_cache; not vLLM-style paged attention yet",
+        }
+        print(
+            "  serve  paged_kv: true — train ignores; serve uses standard HF KV cache",
+            file=sys.stderr,
+        )
+    if opt(rec, "speculative", False, "deploy", "serve", "llm"):
+        intent["speculative"] = {
+            "requested": True,
+            "active": False,
+            "note": "no draft model yet; serve uses single-model decode",
+        }
+        print(
+            "  serve  speculative: true — not active yet; serve uses single-model decode",
+            file=sys.stderr,
+        )
+    if intent:
+        manifest["serve_intent"] = intent
+
+
+def warn_serve_intent(rec: dict, model: dict | None = None) -> None:
+    """Remind at serve time when recipe or checkpoint asked for unimplemented serve opts."""
+    if opt(rec, "paged_kv", False, "deploy", "serve", "llm") or (
+        model and (model.get("serve_intent") or {}).get("paged_kv")
+    ):
+        print(
+            "  serve  paged_kv was requested; using standard HF generation (not paged attention)",
+            file=sys.stderr,
+        )
+    if opt(rec, "speculative", False, "deploy", "serve", "llm") or (
+        model and (model.get("serve_intent") or {}).get("speculative")
+    ):
+        print(
+            "  serve  speculative was requested; using single-model decode (no draft model)",
+            file=sys.stderr,
         )
 
 

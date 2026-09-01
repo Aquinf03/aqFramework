@@ -54,7 +54,8 @@ Rules:
 - **mlm** needs a MaskedLM-capable model for true bidirectional MLM (e.g. BERT). Causal models (Llama, GPT) also work — aq uses masked-token loss on the causal backbone.
 - **QLoRA** fails on MPS/CPU/ROCm without CUDA bitsandbytes.
 - **`objective: mtp`** — multi-token prediction; set **`n_predict: 2`** (or higher). Auxiliary heads on a causal LM.
-- These **fail closed** (not faked): `formats: true`, `speculative: true`, `paged_kv: true`.
+- **`paged_kv: true` / `speculative: true`** — serve-time flags; training proceeds and records intent. `aq serve` uses standard HF decode until real paged/speculative serve lands.
+- These **fail closed** (not faked): `formats: true`.
 
 ## Transformer
 

@@ -735,6 +735,8 @@ def fit(src: Path, rec: dict, *, method_name: str | None = None) -> dict:
         deploy_target = model.inner if hasattr(model, "inner") else model
         deploy_mod.apply_deploy(deploy_target, tok, slot, rec, manifest)
 
+    deploy_mod.note_serve_intent(rec, manifest)
+
     return manifest
 
 
@@ -843,6 +845,7 @@ def generate(
 ) -> dict:
     torch = require_torch()
     train = Path(rec["_train"]) if rec.get("_train") else Path.cwd()
+    deploy_mod.warn_serve_intent(rec, model)
     m, tok = _load_for_infer(train, model)
     mt = int(max_tokens if max_tokens is not None else opt(rec, "max_tokens", 64, "serve") or 64)
     temp = float(
