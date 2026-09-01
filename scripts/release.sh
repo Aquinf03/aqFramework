@@ -26,6 +26,9 @@ echo "Building aq (TypeScript) ..."
 echo "Packing tarball ..."
 tar czf "$ARCHIVE" -C "$ROOT" \
   --exclude='aq/node_modules' \
+  --exclude='aq/kernel/.venv' \
+  --exclude='aq/**/__pycache__' \
+  --exclude='aq/artifacts' \
   --exclude='.git' \
   aq install.sh README.md
 
