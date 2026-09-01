@@ -26,7 +26,7 @@ from backends.device import (
 )
 from backends.deps import require_peft, require_torch, require_transformers
 from backends.recipe_opt import opt
-from backends.tok_train import load_hf_tokenizer, train_tokenizer
+from backends.tok_train import ensure_pad_token, load_hf_tokenizer, train_tokenizer
 from protocol import metrics as aq_metrics
 
 
@@ -188,9 +188,7 @@ def _build_model_and_tok(rec: dict, obj: str, slot: Path, texts: list[str]):
         tok_meta = train_tokenizer(texts, rec, tok_dir)
         local_tok = tok_dir
 
-    tok = load_hf_tokenizer(model_id, local_tok)
-    if tok.pad_token is None:
-        tok.pad_token = tok.eos_token or "[PAD]"
+    tok, resize_emb = load_hf_tokenizer(model_id, local_tok)
 
     load_kw: dict[str, Any] = {"trust_remote_code": True}
     qlora_engine = None
@@ -229,6 +227,9 @@ def _build_model_and_tok(rec: dict, obj: str, slot: Path, texts: list[str]):
             ) from e
     else:
         model = transformers.AutoModelForCausalLM.from_pretrained(model_id, **load_kw)
+
+    if resize_emb:
+        model.resize_token_embeddings(len(tok))
 
     if kind == "mps" and "device_map" not in load_kw:
         model.to(torch_device())
@@ -733,8 +734,7 @@ def _load_for_infer(train: Path, model: dict):
         )
     if device_kind() == "mps" and "device_map" not in load_kw:
         m.to(torch_device())
-    if tok.pad_token is None:
-        tok.pad_token = tok.eos_token
+    ensure_pad_token(tok)
     m.eval()
     return m, tok
 

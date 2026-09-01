@@ -17,6 +17,7 @@ from backends.device import (
 from backends.deps import require_torch, require_transformers
 from backends.hf_lm import resolve_model_id
 from backends.recipe_opt import opt
+from backends.tok_train import ensure_pad_token
 from protocol import metrics as aq_metrics
 
 
@@ -80,12 +81,15 @@ def fit(src: Path, rec: dict) -> dict:
         classes = sorted({str(x) for x in labels})
         label2id = {c: i for i, c in enumerate(classes)}
         y = [label2id[str(x)] for x in labels]
-        tok = transformers.AutoTokenizer.from_pretrained(model_id)
+        tok = transformers.AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
+        resize = ensure_pad_token(tok)
         load_kw: dict = {"num_labels": len(classes), "trust_remote_code": True}
         apply_pretrained_dtype(load_kw, model_load_dtype(rec))
         model = transformers.AutoModelForSequenceClassification.from_pretrained(
             model_id, **load_kw
         )
+        if resize:
+            model.resize_token_embeddings(len(tok))
         if device_kind() == "mps":
             model.to(torch_device())
         enc = tok(texts, truncation=True, padding=True, max_length=max_len, return_tensors="pt")
@@ -143,10 +147,13 @@ def fit(src: Path, rec: dict) -> dict:
         tgt_k = str(data.get("tgt") or "tgt")
         sources = [str(r[src_k]) for r in rows]
         targets = [str(r[tgt_k]) for r in rows]
-        tok = transformers.AutoTokenizer.from_pretrained(model_id)
+        tok = transformers.AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
+        resize = ensure_pad_token(tok)
         load_kw: dict = {"trust_remote_code": True}
         apply_pretrained_dtype(load_kw, model_load_dtype(rec))
         model = transformers.AutoModelForSeq2SeqLM.from_pretrained(model_id, **load_kw)
+        if resize:
+            model.resize_token_embeddings(len(tok))
         if device_kind() == "mps":
             model.to(torch_device())
         enc = tok(sources, truncation=True, padding=True, max_length=max_len, return_tensors="pt")
@@ -213,7 +220,8 @@ def evaluate(model: dict, src: Path, rec: dict):
     transformers = require_transformers()
     train = Path(rec["_train"])
     path = train / str(model["model_path"])
-    tok = transformers.AutoTokenizer.from_pretrained(str(path))
+    tok = transformers.AutoTokenizer.from_pretrained(str(path), trust_remote_code=True)
+    ensure_pad_token(tok)
     if model.get("arch") == "encoder":
         m = transformers.AutoModelForSequenceClassification.from_pretrained(str(path))
         m.eval()

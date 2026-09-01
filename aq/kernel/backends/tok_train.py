@@ -80,13 +80,28 @@ def train_tokenizer(texts: list[str], rec: dict, dest: Path) -> dict:
     return meta
 
 
-def load_hf_tokenizer(model_id: str, local_tok_dir: Path | None = None):
+def ensure_pad_token(tok) -> bool:
+    """Ensure tokenizer can pad batches. Returns True if vocab grew (caller should resize embeddings)."""
+    if tok.pad_token is not None:
+        return False
+    if tok.eos_token is not None:
+        tok.pad_token = tok.eos_token
+        return False
+    if tok.unk_token is not None:
+        tok.pad_token = tok.unk_token
+        return False
+    tok.add_special_tokens({"pad_token": "[PAD]"})
+    return True
+
+
+def load_hf_tokenizer(model_id: str, local_tok_dir: Path | None = None) -> tuple:
+    """Load HF tokenizer. Returns (tokenizer, resize_embeddings)."""
     from backends.deps import require_transformers
 
     transformers = require_transformers()
     if local_tok_dir and (local_tok_dir / "tokenizer.json").is_file():
         try:
-            return transformers.PreTrainedTokenizerFast(
+            tok = transformers.PreTrainedTokenizerFast(
                 tokenizer_file=str(local_tok_dir / "tokenizer.json"),
                 bos_token="[BOS]",
                 eos_token="[EOS]",
@@ -94,9 +109,8 @@ def load_hf_tokenizer(model_id: str, local_tok_dir: Path | None = None):
                 unk_token="[UNK]",
                 mask_token="[MASK]",
             )
+            return tok, False
         except Exception:
             pass
     tok = transformers.AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
-    if tok.pad_token is None:
-        tok.pad_token = tok.eos_token
-    return tok
+    return tok, ensure_pad_token(tok)
