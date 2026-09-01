@@ -344,20 +344,38 @@ function AuthPortalInner() {
                 ))}
 
                 <div className="pt-2">
-                  <a
-                    href="https://aquin.app/docs"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="group inline-flex items-center gap-1.5 text-sm font-medium text-stone-800 underline decoration-stone-300 underline-offset-4 transition-colors hover:decoration-stone-800"
-                  >
-                    Documentation
-                    <ArrowUpRight
-                      className="h-3.5 w-3.5 text-stone-400 transition-colors group-hover:text-stone-800"
-                      weight="bold"
-                    />
-                  </a>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <a
+                      href="https://www.aquin.app/docs"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="group inline-flex items-center gap-1.5 text-sm font-medium text-stone-800 underline decoration-stone-300 underline-offset-4 transition-colors hover:decoration-stone-800"
+                    >
+                      Documentation
+                      <ArrowUpRight
+                        className="h-3.5 w-3.5 text-stone-400 transition-colors group-hover:text-stone-800"
+                        weight="bold"
+                      />
+                    </a>
+                    <span className="text-stone-300" aria-hidden>
+                      ·
+                    </span>
+                    <a
+                      href="https://www.aquin.app/changelog"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="group inline-flex items-center gap-1.5 text-sm font-medium text-stone-800 underline decoration-stone-300 underline-offset-4 transition-colors hover:decoration-stone-800"
+                    >
+                      Changelog
+                      <ArrowUpRight
+                        className="h-3.5 w-3.5 text-stone-400 transition-colors group-hover:text-stone-800"
+                        weight="bold"
+                      />
+                    </a>
+                  </div>
                   <p className="mt-1.5 text-xs text-stone-400">
-                    Guides, CLI reference, and how trains work.
+                    Guides, CLI reference, and how trains work. Release notes for each{" "}
+                    <span className="font-mono">aq</span> version.
                   </p>
                 </div>
               </div>
