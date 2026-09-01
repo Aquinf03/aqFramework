@@ -62,6 +62,7 @@ Thumbs.db
 .env
 .env.*
 !.env.example
+!.env.r2.example
 *.pem
 *.key
 credentials.json

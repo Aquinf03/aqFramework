@@ -14,6 +14,13 @@ curl -fsSL https://aq.aquin.app/framework/install.sh | bash
 
 Tarballs live in Cloudflare R2; a Worker proxies `https://aq.aquin.app/releases/aq-latestv.tar.gz`. See `scripts/cloudflare/releases-worker/README.md` to set up the bucket and publish.
 
+**Download metrics** (install script + tarball counts; reads from R2, loads creds from `web/.env` automatically):
+
+```bash
+./scripts/download-metrics.sh
+./scripts/download-metrics.sh --days 7
+```
+
 From a checkout:
 
 ```bash

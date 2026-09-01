@@ -2,31 +2,68 @@
 /**
  * Summarize aq download metrics stored in R2 by the releases worker.
  *
- * Requires R2 S3 credentials (read access to aqfw-releases):
- *   R2_ACCOUNT_ID
- *   R2_ACCESS_KEY_ID
- *   R2_SECRET_ACCESS_KEY
- *   AQUIN_R2_BUCKET   (default: aqfw-releases)
+ * Loads credentials from (first found):
+ *   scripts/.env.r2
+ *   web/.env
+ *
+ * Or set manually:
+ *   R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY
+ *   AQUIN_R2_BUCKET (default: aqfw-releases)
  *
  * Usage:
- *   cd scripts && npm install
- *   npm run metrics
- *   npm run metrics -- --days 30
- *   npm run metrics -- --since 2026-09-01
+ *   ./scripts/download-metrics.sh
+ *   ./scripts/download-metrics.sh --days 30
+ *   ./scripts/download-metrics.sh --since 2026-09-01
  */
 
+import { readFileSync, existsSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { GetObjectCommand, ListObjectsV2Command, S3Client } from "@aws-sdk/client-s3";
 
 const DEFAULT_BUCKET = "aqfw-releases";
 const METRICS_PREFIX = "metrics/events/";
+const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
+
+function loadEnvFile(path) {
+  if (!existsSync(path)) return;
+  const text = readFileSync(path, "utf8").replace(/^\uFEFF/, "");
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#")) continue;
+    const eq = line.indexOf("=");
+    if (eq === -1) continue;
+    const key = line.slice(0, eq).trim();
+    let value = line.slice(eq + 1).trim();
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+    if (process.env[key] === undefined) {
+      process.env[key] = value;
+    }
+  }
+}
+
+function loadEnv() {
+  loadEnvFile(join(SCRIPT_DIR, ".env.r2"));
+  loadEnvFile(join(SCRIPT_DIR, "..", "web", ".env"));
+  if (!process.env.AQUIN_R2_BUCKET) {
+    process.env.AQUIN_R2_BUCKET = DEFAULT_BUCKET;
+  }
+}
 
 function usage() {
   console.error(`Usage: download-metrics.mjs [--days N] [--since YYYY-MM-DD]
 
-Environment:
-  R2_ACCOUNT_ID         Cloudflare account id
-  R2_ACCESS_KEY_ID      R2 API token access key
-  R2_SECRET_ACCESS_KEY  R2 API token secret
+Loads R2 creds from scripts/.env.r2 or web/.env automatically.
+
+Manual override:
+  R2_ACCOUNT_ID
+  R2_ACCESS_KEY_ID
+  R2_SECRET_ACCESS_KEY
   AQUIN_R2_BUCKET       Bucket name (default: ${DEFAULT_BUCKET})
 `);
   process.exit(2);
@@ -58,7 +95,9 @@ function parseArgs(argv) {
 function requireEnv(name) {
   const value = process.env[name];
   if (!value) {
-    console.error(`Missing ${name}. Create an R2 API token with Object Read on the releases bucket.`);
+    console.error(`Missing ${name}.`);
+    console.error("");
+    console.error("Expected R2 creds in scripts/.env.r2 or web/.env");
     process.exit(1);
   }
   return value;
@@ -137,6 +176,7 @@ function printSection(title) {
 }
 
 async function main() {
+  loadEnv();
   const args = parseArgs(process.argv.slice(2));
   const accountId = requireEnv("R2_ACCOUNT_ID");
   const accessKeyId = requireEnv("R2_ACCESS_KEY_ID");
