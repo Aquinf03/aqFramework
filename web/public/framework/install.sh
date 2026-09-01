@@ -166,6 +166,8 @@ install_from_release() {
     echo "Install unavailable. Try again later." >&2
     exit 1
   fi
+  # Release tar only adds/overwrites — remove old aq/ so deleted sources (e.g. schedule.ts) don't linger.
+  rm -rf "$INSTALL_DIR/aq"
   extract_release "$archive" "$INSTALL_DIR"
   rm -f "$archive"
 
