@@ -13,6 +13,7 @@ Code: `aq/src/agent/` (`agent.ts`, `agent-loop.ts`, `agent-tools.ts`, `chat-ui.t
 | `aq ask --json` | `{ text, tools }` for scripts / spawn |
 | `aq ask -y` | Auto-approve shell `run` |
 | `aq chat list\|last\|<id>` | Resume sessions under `~/.aq/chats/` (per-train view; `--all` for every chat) |
+| Ask for a graph/chart/plot | Agent uses **`plot`** tool → files under `artifacts/plots/` |
 | `aq spawn …` | Background workers (jobs + `artifacts/agents/`). `--kill` = cheapest-disproof critic |
 
 ## Tool rounds
@@ -48,7 +49,7 @@ Config: `~/.aq/config.json` (mode `0600`). This is separate from `aq login` / `~
 | Web | `web_search`, `web_fetch` (native search on some providers) |
 | Skills | `skill_load`, `skill_run`, `skills_search` |
 | Shell | `run` (needs approval unless `-y`; `detach` → job) |
-| CLI | `aq`, `aq_*` wrappers (init, status, train, eval, …) |
+| CLI | `aq`, `aq_*` wrappers (init, status, train, eval, plot, …) |
 | Workers | `spawn`, `spawn_list`, `spawn_log`, `spawn_cancel` |
 | Train tools | `tool` → `tools/<name>.{py,ts,js,sh}` |
 

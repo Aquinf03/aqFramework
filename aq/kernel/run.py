@@ -12,10 +12,25 @@ from pathlib import Path
 
 from protocol.revision import hash_train
 from engine.step import do_checkpoint, do_eval, do_serve, do_train
+from plot import do_plot
 
 
 # Invocation only. Spec is recipe.yaml, never this file.
-REQ_KEYS = {"op", "snapshot", "ckpt", "keep", "probe", "prompt", "max_tokens", "temperature"}
+REQ_KEYS = {
+    "op",
+    "snapshot",
+    "ckpt",
+    "keep",
+    "probe",
+    "prompt",
+    "max_tokens",
+    "temperature",
+    "kind",
+    "format",
+    "dpi",
+    "out",
+    "out_file",
+}
 
 
 def dispatch(train: Path, req: dict) -> list[str]:
@@ -39,6 +54,8 @@ def dispatch(train: Path, req: dict) -> list[str]:
             int(mt) if mt is not None else None,
             float(temp) if temp is not None else None,
         )
+    if op == "plot":
+        return do_plot(train, req)
     raise SystemExit(f"unknown op: {op}")
 
 

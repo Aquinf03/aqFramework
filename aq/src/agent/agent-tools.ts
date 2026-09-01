@@ -41,6 +41,7 @@ function nativeAqTools(): AgentToolDef[] {
     ["diff", "Compare run records."],
     ["schedule", "Sweeps, cron, resume-on-fail."],
     ["stage", "Nested trains."],
+    ["plot", "Generate charts from artifacts: loss/lr (metrics), job status (jobs), run comparison (runs), or all. Writes artifacts/plots/*.png. Use when the user asks for a graph, chart, or plot."],
     ["provider", "List or set model providers."],
   ]
   return verbs.map(([verb, description]) => ({
@@ -338,6 +339,20 @@ export const AGENT_TOOLS: AgentToolDef[] = [
     },
   },
   {
+    name: "plot",
+    description:
+      "Generate matplotlib charts for this train. kind=metrics (loss/lr curve), jobs (status bar chart), runs (experiment comparison), or all. Writes under artifacts/plots/. Use when the user asks for a graph, chart, diagram, or plot of training or jobs.",
+    parameters: {
+      type: "object",
+      properties: {
+        kind: {
+          type: "string",
+          description: "metrics | jobs | runs | all (default all)",
+        },
+      },
+    },
+  },
+  {
     name: "skills_search",
     description: "Search skills/ by name or first line. Empty query lists them.",
     parameters: {
@@ -363,6 +378,7 @@ const ALLOW = new Set([
   "tool",
   "schedule",
   "stage",
+  "plot",
   "provider",
   "spawn",
 ])
@@ -476,6 +492,10 @@ export async function runAgentTool(train: string, name: string, rawArgs: string)
   if (name === "tool") {
     const extra = typeof args.args === "string" ? args.args.trim().split(/\s+/).filter(Boolean) : []
     return runToolCaptured(train, jsonArg(args, "name"), extra)
+  }
+  if (name === "plot") {
+    const kind = typeof args.kind === "string" && args.kind.trim() ? args.kind.trim() : "all"
+    return runAq(train, ["plot", kind])
   }
   if (name === "spawn") {
     const spec = await startAgent(train, jsonArg(args, "prompt"), {

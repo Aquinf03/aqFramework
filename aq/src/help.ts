@@ -1,4 +1,5 @@
 import { jobHelp } from "./job/job.js"
+import { plotHelp } from "./handle/plot.js"
 
 export function help(): string {
   return [
@@ -39,6 +40,7 @@ export function help(): string {
     "  aq schedule [dir] | tick | run <name>  sweeps/cron/resume-on-fail",
     "  aq stage [dir] | init <name> | <name> | eval <name>  nested trains",
     "  aq diff [dir] [<a> <b>]     compare run records (files, not screenshots)",
+    "  aq plot [dir] [metrics|jobs|runs|all]  matplotlib charts from artifacts",
     "  aq status [dir]            jobs, last run, eval, schedule logs",
     "  aq doctor [dir]           health check (cli, provider, train, skills, mcp)",
     "  aq spawn run [dir] -- <prompt>  start a worker agent (job)",
@@ -47,6 +49,7 @@ export function help(): string {
     "  aq spawn log [dir] <id>  that agent's log",
     "  aq spawn cancel [dir] <id>",
     jobHelp(),
+    plotHelp(),
     "",
     "init writes:",
     "  instructions.md  recipe.yaml  train.ts",

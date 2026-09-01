@@ -37,6 +37,11 @@ export type KernelReq = {
   prompt?: string
   max_tokens?: number
   temperature?: number
+  kind?: string
+  format?: string
+  dpi?: number
+  out?: string
+  out_file?: string
 }
 
 /** Kill the kernel and any Trainer / dataloader workers in one shot. */

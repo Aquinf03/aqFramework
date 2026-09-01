@@ -43,6 +43,8 @@ Keys for models live in `~/.aq/config.json`. Aquin account tokens live in `~/.aq
 | `aq serve [dir] [prompt] [--ckpt name] [--max-tokens n] [--temperature t]` | Generate |
 | `aq status [dir]` | Jobs, last run, eval, recent metrics, schedules |
 | `aq diff [dir] [<a> <b>]` | List runs or diff two run records |
+| `aq plot [dir] [metrics\|jobs\|runs\|all]` | Matplotlib charts from artifacts → `artifacts/plots/` |
+| `aq status [dir]` | Jobs, last run, eval, recent metrics, schedules |
 | `aq doctor [dir]` | Health: node, python, kernel, provider, train, skills, MCP |
 
 ### Train notes
@@ -50,6 +52,7 @@ Keys for models live in `~/.aq/config.json`. Aquin account tokens live in `~/.aq
 - Opt-in fail-closed watches: set `guard.safety` / `guard.leak` in `recipe.yaml` (see [Metrics & guard](./metrics-and-guard.md)).
 - `aq eval` is the **human gate**. When `eval.min_score` is set, results are pass/fail; otherwise scores are reported without inventing a verdict.
 - Serve requires a method that implements `generate(...)`.
+- `aq plot` reads `artifacts/metrics.jsonl`, `jobs/*/spec.json`, and `artifacts/runs/*.json`. Config: `recipe.yaml` `plot:` block and `~/.aq/config.json` → `plot`. Set `plot.auto: true` to chart after `aq train`.
 
 ---
 

@@ -6,6 +6,7 @@ import { fork, parseForkArgs } from "./handle/fork.js"
 import { init, resolveInitRoot } from "./handle/init.js"
 import { diffRuns } from "./handle/diff.js"
 import { data } from "./handle/data.js"
+import { plot } from "./handle/plot.js"
 import { job } from "./job/job.js"
 import { checkpoint, evalCmd, serve, train } from "./handle/step.js"
 import { schedule } from "./handle/schedule.js"
@@ -121,6 +122,11 @@ async function main(): Promise<void> {
 
   if (cmd === "status") {
     await status(argv.slice(1))
+    return
+  }
+
+  if (cmd === "plot") {
+    await plot(argv.slice(1))
     return
   }
 

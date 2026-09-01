@@ -130,6 +130,11 @@ export const BUILTINS: ToolCard[] = [
     description: "Search skills/ by name or first line.",
   },
   {
+    name: "plot",
+    source: "builtin",
+    description: "Generate matplotlib charts: loss curve, job status, run comparison. artifacts/plots/.",
+  },
+  {
     name: "spawn",
     source: "builtin",
     description: "Start a worker aq agent on this train.",
@@ -156,6 +161,7 @@ export const CLI_VERBS: ToolCard[] = [
   { name: "aq_schedule", source: "cli", description: "Sweeps, cron, resume-on-fail, spawn agents." },
   { name: "aq_spawn", source: "cli", description: "Start/list/log/cancel worker agents." },
   { name: "aq_stage", source: "cli", description: "Nested trains." },
+  { name: "aq_plot", source: "cli", description: "Charts from artifacts (metrics, jobs, runs). Same as plot tool." },
   { name: "aq_provider", source: "cli", description: "List or set model providers." },
 ]
 

@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process"
 import { existsSync, readdirSync } from "node:fs"
 import path from "node:path"
 import { pythonBin } from "../core/python.js"
+import { kernelRoot } from "../core/root.js"
 import { assertTrain, isTrain } from "../core/schema.js"
 import { aqRoot } from "../core/root.js"
 
@@ -68,7 +69,7 @@ function runFile(train: string, file: string, extra: string[]): void {
   const r = spawnSync(cmd, args, {
     cwd: train,
     stdio: "inherit",
-    env: { ...process.env, AQ_TRAIN: train },
+    env: { ...process.env, AQ_TRAIN: train, AQ_KERNEL: kernelRoot() },
   })
   if (r.status !== 0) process.exitCode = r.status ?? 1
 }
@@ -112,7 +113,7 @@ export function runFileCaptured(train: string, file: string, extra: string[] = [
     cwd: train,
     encoding: "utf8",
     timeout: 120_000,
-    env: { ...process.env, AQ_TRAIN: train },
+    env: { ...process.env, AQ_TRAIN: train, AQ_KERNEL: kernelRoot() },
   })
   const out = `${r.stdout ?? ""}${r.stderr ?? ""}`.trim()
   if (r.status !== 0) throw new Error(out || `exit ${r.status}`)

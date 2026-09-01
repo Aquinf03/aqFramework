@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises"
+import { mkdir, readFile, writeFile, copyFile } from "node:fs/promises"
 import { existsSync, readdirSync } from "node:fs"
 import path from "node:path"
 import { OPTIONAL_DIRS, OPTIONAL_FILES, REQUIRED } from "../core/schema.js"
@@ -30,6 +30,30 @@ async function writeNew(
   await mkdir(path.dirname(dest), { recursive: true })
   await writeFile(dest, body, "utf8")
   created.push(rel)
+}
+
+async function copyTemplateFiles(
+  subdir: string,
+  destDir: string,
+  created: string[],
+  skipped: string[],
+  cwd: string,
+): Promise<void> {
+  const srcDir = path.join(templates, subdir)
+  if (!existsSync(srcDir)) return
+  await mkdir(destDir, { recursive: true })
+  for (const name of readdirSync(srcDir)) {
+    if (name.startsWith(".")) continue
+    const src = path.join(srcDir, name)
+    const dest = path.join(destDir, name)
+    const rel = path.relative(cwd, dest) || dest
+    if (existsSync(dest)) {
+      skipped.push(rel)
+      continue
+    }
+    await copyFile(src, dest)
+    created.push(rel)
+  }
 }
 
 function assertNotCliHome(root: string): void {
@@ -117,6 +141,9 @@ export async function init(dir: string): Promise<InitResult> {
     await writeFile(keep, "", "utf8")
     created.push(path.relative(cwd, dest) || dest)
   }
+
+  await copyTemplateFiles("tools", path.join(root, "tools"), created, skipped, cwd)
+  await copyTemplateFiles("skills", path.join(root, "skills"), created, skipped, cwd)
 
   return { root, created, skipped }
 }
