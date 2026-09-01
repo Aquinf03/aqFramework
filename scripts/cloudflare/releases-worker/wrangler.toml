@@ -9,3 +9,7 @@ bucket_name = "aqfw-releases"
 [[routes]]
 pattern = "aq.aquin.app/releases/*"
 zone_name = "aquin.app"
+
+[[routes]]
+pattern = "aq.aquin.app/framework/install.sh"
+zone_name = "aquin.app"

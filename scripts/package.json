@@ -1,0 +1,11 @@
+{
+  "name": "aqfw-scripts",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "metrics": "node download-metrics.mjs"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.888.0"
+  }
+}

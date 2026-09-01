@@ -11,6 +11,7 @@ import { searchSkills, skillsDigest } from "../lib/skill.js"
 import { activateSkill, callMcpTool, extraTools, runSkillCode } from "../lib/skill-runtime.js"
 import { childTrains, isTrain, trainInArgv } from "../core/schema.js"
 import { labDigest, parseLabFlags, readForecast } from "../core/forecast.js"
+import { formatRefineResult, harnessDigest, runRefine } from "../core/harness.js"
 import { runToolCaptured } from "../handle/tool.js"
 import { enqueueJob, waitForPid } from "../job/job.js"
 import { agentLog, cancelAgent, formatAgents, startAgent } from "./spawn.js"
@@ -40,6 +41,7 @@ function nativeAqTools(): AgentToolDef[] {
     ["fork", "Copy this train. You (the agent) must pass --lo --hi --why yourself. Never ask the human for those."],
     ["forecast", "You write the predicted metric range. Never ask the human for lo/hi/why."],
     ["learn", "Ack memory/heuristics.md when you have compressed failure patterns. Optional; overdue learn taxes budget on the next forecast-fork."],
+    ["refine", "Self-improve the harness from trajectory (calibration, misses, critique). Writes the smallest memory/skill/prompt edit. Use after a miss or when the human says learn from this."],
     ["checkout", "Restore a run tree. args is id and optional dest."],
     ["diff", "Compare run records."],
     ["schedule", "Sweeps, cron, resume-on-fail."],
@@ -341,6 +343,19 @@ export const AGENT_TOOLS: AgentToolDef[] = [
     },
   },
   {
+    name: "refine",
+    description:
+      "Self-improve this train's harness from trajectory (forecast misses, eval critique, novelty). Writes the smallest durable edit to memory/ or skills/. Optional focus sentence from the human.",
+    parameters: {
+      type: "object",
+      properties: {
+        focus: { type: "string", description: "one lesson to lock in, optional" },
+        dry: { type: "boolean", description: "true = show edits without writing" },
+        skill: { type: "boolean", description: "true = also promote focus into skills/" },
+      },
+    },
+  },
+  {
     name: "skills_search",
     description: "Search skills/ by name or first line. Empty query lists them.",
     parameters: {
@@ -370,6 +385,7 @@ const ALLOW = new Set([
   "spawn",
   "forecast",
   "learn",
+  "refine",
 ])
 
 function aqBin(): string {
@@ -401,6 +417,8 @@ export function workspaceLines(train: string): string[] {
   if (isTrain(train)) {
     const lab = labDigest(train)
     if (lab) lines.push(lab)
+    const harness = harnessDigest(train)
+    if (harness) lines.push(harness)
   }
   return lines
 }
@@ -438,6 +456,23 @@ export async function runAgentTool(train: string, name: string, rawArgs: string)
   if (name === "memory_write") {
     const n = writeMemory(train, jsonArg(args, "name"), jsonArg(args, "body"))
     return `wrote memory/${n}.md`
+  }
+  if (name === "refine") {
+    if (!isTrain(train)) {
+      const kids = childTrains(train)
+      throw new Error(
+        kids.length
+          ? `cwd is not a train; pass aq_refine with args set to a child train (e.g. "${kids[0]}") or cd into it`
+          : "cwd is not a train; aq_init first",
+      )
+    }
+    const focus = typeof args.focus === "string" ? args.focus : undefined
+    const r = runRefine(train, {
+      focus,
+      dry: args.dry === true,
+      applyFocusSkill: args.skill === true,
+    })
+    return formatRefineResult(r)
   }
   if (name === "tools_search") return formatCards(searchTools(train, jsonArg(args, "query")))
   if (name === "ls") {

@@ -36,6 +36,9 @@ Keys for models live in `~/.aq/config.json`. Aquin account tokens live in `~/.aq
 | `aq fork … --lo --hi --why` | Same, with a predicted metric range written to dest `forecast.yaml` |
 | `aq forecast [dir]` | Show calibration / budget, or write `forecast.yaml` with `--lo --hi --why` |
 | `aq learn [dir]` | Ack `memory/heuristics.md` (clears overdue-heuristics tax) |
+| `aq refine [dir]` | Improve harness from trajectory → `memory/` / `skills/` |
+| `aq refine --focus "…"` | Lock one lesson; `--dry` preview; `--skill` also writes `skills/` |
+| `aq refine list\|show\|rollback <id>` | History / trajectory / undo a refine |
 | `aq fork <src> <dest>` | Copy that train |
 | `aq checkout <id>` | Restore job tree into cwd |
 | `aq checkout <id> <dest>` | New dir with tree + that job |
@@ -134,6 +137,7 @@ cd ../clinic-ridge
 # change method: ridge, set lambda
 aq train && aq eval   # fills predicted vs actual + calibration
 aq forecast           # coverage / sharpness / budget
+aq refine             # smallest lesson → memory/heuristics.md
 aq diff <run-a> <run-b>
 ```
 

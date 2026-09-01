@@ -33,6 +33,12 @@ REMOTE="$(release_object_name "$VERSION")"
 echo "Uploading r2://${BUCKET}/${REMOTE} (remote) ..."
 wrangler r2 object put "${BUCKET}/${REMOTE}" --file="$ARCHIVE" --content-type application/gzip --remote
 
+echo "Uploading install script ..."
+wrangler r2 object put "${BUCKET}/framework/install.sh" \
+  --file="$ROOT/install.sh" \
+  --content-type "text/x-shellscript; charset=utf-8" \
+  --remote
+
 if [ "$VERSION" != "latest" ]; then
   LATEST="$(release_object_name latest)"
   echo "Updating ${LATEST} alias ..."

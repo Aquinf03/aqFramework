@@ -153,6 +153,7 @@ export const CLI_VERBS: ToolCard[] = [
   { name: "aq_fork", source: "cli", description: "Copy this train; skip jobs/ and artifacts/. Agent passes --lo --hi --why." },
   { name: "aq_forecast", source: "cli", description: "Write or show forecast.yaml (predicted metric range vs actual after eval)." },
   { name: "aq_learn", source: "cli", description: "Ack memory/heuristics.md after ~10 forecast-forks." },
+  { name: "aq_refine", source: "cli", description: "Self-improve harness from trajectory into memory/skills." },
   { name: "aq_checkout", source: "cli", description: "Restore a run tree." },
   { name: "aq_diff", source: "cli", description: "Compare run records." },
   { name: "aq_schedule", source: "cli", description: "Sweeps, cron, resume-on-fail, spawn agents." },

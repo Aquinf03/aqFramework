@@ -837,6 +837,17 @@ export async function startChatUi(train: string, resumeId?: string): Promise<voi
         await runCompact()
         return
       }
+      if (r.refine) {
+        try {
+          const { formatRefineResult, runRefine } = await import("../core/harness.js")
+          if (!isTrain(train)) note("not a train — /refine needs a train folder")
+          else note(formatRefineResult(runRefine(train, {})))
+        } catch (err) {
+          note(err instanceof Error ? err.message : String(err))
+        }
+        paintComposer()
+        return
+      }
       if (r.image) {
         try {
           const img = loadImage(train, r.image.path)

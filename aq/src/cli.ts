@@ -20,6 +20,7 @@ import { doctorCmd } from "./agent/doctor.js"
 import { spawnCmd } from "./agent/spawn.js"
 import { loginCmd, logoutCmd, switchCmd } from "./handle/login.js"
 import { forecastCmd, learnCmd } from "./handle/forecast.js"
+import { refineCmd } from "./handle/refine.js"
 import { versionReport } from "./core/version.js"
 import { InterruptedError } from "./core/python.js"
 
@@ -78,6 +79,11 @@ async function main(): Promise<void> {
 
   if (cmd === "learn") {
     await learnCmd(argv.slice(1))
+    return
+  }
+
+  if (cmd === "refine") {
+    await refineCmd(argv.slice(1))
     return
   }
 

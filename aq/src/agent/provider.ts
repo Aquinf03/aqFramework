@@ -94,6 +94,7 @@ export const SLASH = [
   { name: "/open", hint: "open a chat by name or id" },
   { name: "/delete", hint: "delete this chat · /delete all" },
   { name: "/compact", hint: "summarize older messages" },
+  { name: "/refine", hint: "improve harness from trajectory" },
   { name: "/undo", hint: "undo last agent turn" },
   { name: "/image", hint: "attach an image by path" },
   { name: "/context", hint: "context window use" },
@@ -578,7 +579,7 @@ export function applyChoice(c: Choice): {
         "  compact    summarize older chat",
         "  sound      click + message cues",
         "",
-        "slash: /new /rename /open /delete [/delete all] /compact /undo /image /status /doctor /spawn /provider /model /temp /key /sound",
+        "slash: /new /rename /open /delete [/delete all] /compact /refine /undo /image /status /doctor /spawn /provider /model /temp /key /sound",
         "",
         "keys: aq provider openai",
         "now: " + activeLabel(),
@@ -619,6 +620,7 @@ export type SlashResult = {
   quit?: boolean
   text?: string
   compact?: boolean
+  refine?: boolean
   undo?: boolean
   newChat?: boolean
   rename?: true | string
@@ -736,6 +738,7 @@ export function runSlash(line: string): SlashResult {
   const cmd = resolveSlash(raw ?? "")
   if (cmd === "/exit") return { quit: true }
   if (cmd === "/compact") return { compact: true }
+  if (cmd === "/refine") return { refine: true }
   if (cmd === "/undo") return { undo: true }
   if (cmd === "/image") {
     if (!arg) return { text: "usage: /image <path> [text]" }

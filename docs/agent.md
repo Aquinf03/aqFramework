@@ -23,6 +23,7 @@ Prompt (`prompt.ts`) emphasizes:
 
 - Conversation first: a wish is not permission; tools stay off until the human says go  
 - One heavy step per turn (create files **or** train **or** eval), then ask  
+- **Continual harness:** after misses or “learn from this”, `refine` / `/refine` writes the smallest lesson to `memory/` or `skills/`  
 - Cite real files (paths)  
 - **Do not invent metrics or eval results** - humans own `aq eval`  
 - The agent writes predicted ranges itself; after eval, predicted vs actual is the trust signal 

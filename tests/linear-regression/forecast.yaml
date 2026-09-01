@@ -1,0 +1,12 @@
+# Predicted metric range. Write this before train/fork. aq eval fills actual.
+metric: mse
+lo: 0
+hi: 50
+why: linear toy; expect low mse
+novelty: hyperparam
+eval_n: 5
+delta_ignore: 0.438
+eval_note: 5 eval rows — low trust. Ignore deltas under 0.438.
+actual: 0
+hit: true
+resolved_at: "2026-09-01T11:25:20.479Z"
