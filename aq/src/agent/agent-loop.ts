@@ -18,9 +18,9 @@ export { type ChatMsg }
 const MAX_ROUNDS = 16
 
 const ACT =
-  /\b(train|eval|fork|fix|generate|init|write|change|run|serve|forecast|learn|spawn|refine)\b/i
+  /\b(train|eval|fork|fix|generate|init|write|change|run|serve|spawn)\b/i
 const GO =
-  /\b(yeah|yep|yes|ok|okay|sure|fine|go ahead|go on|do it|do that|try it|train it|build it|fix it|proceed|please do|let'?s go|ship it|run it|learn from|refine)\b/i
+  /\b(yeah|yep|yes|ok|okay|sure|fine|go ahead|go on|do it|do that|try it|train it|build it|fix it|proceed|please do|let'?s go|ship it|run it|learn from)\b/i
 const WISH =
   /\b(wanna|want to|want a|what'?s a|what is|how do i|could we|maybe|idk|i don'?t know|thinking|curious)\b/i
 

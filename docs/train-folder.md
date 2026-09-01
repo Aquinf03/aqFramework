@@ -17,7 +17,6 @@ Authority: `aq/src/core/schema.ts` (`isTrain` / `assertTrain`).
 my-train/
   instructions.md          REQUIRED - what this train is for
   recipe.yaml              REQUIRED - kernel spec (aq does not override)
-  forecast.yaml            OPTIONAL - predicted metric range (before train/fork)
   train.ts                 OPTIONAL - placeholder; aq does not read yet
 
   data/                    your datasets (path from recipe)
@@ -74,7 +73,7 @@ Placeholder for a future runtime entry (resources, retries). Today it is documen
 | `methods/` | kernel loader | `{name}.py` wins over `kernel/methods/{name}.py` |
 | `tools/` | `aq tool` / agent | Executable helpers with `AQ_TRAIN` set |
 | `skills/` | agent only | SKILL.md / run scripts / mcp.json |
-| `memory/` | agent | searchable notes; `heuristics.md` is the learn-pass after ~10 forks |
+| `memory/` | agent | searchable notes |
 | `schedules/` | `aq schedule` | cron, sweep, resume, pipeline, agents |
 | `stages/` | `aq stage` | nested full trains |
 | `jobs/` | job system | do not hand-edit casually |
@@ -113,7 +112,7 @@ Agent **chats** live in `~/.aq/chats/` (not in the train), so experiments stay l
 
 ## Fork and checkout
 
-- **`aq fork <dest>`** - copy the train, omit runtime `jobs/` and `artifacts/`, recreate empty ones. Use this to try a variant without carrying old metrics. The agent must pass a predicted metric range (`--lo --hi --why`); humans may omit it. After `aq eval`, predicted vs actual lands in `artifacts/calibration.jsonl`.
+- **`aq fork <dest>`** - copy the train, omit runtime `jobs/` and `artifacts/`, recreate empty ones. Use this to try a variant without carrying old metrics.
 - **`aq checkout <job-id>`** - restore that job’s captured `tree/` into cwd (or a new dest with the job record). This is how you time-travel a workspace that was snapshotted at enqueue.
 
 ## Nested trains (`stages/`)

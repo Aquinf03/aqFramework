@@ -23,10 +23,9 @@ Prompt (`prompt.ts`) emphasizes:
 
 - Conversation first: a wish is not permission; tools stay off until the human says go  
 - One heavy step per turn (create files **or** train **or** eval), then ask  
-- **Continual harness:** after misses or “learn from this”, `refine` / `/refine` writes the smallest lesson to `memory/` or `skills/`  
+- Use `memory_write` for durable lessons; read `memory/` and `skills/` before repeating a failure  
 - Cite real files (paths)  
-- **Do not invent metrics or eval results** - humans own `aq eval`  
-- The agent writes predicted ranges itself; after eval, predicted vs actual is the trust signal 
+- **Do not invent metrics or eval results** — humans own `aq eval`
 
 ## Providers
 
@@ -85,4 +84,4 @@ Checks Node ≥ 18, Python, kernel presence, provider/key, train files, tools, s
 
 ## Internal agent evals
 
-`tests/aq-agent-internal-evals/` is **not** a user product feature. It probes whether the agent follows skills, forks instead of mutating, uses tools, files jobs, runs `aq eval`, stays in-train, recovers from failed tools, etc. Tick only when the harness says so.
+`tests/aq-agent-internal-evals/` is **not** a user product feature. It probes whether the agent follows skills, forks instead of mutating, uses tools, files jobs, runs `aq eval`, stays in-train, recovers from failed tools, etc.

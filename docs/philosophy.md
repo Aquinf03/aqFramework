@@ -71,13 +71,9 @@ The same path (train, then eval, then inspect) must work across families (tabula
 
 Aquin does not ship “ImageNet but smaller” or a blessed benchmark suite as product. **You** put probes in `evals/`. Humans own the gate (`aq eval`). The agent must not invent scores.
 
-### 10. Predictions constrain freedom
+### 10. Memory and skills
 
-Autonomy is not a fixed ceremony. When the agent makes a bet (`forecast.yaml`), `aq eval` scores that bet. Calibration of those bets retunes how much fork budget it has left. Failures compound into `memory/` when useful (`aq refine`). Search trees and roles are plumbing for that constraint — not a checklist to march through.
-
-### 11. Continual harness
-
-The base agent prompt is immutable. Around it, the train’s harness layer (`memory/`, `skills/`, prompt notes) can create/read/update from the trajectory. `aq refine` applies the *smallest* evidence-backed edit and logs it to `artifacts/refine.jsonl` (rollbackable). That is Aquin’s self-improving training harness — not a coding REPL.
+Drop notes in `memory/` and `skills/` when a train teaches you something. The agent can read and write them; they fork with the train. No separate “harness” CLI — just files.
 
 ## What “working” means
 

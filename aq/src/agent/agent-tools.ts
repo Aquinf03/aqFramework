@@ -10,8 +10,6 @@ import { cpAt, editFileAt, mkdirAt, mvAt, rmAt, writeFileAt } from "../lib/files
 import { searchSkills, skillsDigest } from "../lib/skill.js"
 import { activateSkill, callMcpTool, extraTools, runSkillCode } from "../lib/skill-runtime.js"
 import { childTrains, isTrain, trainInArgv } from "../core/schema.js"
-import { labDigest, parseLabFlags, readForecast } from "../core/forecast.js"
-import { formatRefineResult, harnessDigest, runRefine } from "../core/harness.js"
 import { runToolCaptured } from "../handle/tool.js"
 import { enqueueJob, waitForPid } from "../job/job.js"
 import { agentLog, cancelAgent, formatAgents, startAgent } from "./spawn.js"
@@ -38,10 +36,7 @@ function nativeAqTools(): AgentToolDef[] {
     ["serve", "Generate from last checkpoint. If cwd is not a train, args starts with the train folder, then the prompt."],
     ["data", "Hash recipe data.path. Extra args after data."],
     ["job", "Run, list, log, cancel jobs."],
-    ["fork", "Copy this train. You (the agent) must pass --lo --hi --why yourself. Never ask the human for those."],
-    ["forecast", "You write the predicted metric range. Never ask the human for lo/hi/why."],
-    ["learn", "Ack memory/heuristics.md when you have compressed failure patterns. Optional; overdue learn taxes budget on the next forecast-fork."],
-    ["refine", "Self-improve the harness from trajectory (calibration, misses, critique). Writes the smallest memory/skill/prompt edit. Use after a miss or when the human says learn from this."],
+    ["fork", "Copy this train to try a variant without mutating the original."],
     ["checkout", "Restore a run tree. args is id and optional dest."],
     ["diff", "Compare run records."],
     ["schedule", "Sweeps, cron, resume-on-fail."],
@@ -343,19 +338,6 @@ export const AGENT_TOOLS: AgentToolDef[] = [
     },
   },
   {
-    name: "refine",
-    description:
-      "Self-improve this train's harness from trajectory (forecast misses, eval critique, novelty). Writes the smallest durable edit to memory/ or skills/. Optional focus sentence from the human.",
-    parameters: {
-      type: "object",
-      properties: {
-        focus: { type: "string", description: "one lesson to lock in, optional" },
-        dry: { type: "boolean", description: "true = show edits without writing" },
-        skill: { type: "boolean", description: "true = also promote focus into skills/" },
-      },
-    },
-  },
-  {
     name: "skills_search",
     description: "Search skills/ by name or first line. Empty query lists them.",
     parameters: {
@@ -383,9 +365,6 @@ const ALLOW = new Set([
   "stage",
   "provider",
   "spawn",
-  "forecast",
-  "learn",
-  "refine",
 ])
 
 function aqBin(): string {
@@ -413,12 +392,6 @@ export function workspaceLines(train: string): string[] {
     }
   } else if (kids.length) {
     lines.push(`Nested trains: ${kids.join(", ")}`)
-  }
-  if (isTrain(train)) {
-    const lab = labDigest(train)
-    if (lab) lines.push(lab)
-    const harness = harnessDigest(train)
-    if (harness) lines.push(harness)
   }
   return lines
 }
@@ -456,23 +429,6 @@ export async function runAgentTool(train: string, name: string, rawArgs: string)
   if (name === "memory_write") {
     const n = writeMemory(train, jsonArg(args, "name"), jsonArg(args, "body"))
     return `wrote memory/${n}.md`
-  }
-  if (name === "refine") {
-    if (!isTrain(train)) {
-      const kids = childTrains(train)
-      throw new Error(
-        kids.length
-          ? `cwd is not a train; pass aq_refine with args set to a child train (e.g. "${kids[0]}") or cd into it`
-          : "cwd is not a train; aq_init first",
-      )
-    }
-    const focus = typeof args.focus === "string" ? args.focus : undefined
-    const r = runRefine(train, {
-      focus,
-      dry: args.dry === true,
-      applyFocusSkill: args.skill === true,
-    })
-    return formatRefineResult(r)
   }
   if (name === "tools_search") return formatCards(searchTools(train, jsonArg(args, "query")))
   if (name === "ls") {
@@ -552,14 +508,6 @@ function runAq(train: string, parts: string[]): string {
       : "use aq_init first, then pass that folder in args"
     throw new Error(`cwd is not a train; ${hint}`)
   }
-  if (head === "fork") {
-    const { force, input } = parseLabFlags(parts.slice(1))
-    if (!force && (input.lo == null || input.hi == null || !String(input.why || "").trim())) {
-      throw new Error(
-        `agent fork needs a predicted range before you copy: aq_fork args "<dest> --lo n --hi n --why \\"one sentence\\""`,
-      )
-    }
-  }
   const r = spawnSync(aqBin(), parts, {
     cwd: train,
     encoding: "utf8",
@@ -568,15 +516,7 @@ function runAq(train: string, parts: string[]): string {
   })
   const out = `${r.stdout ?? ""}${r.stderr ?? ""}`.trim()
   if (r.status !== 0) throw new Error(out || `aq ${head} exit ${r.status}`)
-  let text = out || "ok"
-  if (head === "train") {
-    const t = trainInArgv(train, parts) || train
-    if (isTrain(t) && !readForecast(t)) {
-      text +=
-        "\nnote: no forecast.yaml — write aq_forecast --lo --hi --why before the next train so eval can score predicted vs actual"
-    }
-  }
-  return text
+  return out || "ok"
 }
 
 export function parseRunCommand(rawArgs: string): { command: string; detach: boolean } {

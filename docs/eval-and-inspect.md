@@ -18,8 +18,6 @@ aq eval --ckpt 3        # specific checkpoint
 
 Results: `artifacts/eval.json` plus metrics events (`eval.probe`). Pass/fail only when `recipe.eval.min_score` is set; otherwise scores are informational.
 
-If `forecast.yaml` exists, `aq eval` also appends **predicted vs actual** to `artifacts/calibration.jsonl`, retunes `artifacts/budget.json` from how honest those intervals were, and writes `artifacts/eval-critique.json` (`n`, trust, ignore-delta). That calibration is the trust signal — not whether the run "passed," and not a fixed sequence of agent steps.
-
 **Humans own the gate.** The agent prompt forbids inventing eval numbers. If you need a gate in CI, run `aq eval` and parse `eval.json` / exit behavior yourself.
 
 ## Inspect

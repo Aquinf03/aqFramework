@@ -4,9 +4,14 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { randomBytes } from "node:crypto"
 import path from "node:path"
 import { cancelJob, enqueueJob, jobLogPath, waitForPid } from "../job/job.js"
-import { KILLER_PREAMBLE } from "../core/forecast.js"
 import { assertTrain } from "../core/schema.js"
 import { aqRoot } from "../core/root.js"
+
+const KILLER_PREAMBLE = [
+  "Your job is the cheapest disproof, not agreement.",
+  "Find the fastest way this fork is wrong: leak, tiny eval, broken split, recipe that cannot beat the parent.",
+  "Kill bad forks quickly. Do not cheerlead. Do not propose a bigger model until you have a cheap counterexample on disk (eval or a memory note).",
+].join(" ")
 
 export type AgentSpec = {
   id: string

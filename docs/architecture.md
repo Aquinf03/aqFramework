@@ -27,7 +27,7 @@
 ┌───────────────────────────▼─────────────────────────────────┐
 │  Disk (source of truth)                                     │
 │    recipe.yaml  data/  evals/  methods/                     │
-│    artifacts/{checkpoints,metrics.jsonl,runs,eval,serve,calibration,…}   │
+│    artifacts/{checkpoints,metrics.jsonl,runs,eval,serve,…}   │
 │    jobs/  skills/  tools/  schedules/  stages/              │
 └─────────────────────────────────────────────────────────────┘
 
