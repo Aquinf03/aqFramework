@@ -10,6 +10,7 @@ Install: `pip install -r aq/kernel/requirements.txt`
 | boosting | XGBoost → LightGBM → CatBoost → sklearn GBR | set `library:` to force |
 | llm, lora, qlora | Hugging Face + PEFT | **`model:` required** |
 | transformer | Hugging Face | **`model:` required**; arch encoder/decoder/enc-dec |
+| cnn | **aq `neural/cnn`** | `family: vision`; arch lenet/alexnet/vgg/resnet/inception/efficientnet/convnext |
 
 Custom override: `{train}/tools/<name>.py` with a `fit()` function wins over the kernel built-in.
 
@@ -23,7 +24,9 @@ Custom override: `{train}/tools/<name>.py` with a `fit()` function wins over the
 | Claim | Reality |
 |-------|---------|
 | QLoRA | CUDA + bitsandbytes only |
-| GPTQ/AWQ/GGUF/EXL2 | `formats: true` or `formats: [gguf]` — see [recipe](../recipe.md) |
-| Speculative / paged KV | Not implemented (errors if set) |
-| MTP heads | Not implemented (`objective: mtp` errors) |
+| Vision CNN | aq-owned modules (not torchvision.models); needs Pillow |
+| GPTQ/AWQ/GGUF/EXL2 | `formats:` — see [recipe](../recipe.md) |
+| Speculative | `draft_model:` + HF assisted decode |
+| Paged KV | Recorded; serve still standard HF cache |
+| MTP heads | `objective: mtp` + `n_predict` |
 | `size:` | Label only; does not download Llama/Phi/etc. |

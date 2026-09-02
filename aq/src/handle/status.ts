@@ -2,10 +2,12 @@ import { existsSync, readdirSync, readFileSync } from "node:fs"
 import path from "node:path"
 import { assertTrain } from "../core/schema.js"
 import { listPlanFiles, listPlanLogFiles } from "../job/plans.js"
+import { printSection, printTable } from "../lib/term-table.js"
+
 export async function status(argv: string[]): Promise<void> {
   const train = assertTrain(argv[0] ?? ".")
   const jobs = path.join(train, "jobs")
-  const rows: string[] = []
+  const jobRows: unknown[][] = []
   if (existsSync(jobs)) {
     for (const id of readdirSync(jobs).sort()) {
       if (id.startsWith(".") || id === "plans") continue
@@ -15,12 +17,10 @@ export async function status(argv: string[]): Promise<void> {
         status?: string
         command?: string[]
       }
-      rows.push(id + "  " + (spec.status ?? "?") + "  " + (spec.command ?? []).join(" "))
+      jobRows.push([id, spec.status ?? "?", (spec.command ?? []).join(" ")])
     }
   }
-  console.log("jobs")
-  if (!rows.length) console.log("  (none)")
-  else for (const r of rows) console.log("  " + r)
+  printSection("jobs", ["id", "status", "command"], jobRows)
 
   const last = path.join(train, "artifacts", "runs", "last.json")
   console.log("run")
@@ -31,16 +31,16 @@ export async function status(argv: string[]): Promise<void> {
       metrics?: { metric?: string; score?: number }
     }
     const p = run.pass === true ? "pass" : run.pass === false ? "fail" : "skip"
-    console.log("  " + (run.id ?? "last") + "  " + p)
+    const rows: unknown[][] = [["id", run.id ?? "last"], ["result", p]]
     if (run.metrics?.metric != null) {
-      console.log("  " + run.metrics.metric + "  " + String(run.metrics.score ?? ""))
+      rows.push([String(run.metrics.metric), run.metrics.score ?? "—"])
     }
+    printTable(["key", "value"], rows)
   } else console.log("  (none)")
 
   const inspect = path.join(train, "artifacts", "inspect.md")
   console.log("inspect")
-  if (existsSync(inspect)) console.log("  artifacts/inspect.md")
-  else console.log("  (none)")
+  console.log(existsSync(inspect) ? "  artifacts/inspect.md" : "  (none)")
 
   const ev = path.join(train, "artifacts", "eval.json")
   console.log("eval")
@@ -51,7 +51,10 @@ export async function status(argv: string[]): Promise<void> {
       pass?: boolean | null
     }
     const p = e.pass === true ? "pass" : e.pass === false ? "fail" : "skip"
-    console.log("  " + (e.metric ?? "") + "  " + String(e.score ?? "") + "  " + p)
+    printTable(
+      ["metric", "score", "result"],
+      [[e.metric ?? "—", e.score ?? "—", p]],
+    )
   } else console.log("  (none)")
 
   const sv = path.join(train, "artifacts", "serve.json")
@@ -62,9 +65,12 @@ export async function status(argv: string[]): Promise<void> {
       tokens?: number
       checkpoint?: string
     }
-    console.log("  " + String(s.text ?? ""))
-    console.log("  tokens: " + String(s.tokens ?? ""))
-    if (s.checkpoint) console.log("  " + s.checkpoint)
+    const rows: unknown[][] = []
+    if (s.tokens != null) rows.push(["tokens", s.tokens])
+    if (s.checkpoint) rows.push(["checkpoint", s.checkpoint])
+    if (s.text) rows.push(["text", String(s.text).slice(0, 80)])
+    if (rows.length) printTable(["key", "value"], rows)
+    else console.log("  (none)")
   } else console.log("  (none)")
 
   const metrics = path.join(train, "artifacts", "metrics.jsonl")
@@ -72,35 +78,45 @@ export async function status(argv: string[]): Promise<void> {
   if (existsSync(metrics)) {
     const lines = readFileSync(metrics, "utf8").trim().split("\n").filter(Boolean)
     console.log("  artifacts/metrics.jsonl  (" + lines.length + " events)")
-    for (const line of lines.slice(-5)) {
+    const recent = lines.slice(-8)
+    const rows: unknown[][] = []
+    for (const line of recent) {
       try {
         const row = JSON.parse(line) as {
           event?: string
           step?: number
+          epoch?: number
           loss?: number
+          acc?: number
           score?: number
           metric?: string
           elapsed_ms?: number
         }
-        const bits = [row.event ?? "?"]
-        if (row.step != null) bits.push("step " + row.step)
-        if (row.loss != null) bits.push("loss " + row.loss)
-        if (row.metric != null) bits.push(row.metric + " " + String(row.score ?? ""))
-        if (row.elapsed_ms != null) bits.push(row.elapsed_ms + "ms")
-        console.log("  " + bits.join("  "))
+        rows.push([
+          row.event ?? "?",
+          row.step ?? row.epoch ?? "—",
+          row.loss ?? row.score ?? "—",
+          row.acc ?? (row.metric ? row.metric : "—"),
+          row.elapsed_ms != null ? row.elapsed_ms + "ms" : "—",
+        ])
       } catch {
-        console.log("  " + line.slice(0, 80))
+        rows.push([line.slice(0, 40), "—", "—", "—", "—"])
       }
     }
+    printTable(["event", "step", "loss", "acc", "time"], rows)
   } else console.log("  (none)")
 
   const plans = listPlanFiles(train)
-  console.log("job plans")
-  if (!plans.length) console.log("  (none)")
-  else for (const { name, file } of plans) console.log("  jobs/plans/" + path.basename(file))
+  printSection(
+    "job plans",
+    ["plan"],
+    plans.map(({ file }) => ["jobs/plans/" + path.basename(file)]),
+  )
 
   const logs = listPlanLogFiles(train)
-  console.log("job plan logs")
-  if (!logs.length) console.log("  (none)")
-  else for (const f of logs) console.log("  artifacts/jobs/plans/" + f)
+  printSection(
+    "job plan logs",
+    ["log"],
+    logs.map((f) => ["artifacts/jobs/plans/" + f]),
+  )
 }

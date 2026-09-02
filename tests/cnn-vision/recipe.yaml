@@ -1,0 +1,14 @@
+family: vision
+method: cnn
+arch: resnet18
+epochs: 3
+batch_size: 8
+lr: 1.0e-3
+image_size: 128
+val_frac: 0.2
+seed: 0
+data:
+  path: data/images
+eval:
+  metric: accuracy
+  min_score: null

@@ -62,6 +62,11 @@ def data_file(train: Path, rec: dict) -> Path:
     if not rel:
         raise SystemExit("recipe.yaml has no data.path")
     src = (train / str(rel)).resolve()
+    method = str(rec.get("method") or "")
+    if src.is_dir():
+        if method == "cnn" or str(rec.get("family") or "") == "vision":
+            return src
+        raise SystemExit(f"data path is a directory (use method: cnn for ImageFolder): {rel}")
     if not src.is_file():
         raise SystemExit(f"data path not found: {rel}")
     return src
@@ -121,24 +126,26 @@ def do_train(train: Path) -> list[str]:
             **summary,
         )
         rid = write_run(train, {"artifacts": arts})
-        lines = [
-            "train",
-            "  artifacts/checkpoints/" + named.name,
-            "  artifacts/checkpoints/last.json",
-            "  artifacts/metrics.jsonl",
-            "  artifacts/runs/" + rid + ".json",
+        from protocol.term_table import render_table
+
+        art_rows = [
+            ["checkpoint", "artifacts/checkpoints/" + named.name],
+            ["last", "artifacts/checkpoints/last.json"],
+            ["metrics", "artifacts/metrics.jsonl"],
+            ["run", "artifacts/runs/" + rid + ".json"],
         ]
         if arts.get("inspect"):
-            lines.append("  " + arts["inspect"])
+            art_rows.append(["inspect", arts["inspect"]])
         if arts.get("tokenizer"):
-            lines.append("  " + arts["tokenizer"])
-            lines.append("  tokenizer sha256:" + str(arts.get("tokenizer_sha256")))
+            art_rows.append(["tokenizer", arts["tokenizer"]])
+        lines = ["train", render_table(("artifact", "path"), art_rows)]
         if gcfg.get("safety") or gcfg.get("leak"):
-            lines.append(
-                "  guard  "
-                + ("safety " if gcfg.get("safety") else "")
-                + ("leak" if gcfg.get("leak") else "")
-            )
+            g = []
+            if gcfg.get("safety"):
+                g.append("safety")
+            if gcfg.get("leak"):
+                g.append("leak")
+            lines.append(render_table(("key", "value"), [("guard", "+".join(g))]))
         return lines
     except GuardAbort as e:
         aq_metrics.event("guard.abort", message=str(e))

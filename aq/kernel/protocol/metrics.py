@@ -27,6 +27,8 @@ _state: dict[str, Any] = {
     "steps": None,
     "guard": None,
     "watch": None,
+    "step_header": False,
+    "epoch_header": False,
 }
 
 
@@ -63,6 +65,9 @@ def begin(
     _state["step"] = -1
     _state["guard"] = cfg
     _state["watch"] = SafetyWatch(cfg) if cfg.get("safety") else None
+    _state["step_header"] = False
+    _state["epoch_header"] = False
+    _state["step_cols"] = None
     steps = meta.get("steps")
     if steps is None and recipe:
         steps = recipe.get("steps")
@@ -97,6 +102,8 @@ def end(**meta: Any) -> None:
     _state["steps"] = None
     _state["guard"] = None
     _state["watch"] = None
+    _state["step_header"] = False
+    _state["epoch_header"] = False
 
 
 def emit(event: str, **fields: Any) -> None:
@@ -133,75 +140,133 @@ def emit(event: str, **fields: Any) -> None:
 
 
 def _fmt_num(v: Any) -> str:
-    try:
-        x = float(v)
-    except (TypeError, ValueError):
-        return str(v)
-    if abs(x) >= 1000 or (abs(x) > 0 and abs(x) < 1e-3):
-        return f"{x:.4e}"
-    return f"{x:.6f}".rstrip("0").rstrip(".")
+    from protocol.term_table import fmt_cell
+
+    return fmt_cell(v)
 
 
 def _print_live(event: str, body: dict[str, Any]) -> None:
     """Always show progress on stderr so `aq train` is live, not silent."""
+    from protocol.term_table import fmt_cell, print_kv, print_table, render_table
+
     if event == "start":
-        op = body.get("op") or "run"
-        bits = [str(op)]
+        rows: list[tuple[str, Any]] = [("op", body.get("op") or "run")]
         if body.get("method"):
-            bits.append(str(body["method"]))
+            rows.append(("method", body["method"]))
         if body.get("family"):
-            bits.append(str(body["family"]))
+            rows.append(("family", body["family"]))
         flags = []
         if body.get("guard_safety"):
             flags.append("safety")
         if body.get("guard_leak"):
             flags.append("leak")
         if flags:
-            bits.append("guard:" + "+".join(flags))
-        print("  " + "  ".join(bits), file=sys.stderr, flush=True)
+            rows.append(("guard", "+".join(flags)))
+        print_kv(rows)
         return
 
     if event == "step":
-        step_n = body.get("step", 0)
+        step_n = int(body.get("step") or 0)
         total = body.get("steps") or _state.get("steps")
-        if total is not None:
-            label = f"step  {int(step_n):>4}/{int(total)}"
-        else:
-            label = f"step  {int(step_n):>4}"
-        parts = [label]
-        if body.get("loss") is not None:
-            parts.append(f"loss  {_fmt_num(body['loss'])}")
-        if body.get("lr") is not None:
-            parts.append(f"lr  {_fmt_num(body['lr'])}")
-        # extra scalar metrics (skip noise)
-        skip = {"ts", "event", "run_id", "op", "elapsed_ms", "step", "steps", "loss", "lr", "demo"}
+        step_label = f"{step_n}/{int(total)}" if total is not None else str(step_n)
+        headers = ["step", "loss", "lr", "acc", "epoch", "time"]
+        row = [
+            step_label,
+            body.get("loss"),
+            body.get("lr"),
+            body.get("acc"),
+            body.get("epoch"),
+            f"{int(body['elapsed_ms'])}ms" if body.get("elapsed_ms") is not None else None,
+        ]
+        skip = set(headers) | {
+            "ts",
+            "event",
+            "run_id",
+            "op",
+            "elapsed_ms",
+            "steps",
+            "demo",
+        }
         for k, v in body.items():
             if k in skip or v is None:
                 continue
             if isinstance(v, (int, float)) and not isinstance(v, bool):
-                parts.append(f"{k}  {_fmt_num(v)}")
-        if body.get("elapsed_ms") is not None:
-            parts.append(f"{int(body['elapsed_ms'])}ms")
-        print("  " + "   ".join(parts), file=sys.stderr, flush=True)
+                headers.append(k)
+                row.append(v)
+
+        if not _state.get("step_header"):
+            text = render_table(headers, [row])
+            print(text, file=sys.stderr, flush=True)
+            # lock widths from the rendered header line
+            from protocol.term_table import fmt_cell as _fc
+
+            cells0 = [_fc(c) for c in row]
+            _state["step_cols"] = headers
+            _state["step_widths"] = [max(len(headers[i]), len(cells0[i])) for i in range(len(headers))]
+            _state["step_header"] = True
+        else:
+            cols = list(_state.get("step_cols") or headers)
+            widths = list(_state.get("step_widths") or [8] * len(cols))
+            by = dict(zip(headers, row))
+            cells = [fmt_cell(by.get(h)) for h in cols]
+            # grow widths if needed so long numbers don't smash neighbors
+            for i, c in enumerate(cells):
+                if len(c) > widths[i]:
+                    widths[i] = len(c)
+            _state["step_widths"] = widths
+            parts = [cells[i].rjust(widths[i]) if i else cells[i].ljust(widths[i]) for i in range(len(cols))]
+            print("  " + "  ".join(parts), file=sys.stderr, flush=True)
+        return
+
+    if event == "epoch":
+        headers = ["epoch", "loss", "acc", "val_loss", "val_acc"]
+        row = [
+            body.get("epoch"),
+            body.get("loss") if body.get("loss") is not None else body.get("train_loss"),
+            body.get("acc") if body.get("acc") is not None else body.get("train_acc"),
+            body.get("val_loss"),
+            body.get("val_acc"),
+        ]
+        if not _state.get("epoch_header"):
+            print(render_table(headers, [row]), file=sys.stderr, flush=True)
+            cells0 = [fmt_cell(c) for c in row]
+            _state["epoch_widths"] = [max(len(headers[i]), len(cells0[i])) for i in range(5)]
+            _state["epoch_header"] = True
+        else:
+            widths = list(_state.get("epoch_widths") or [8] * 5)
+            cells = [fmt_cell(c) for c in row]
+            for i, c in enumerate(cells):
+                if len(c) > widths[i]:
+                    widths[i] = len(c)
+            _state["epoch_widths"] = widths
+            parts = [cells[i].rjust(widths[i]) if i else cells[i].ljust(widths[i]) for i in range(5)]
+            print("  " + "  ".join(parts), file=sys.stderr, flush=True)
         return
 
     if event == "guard.abort":
         msg = body.get("message") or body.get("reason") or "aborted"
-        print(f"  abort  {msg}", file=sys.stderr, flush=True)
+        print_kv([("abort", msg)])
         return
 
     if event == "end":
-        parts = ["done"]
+        rows = []
         if body.get("train_loss") is not None:
-            parts.append(f"loss  {_fmt_num(body['train_loss'])}")
+            rows.append(("loss", body["train_loss"]))
+        if body.get("train_acc") is not None:
+            rows.append(("acc", body["train_acc"]))
+        if body.get("val_acc") is not None:
+            rows.append(("val_acc", body["val_acc"]))
         if body.get("score") is not None:
-            m = body.get("metric") or "score"
-            parts.append(f"{m}  {_fmt_num(body['score'])}")
+            rows.append((str(body.get("metric") or "score"), body["score"]))
         if body.get("verdict"):
-            parts.append(str(body["verdict"]))
+            rows.append(("verdict", body["verdict"]))
         if body.get("elapsed_ms") is not None:
-            parts.append(f"{int(body['elapsed_ms'])}ms")
-        print("  " + "   ".join(parts), file=sys.stderr, flush=True)
+            rows.append(("time", f"{int(body['elapsed_ms'])}ms"))
+        if rows:
+            print("  done", file=sys.stderr, flush=True)
+            print_kv(rows)
+        else:
+            print("  done", file=sys.stderr, flush=True)
         return
 
     if event == "eval.probe":
@@ -210,15 +275,14 @@ def _print_live(event: str, body: dict[str, Any]) -> None:
         score = body.get("score")
         verdict = body.get("pass")
         v = "pass" if verdict is True else "fail" if verdict is False else "—"
-        print(
-            f"  probe  {path}   {metric}  {_fmt_num(score)}   {v}",
-            file=sys.stderr,
-            flush=True,
+        print_table(
+            ("probe", "metric", "score", "result"),
+            [(path, metric, score, v)],
         )
         return
 
     if event == "error":
-        print(f"  error  {body.get('error')}", file=sys.stderr, flush=True)
+        print_kv([("error", body.get("error"))])
 
 
 def step(step: int | None = None, **fields: Any) -> None:

@@ -22,6 +22,7 @@ pip install -r aq/kernel/requirements.txt
 - `size:` is a label only.
 - QLoRA = CUDA + bitsandbytes only (errors elsewhere).
 - Unsupported: `paged_kv` (recorded; serve not paged yet). `objective: mtp` needs `n_predict >= 2`. `speculative: true` needs `draft_model:`. `formats:` exports real packs (GGUF / GPTQ / AWQ / EXL2) — see recipe docs.
+- Vision: `family: vision` / `method: cnn` — aq-owned CNNs under `neural/cnn/` (Pillow required).
 - Devices: CUDA, MPS, ROCm, CPU.
 
 See [docs/recipe.md](../../docs/recipe.md) and [internals/COMPLETED.md](../../internals/COMPLETED.md).

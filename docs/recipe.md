@@ -59,6 +59,32 @@ Rules:
 - **`paged_kv: true`** — recorded at train; `aq serve` still uses standard HF KV cache (not vLLM paged attention yet).
 - These **fail closed** when a requested format cannot actually be produced.
 
+## Vision (CNN)
+
+Aq-owned backbones (not torchvision wrappers). Folder-of-folders or a path+label table.
+
+```yaml
+family: vision
+method: cnn
+arch: resnet18    # lenet | alexnet | vgg16 | resnet18/34/50/101/152 |
+                  # inception | efficientnet_b0/b1/b2 | convnext_tiny/small/base
+epochs: 10
+batch_size: 32
+lr: 1.0e-3
+image_size: 224   # default depends on arch (lenet→32)
+val_frac: 0.1
+data:
+  path: data/images          # ImageFolder: data/images/<class>/*.jpg
+  # or a csv/jsonl:
+  # path: data/index.csv
+  # image: path
+  # target: label
+eval:
+  metric: accuracy           # or loss
+```
+
+Requires **Pillow**. Checkpoints store `model.pt` under `artifacts/checkpoints/<n>/`.
+
 ## Transformer
 
 ```yaml
