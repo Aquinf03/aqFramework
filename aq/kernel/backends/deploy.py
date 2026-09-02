@@ -66,8 +66,35 @@ def _reject_unsupported(rec: dict) -> None:
         )
 
 
+def speculative_requested(rec: dict) -> bool:
+    """True when recipe asks for speculative / assisted decode."""
+    v = opt(rec, "speculative", False, "deploy", "serve", "llm")
+    if isinstance(v, dict):
+        return v.get("enabled", True) is not False
+    return bool(v)
+
+
+def draft_model_id(rec: dict, model: dict | None = None) -> str | None:
+    """Hub id (or local path) for the draft / assistant model."""
+    v = opt(rec, "speculative", None, "deploy", "serve", "llm")
+    if isinstance(v, dict):
+        for key in ("draft", "draft_model", "model", "assistant"):
+            if v.get(key):
+                return str(v[key])
+    draft = opt(rec, "draft_model", None, "deploy", "serve", "llm")
+    if draft:
+        return str(draft)
+    if model:
+        intent = (model.get("serve_intent") or {}).get("speculative") or {}
+        if intent.get("draft_model"):
+            return str(intent["draft_model"])
+        if model.get("draft_model"):
+            return str(model["draft_model"])
+    return None
+
+
 def note_serve_intent(rec: dict, manifest: dict) -> None:
-    """Serve-time recipe flags — safe to set during train; recorded, not faked."""
+    """Serve-time recipe flags — recorded at train; speculative needs a draft_model."""
     intent: dict[str, Any] = {}
     if opt(rec, "paged_kv", False, "deploy", "serve", "llm"):
         intent["paged_kv"] = {
@@ -79,14 +106,23 @@ def note_serve_intent(rec: dict, manifest: dict) -> None:
             "  serve  paged_kv: true — train ignores; serve uses standard HF KV cache",
             file=sys.stderr,
         )
-    if opt(rec, "speculative", False, "deploy", "serve", "llm"):
+    if speculative_requested(rec):
+        draft = draft_model_id(rec)
+        if not draft:
+            raise SystemExit(
+                "recipe speculative: true needs a draft model.\n"
+                "Reason: assisted decode loads a smaller assistant beside the target.\n"
+                "Fix: set draft_model: <hub-id> (or speculative: { draft: <hub-id> })."
+            )
         intent["speculative"] = {
             "requested": True,
-            "active": False,
-            "note": "no draft model yet; serve uses single-model decode",
+            "active": True,
+            "draft_model": draft,
+            "note": "aq serve uses Hugging Face assisted generation (assistant_model)",
         }
+        manifest["draft_model"] = draft
         print(
-            "  serve  speculative: true — not active yet; serve uses single-model decode",
+            f"  serve  speculative: true — draft={draft}",
             file=sys.stderr,
         )
     if intent:
@@ -100,13 +136,6 @@ def warn_serve_intent(rec: dict, model: dict | None = None) -> None:
     ):
         print(
             "  serve  paged_kv was requested; using standard HF generation (not paged attention)",
-            file=sys.stderr,
-        )
-    if opt(rec, "speculative", False, "deploy", "serve", "llm") or (
-        model and (model.get("serve_intent") or {}).get("speculative")
-    ):
-        print(
-            "  serve  speculative was requested; using single-model decode (no draft model)",
             file=sys.stderr,
         )
 

@@ -33,7 +33,8 @@ eval:
   metric: loss
   min_score: null
 
-# Unsupported (errors on purpose): formats, speculative, paged_kv
+# Unsupported (errors on purpose): formats, paged_kv
+# Speculative decode (serve): speculative: true + draft_model: <smaller-hub-id>
 # Optional: guard.safety / guard.leak
 # Optional plot (matplotlib charts after train or via aq plot):
 # plot:

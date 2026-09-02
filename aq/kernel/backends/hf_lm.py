@@ -554,6 +554,12 @@ def fit(src: Path, rec: dict, *, method_name: str | None = None) -> dict:
     torch = require_torch()
     transformers = require_transformers()
     deploy_mod._reject_unsupported(rec)
+    if deploy_mod.speculative_requested(rec) and not deploy_mod.draft_model_id(rec):
+        raise SystemExit(
+            "recipe speculative: true needs a draft model.\n"
+            "Reason: assisted decode loads a smaller assistant beside the target.\n"
+            "Fix: set draft_model: <hub-id> (or speculative: { draft: <hub-id> })."
+        )
     obj = _objective(rec, method_name)
     texts, sources = _texts_from_data(src, rec)
     max_len = int(opt(rec, "max_seq_len", opt(rec, "context", 512, "llm"), "train", "llm") or 512)
@@ -836,6 +842,36 @@ def evaluate(model: dict, src: Path, rec: dict) -> tuple[float, int]:
     return sum(losses) / len(losses), len(losses)
 
 
+def _load_draft(draft_id: str, target):
+    """Load a smaller causal LM for Hugging Face assisted / speculative decode."""
+    torch = require_torch()
+    transformers = require_transformers()
+    dtype = default_dtype({})
+    load_kw: dict[str, Any] = {"trust_remote_code": True}
+    apply_pretrained_dtype(load_kw, dtype)
+    if device_kind() in ("cuda", "rocm"):
+        load_kw["device_map"] = "auto"
+    path = Path(draft_id)
+    src = str(path) if path.is_dir() else draft_id
+    try:
+        assistant = transformers.AutoModelForCausalLM.from_pretrained(src, **load_kw)
+    except Exception as e:
+        raise SystemExit(
+            f"failed to load draft_model {draft_id!r} for speculative decode: {e}"
+        ) from e
+    if device_kind() == "mps" and "device_map" not in load_kw:
+        assistant.to(torch_device())
+    # Prefer keeping assistant on the same device as the target when not sharded.
+    try:
+        tdev = next(target.parameters()).device
+        if "device_map" not in load_kw and tdev.type != "meta":
+            assistant.to(tdev)
+    except StopIteration:
+        pass
+    assistant.eval()
+    return assistant
+
+
 def generate(
     model: dict,
     prompt: str,
@@ -861,15 +897,50 @@ def generate(
     )
     if temp > 0:
         gen_kw["temperature"] = max(temp, 1e-5)
+
+    assistant = None
+    draft = None
+    if deploy_mod.speculative_requested(rec) or (model.get("serve_intent") or {}).get("speculative"):
+        draft = deploy_mod.draft_model_id(rec, model)
+        if not draft:
+            raise SystemExit(
+                "speculative decode requested but no draft_model in recipe or checkpoint.\n"
+                "Fix: set draft_model: <hub-id> (smaller causal LM, same tokenizer family)."
+            )
+        print(f"  serve  speculative decode with draft={draft}", file=sys.stderr)
+        assistant = _load_draft(draft, m)
+        gen_kw["assistant_model"] = assistant
+
     with torch.no_grad():
-        out = m.generate(**enc, **gen_kw)
+        try:
+            out = m.generate(**enc, **gen_kw)
+        except TypeError as e:
+            if assistant is not None and "assistant_model" in str(e):
+                raise SystemExit(
+                    "this transformers build does not support assistant_model. "
+                    "Upgrade transformers, or remove speculative: true."
+                ) from e
+            raise
+        except Exception as e:
+            if assistant is not None:
+                raise SystemExit(
+                    f"speculative decode failed ({e}). "
+                    "Draft and target usually need the same tokenizer / vocab. "
+                    "Pick a smaller sibling (e.g. Llama-3.2-1B draft for a 3B target), "
+                    "or remove speculative: true."
+                ) from e
+            raise
     text = tok.decode(out[0], skip_special_tokens=True)
-    return {
+    result = {
         "completion": text,
         "tokens": int(out.shape[-1]),
         "prompt": prompt,
         "device": device_kind(),
     }
+    if draft:
+        result["speculative"] = True
+        result["draft_model"] = draft
+    return result
 
 
 def write_inspect(train: Path, model: dict) -> str:
@@ -887,6 +958,9 @@ def write_inspect(train: Path, model: dict) -> str:
         lines.append(f"mask_rate: {model.get('mask_rate')}")
     if model.get("objective") in ("mtp", "multi-token", "multi-token-prediction"):
         lines.append(f"n_predict: {model.get('n_predict')}")
+    if model.get("draft_model") or (model.get("serve_intent") or {}).get("speculative"):
+        spec = (model.get("serve_intent") or {}).get("speculative") or {}
+        lines.append(f"draft_model: {model.get('draft_model') or spec.get('draft_model')}")
     lines.extend(
         [
             f"qlora_engine: {model.get('qlora_engine')}",

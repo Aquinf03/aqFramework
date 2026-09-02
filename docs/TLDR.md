@@ -47,7 +47,7 @@ eval:
 
 ## What is real vs not
 
-See [COMPLETED.md](../internals/COMPLETED.md) for what works. Unsupported knobs (`formats`, `speculative`, `paged_kv`, `objective: mtp`) error out — tracked in [TODO.md](../internals/TODO.md).
+See [COMPLETED.md](../internals/COMPLETED.md) for what works. Unsupported knobs (`formats`, `paged_kv`) error or stay inactive — tracked in [TODO.md](../internals/TODO.md).
 
 ## What we want from you
 
