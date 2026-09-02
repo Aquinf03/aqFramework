@@ -64,9 +64,11 @@ def data_file(train: Path, rec: dict) -> Path:
     src = (train / str(rel)).resolve()
     method = str(rec.get("method") or "")
     if src.is_dir():
-        if method == "cnn" or str(rec.get("family") or "") == "vision":
+        if method in ("cnn", "vit") or str(rec.get("family") or "") == "vision":
             return src
-        raise SystemExit(f"data path is a directory (use method: cnn for ImageFolder): {rel}")
+        raise SystemExit(
+            f"data path is a directory (use method: cnn|vit for ImageFolder): {rel}"
+        )
     if not src.is_file():
         raise SystemExit(f"data path not found: {rel}")
     return src

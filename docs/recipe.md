@@ -85,6 +85,36 @@ eval:
 
 Requires **Pillow**. Checkpoints store `model.pt` under `artifacts/checkpoints/<n>/`.
 
+## Vision (ViT / Swin / DeiT / BEiT)
+
+Same data layout as CNN. Aq-owned transformers under `neural/vit/` (not timm / HF).
+
+```yaml
+family: vision
+method: vit
+arch: vit-b/16        # vit-t/16 | vit-s/16 | vit-b/16
+                      # swin-t | swin-s | swin-b   (image_size % 32 == 0, usually 224)
+                      # deit-t | deit-s | deit-b  (CNN teacher distillation)
+                      # beit-b | beit-l           (VQ tokenizer → block MIM → classify)
+epochs: 10
+batch_size: 32
+lr: 1.0e-3
+weight_decay: 0.05
+image_size: 224
+# DeiT:
+# teacher: resnet50
+# teacher_epochs: 3
+# distill_alpha: 0.5
+# distill_temp: 3.0
+# BEiT:
+# vocab_size: 8192
+# vq_epochs / mim_epochs / classify_epochs / mask_ratio: 0.4
+data:
+  path: data/images
+eval:
+  metric: accuracy
+```
+
 ## Transformer
 
 ```yaml

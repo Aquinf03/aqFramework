@@ -22,7 +22,7 @@ def _require_pil():
         from PIL import Image
     except ImportError as e:
         raise SystemExit(
-            "Pillow is required for vision CNN.\n"
+            "Pillow is required for vision trains.\n"
             "Fix: pip install pillow   in the kernel venv."
         ) from e
     return Image

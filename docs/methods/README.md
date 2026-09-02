@@ -11,6 +11,7 @@ Install: `pip install -r aq/kernel/requirements.txt`
 | llm, lora, qlora | Hugging Face + PEFT | **`model:` required** |
 | transformer | Hugging Face | **`model:` required**; arch encoder/decoder/enc-dec |
 | cnn | **aq `neural/cnn`** | `family: vision`; arch lenet/alexnet/vgg/resnet/inception/efficientnet/convnext |
+| vit | **aq `neural/vit`** | `family: vision`; ViT / Swin / DeiT (CNN teacher) / BEiT (VQ + block MIM) |
 
 Custom override: `{train}/tools/<name>.py` with a `fit()` function wins over the kernel built-in.
 
@@ -25,6 +26,7 @@ Custom override: `{train}/tools/<name>.py` with a `fit()` function wins over the
 |-------|---------|
 | QLoRA | CUDA + bitsandbytes only |
 | Vision CNN | aq-owned modules (not torchvision.models); needs Pillow |
+| Vision ViT | aq-owned ViT/Swin/DeiT/BEiT; DeiT uses a warmed CNN teacher; BEiT trains a discrete VAE then blockwise MIM |
 | GPTQ/AWQ/GGUF/EXL2 | `formats:` — see [recipe](../recipe.md) |
 | Speculative | `draft_model:` + HF assisted decode |
 | Paged KV | Recorded; serve still standard HF cache |

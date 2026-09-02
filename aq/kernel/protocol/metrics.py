@@ -1,6 +1,6 @@
 """Live observability log: artifacts/metrics.jsonl (one JSON object per line).
 
-TTY → monitor-style live dashboard (protocol.train_tui).
+TTY → op-specific dashboard (train_tui / eval_tui).
 Pipes/CI → plain append tables (protocol.term_table).
 """
 
@@ -46,6 +46,13 @@ def _elapsed_ms() -> int | None:
     return int((time.perf_counter() - float(t0)) * 1000)
 
 
+def _reset_tuis() -> None:
+    from protocol import eval_tui, train_tui
+
+    train_tui.reset()
+    eval_tui.reset()
+
+
 def begin(
     train: Path,
     *,
@@ -55,9 +62,7 @@ def begin(
     **meta: Any,
 ) -> str:
     """Start a metrics session for this process. Returns run_id."""
-    from protocol import train_tui
-
-    train_tui.reset()
+    _reset_tuis()
     rid = run_id or datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
     cfg = parse_guard(recipe or {})
     _state["train"] = Path(train)
@@ -99,9 +104,7 @@ def begin(
 
 def end(**meta: Any) -> None:
     emit("end", **{k: v for k, v in meta.items() if v is not None})
-    from protocol import train_tui
-
-    train_tui.reset()
+    _reset_tuis()
     for k in list(_state.keys()):
         if k in ("step_header", "epoch_header"):
             _state[k] = False
@@ -142,32 +145,56 @@ def emit(event: str, **fields: Any) -> None:
 
 
 def _print_live(event: str, body: dict[str, Any]) -> None:
-    from protocol import train_tui
+    from protocol import eval_tui, train_tui
     from protocol.term_table import fmt_cell, print_kv, print_table, render_table
 
-    tui = train_tui.get()
-    if tui is not None and event in (
-        "start",
-        "info",
-        "step",
-        "epoch",
-        "end",
-        "error",
-        "guard.abort",
-    ):
-        if event == "start":
-            tui.on_start(body)
-        elif event == "info":
-            tui.on_info(body)
-        elif event == "step":
-            tui.on_step(body)
-        elif event == "epoch":
-            tui.on_epoch(body)
-        elif event == "end":
-            tui.on_end(body)
-        else:
-            tui.on_error({"error": body.get("error") or body.get("message") or event})
-        return
+    op = str(_state.get("op") or body.get("op") or "")
+
+    if op == "eval":
+        et = eval_tui.get()
+        if et is not None and event in (
+            "start",
+            "info",
+            "eval.probe",
+            "end",
+            "error",
+            "guard.abort",
+        ):
+            if event == "start":
+                et.on_start(body)
+            elif event == "info":
+                et.on_info(body)
+            elif event == "eval.probe":
+                et.on_probe(body)
+            elif event == "end":
+                et.on_end(body)
+            else:
+                et.on_error({"error": body.get("error") or body.get("message") or event})
+            return
+    elif op == "train":
+        tui = train_tui.get()
+        if tui is not None and event in (
+            "start",
+            "info",
+            "step",
+            "epoch",
+            "end",
+            "error",
+            "guard.abort",
+        ):
+            if event == "start":
+                tui.on_start(body)
+            elif event == "info":
+                tui.on_info(body)
+            elif event == "step":
+                tui.on_step(body)
+            elif event == "epoch":
+                tui.on_epoch(body)
+            elif event == "end":
+                tui.on_end(body)
+            else:
+                tui.on_error({"error": body.get("error") or body.get("message") or event})
+            return
 
     if event == "start":
         rows: list[tuple[str, Any]] = [("op", body.get("op") or "run")]
@@ -175,6 +202,8 @@ def _print_live(event: str, body: dict[str, Any]) -> None:
             rows.append(("method", body["method"]))
         if body.get("family"):
             rows.append(("family", body["family"]))
+        if body.get("checkpoint"):
+            rows.append(("checkpoint", body["checkpoint"]))
         print_kv(rows)
         return
 
