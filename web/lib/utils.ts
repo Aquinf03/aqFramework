@@ -44,10 +44,7 @@ export function constructMetadata({
       description,
       images: [image],
     },
-    icons: {
-      icon: "/icon.png",
-      apple: "/apple-icon.png",
-    },
+    icons: "/favicon.ico",
     metadataBase: new URL(siteConfig.url),
     authors: [{ name: siteConfig.name, url: siteConfig.url }],
     ...props,
