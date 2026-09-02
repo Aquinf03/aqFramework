@@ -33,8 +33,11 @@ eval:
   metric: loss
   min_score: null
 
-# Unsupported (errors on purpose): formats, paged_kv
-# Speculative decode (serve): speculative: true + draft_model: <smaller-hub-id>
+# Optional deploy:
+# formats: true              # try gguf (+ gptq/awq/exl2 if tools present)
+# formats: [gguf]            # portable; needs gguf pip package (or AQUIN_LLAMA_CPP)
+# draft_model: ...           # with speculative: true
+# Unsupported: paged_kv (recorded, not active)
 # Optional: guard.safety / guard.leak
 # Optional plot (matplotlib charts after train or via aq plot):
 # plot:

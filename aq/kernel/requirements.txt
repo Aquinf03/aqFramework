@@ -16,5 +16,8 @@ xgboost>=2.0.0
 lightgbm>=4.0.0
 catboost>=1.2
 matplotlib>=3.8.0
+gguf>=0.10.0
 # optional:
 # bitsandbytes>=0.43.0   # CUDA only, for QLoRA
+# auto-gptq / optimum    # CUDA, for formats: gptq
+# autoawq                # CUDA, for formats: awq

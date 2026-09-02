@@ -736,8 +736,14 @@ def fit(src: Path, rec: dict, *, method_name: str | None = None) -> dict:
             "continue",
         ) else "continued-pretrain"
 
-    # Deploy knobs that we actually support (prune / aquant)
-    if opt(rec, "prune", None) is not None or opt(rec, "quant", None) is not None:
+    # Deploy knobs (prune / aquant / formats)
+    from backends.formats_export import formats_requested
+
+    if (
+        opt(rec, "prune", None) is not None
+        or opt(rec, "quant", None) is not None
+        or formats_requested(rec)
+    ):
         deploy_target = model.inner if hasattr(model, "inner") else model
         deploy_mod.apply_deploy(deploy_target, tok, slot, rec, manifest)
 

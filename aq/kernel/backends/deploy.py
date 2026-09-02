@@ -47,6 +47,11 @@ def apply_deploy(model, tok, slot: Path, rec: dict, manifest: dict) -> dict:
         qmeta["note"] = "aq weight dump for inspection/export; serve still loads HF weights"
         deploy["quant"] = qmeta
 
+    from backends.formats_export import export_formats, formats_requested
+
+    if formats_requested(rec):
+        deploy["formats"] = export_formats(model, tok, slot, rec, manifest)
+
     if deploy:
         (slot / "deploy.json").write_text(json.dumps(deploy, indent=2) + "\n", encoding="utf-8")
         manifest["deploy"] = deploy
@@ -54,16 +59,15 @@ def apply_deploy(model, tok, slot: Path, rec: dict, manifest: dict) -> dict:
             manifest["quant"] = deploy["quant"]
         if "prune" in deploy:
             manifest["prune"] = deploy["prune"]
+        if "formats" in deploy:
+            manifest["formats"] = deploy["formats"]
     return manifest
 
 
 def _reject_unsupported(rec: dict) -> None:
     """Hard failures for knobs that would fake export/deploy work."""
-    if opt(rec, "formats", False, "deploy", "llm"):
-        raise SystemExit(
-            "recipe formats: true is not supported yet "
-            "(no real GPTQ/AWQ/GGUF/EXL2 exporter). Remove it or implement a converter."
-        )
+    # formats: true is handled by formats_export (real converters / clear skips)
+    return
 
 
 def speculative_requested(rec: dict) -> bool:

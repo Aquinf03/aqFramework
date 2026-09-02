@@ -23,7 +23,7 @@ Custom override: `{train}/tools/<name>.py` with a `fit()` function wins over the
 | Claim | Reality |
 |-------|---------|
 | QLoRA | CUDA + bitsandbytes only |
-| GPTQ/AWQ/GGUF/EXL2 | Not implemented (`formats: true` errors) |
+| GPTQ/AWQ/GGUF/EXL2 | `formats: true` or `formats: [gguf]` — see [recipe](../recipe.md) |
 | Speculative / paged KV | Not implemented (errors if set) |
 | MTP heads | Not implemented (`objective: mtp` errors) |
 | `size:` | Label only; does not download Llama/Phi/etc. |

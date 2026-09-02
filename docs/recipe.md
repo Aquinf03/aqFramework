@@ -55,8 +55,9 @@ Rules:
 - **QLoRA** fails on MPS/CPU/ROCm without CUDA bitsandbytes.
 - **`objective: mtp`** — multi-token prediction; set **`n_predict: 2`** (or higher). Auxiliary heads on a causal LM.
 - **`speculative: true`** — serve-time assisted decode. Requires **`draft_model: <hub-id>`** (smaller causal LM, same tokenizer family). Train records the draft; `aq serve` / generate uses Hugging Face `assistant_model`.
+- **`formats: true`** / **`formats: [gguf]`** — post-train weight packs under the checkpoint `formats/` dir. Always writes merged **HF** weights; **GGUF** via built-in Llama-family writer (`pip install gguf`) or `AQUIN_LLAMA_CPP`; **GPTQ/AWQ** need CUDA + optional packages; **EXL2** needs `AQUIN_EXL2_CONVERT`.
 - **`paged_kv: true`** — recorded at train; `aq serve` still uses standard HF KV cache (not vLLM paged attention yet).
-- These **fail closed** (not faked): `formats: true`.
+- These **fail closed** when a requested format cannot actually be produced.
 
 ## Transformer
 

@@ -47,7 +47,7 @@ eval:
 
 ## What is real vs not
 
-See [COMPLETED.md](../internals/COMPLETED.md) for what works. Unsupported knobs (`formats`, `paged_kv`) error or stay inactive — tracked in [TODO.md](../internals/TODO.md).
+See [COMPLETED.md](../internals/COMPLETED.md) for what works. `paged_kv` stays inactive until real paged attention lands — tracked in [TODO.md](../internals/TODO.md).
 
 ## What we want from you
 

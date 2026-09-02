@@ -10,7 +10,7 @@ Internal checklist: [COMPLETED.md](../internals/COMPLETED.md) (honest ticks) and
 - QLoRA on **CUDA** with bitsandbytes
 - Tokenizers: HF pin + optional local BPE/Unigram/WordPiece/byte
 - Devices: CUDA / MPS / ROCm / CPU for supported paths
-- Fail-closed rejects for fake deploy theater (`formats`, `paged_kv`)
+- Fail-closed rejects for fake deploy theater (`paged_kv` inactive; missing format tools)
 
 ## Not done
 
