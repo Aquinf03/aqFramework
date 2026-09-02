@@ -7,6 +7,7 @@ Disable with AQ_TUI=0.
 from __future__ import annotations
 
 import os
+import shutil
 import sys
 import time
 from typing import Any
@@ -18,7 +19,7 @@ _RESET = "\033[0m"
 _DIM = "\033[2m"
 _BOLD = "\033[1m"
 _GREEN = "\033[32m"
-_MAGENTA_BG = "\033[48;5;98m\033[97m"  # purple-ish highlight like the inspo
+_YELLOW_BG = "\033[48;5;178m\033[30m"  # warm yellow highlight
 _HIDE = "\033[?25l"
 _SHOW = "\033[?25h"
 
@@ -30,6 +31,13 @@ def enabled() -> bool:
         return sys.stderr.isatty()
     except Exception:
         return False
+
+
+def _term_width() -> int:
+    try:
+        return max(60, shutil.get_terminal_size(fallback=(100, 24)).columns)
+    except Exception:
+        return 100
 
 
 class TrainTui:
@@ -92,87 +100,122 @@ class TrainTui:
         empty = "." * (width - n)
         return f"[{_GREEN}{filled}{_RESET}{_DIM}{empty}{_RESET}]"
 
-    def _progress(self, label: str, cur: Any, total: Any, width: int = 16) -> str:
+    def _progress(self, label: str, cur: Any, total: Any, bar_w: int = 16) -> str:
         try:
             c = float(cur)
             t = float(total) if total not in (None, "", 0) else None
         except (TypeError, ValueError):
             return f"{label}  {fmt_cell(cur)}"
         if t and t > 0:
-            return f"{label}  {self._bar(c / t, width)}  {fmt_cell(int(c))}/{fmt_cell(int(t))}"
+            return f"{label}  {self._bar(c / t, bar_w)}  {fmt_cell(int(c))}/{fmt_cell(int(t))}"
         return f"{label}  {fmt_cell(cur)}"
+
+    def _kv(self, key: str, val: Any, key_w: int = 8) -> str:
+        return f"{_DIM}{key.ljust(key_w)}{_RESET} {fmt_cell(val)}"
 
     def _frame(self) -> list[str]:
         info = self.info
         lat = self.latest
-        elapsed = lat.get("elapsed_ms")
-        ago = ""
-        if elapsed is not None:
-            ago = f"elapsed {int(elapsed)}ms"
-        lines: list[str] = []
-        lines.append(f"  {_DIM}aq train{f'  ·  {ago}' if ago else ''}{_RESET}")
+        tw = _term_width()
+        # leave a little margin
+        inner = tw - 2
 
-        # top stats — three columns like the monitor
-        left = [
-            self._progress(
-                "epoch",
-                lat.get("epoch"),
-                info.get("epochs") or lat.get("epochs"),
-                14,
-            ),
-            self._progress(
-                "step ",
-                lat.get("step"),
-                lat.get("steps") or info.get("steps"),
-                14,
-            ),
-        ]
+        method = info.get("method")
+        family = info.get("family")
+        title_bits = ["aq train"]
+        if method or family:
+            title_bits.append(
+                f"{fmt_cell(method)}/{fmt_cell(family)}"
+                if method and family
+                else fmt_cell(method or family)
+            )
+        if lat.get("elapsed_ms") is not None:
+            title_bits.append(f"elapsed {int(lat['elapsed_ms'])}ms")
+        lines: list[str] = [f"  {_DIM}{'  ·  '.join(title_bits)}{_RESET}"]
+
+        # columns: progress | train | val/device | run config
         mid = [
-            f"loss   {fmt_cell(lat.get('loss'))}",
-            f"acc    {fmt_cell(lat.get('acc'))}",
-            f"lr     {fmt_cell(lat.get('lr'))}",
+            self._kv("loss", lat.get("loss")),
+            self._kv("acc", lat.get("acc")),
+            self._kv("lr", lat.get("lr")),
         ]
         right = [
-            f"val_loss  {fmt_cell(lat.get('val_loss'))}",
-            f"val_acc   {fmt_cell(lat.get('val_acc'))}",
-            f"device    {fmt_cell(info.get('device') or '—')}",
+            self._kv("val_loss", lat.get("val_loss"), 9),
+            self._kv("val_acc", lat.get("val_acc"), 9),
+            self._kv("device", info.get("device") or "—", 9),
         ]
-        # pad columns
+        size_v = info.get("image_size")
+        if size_v is None:
+            size_v = info.get("size")
+        has_run = any(info.get(k) is not None for k in ("arch", "classes", "images", "image_size", "size"))
+        run = [
+            self._kv("arch", info.get("arch")),
+            self._kv("classes", info.get("classes")),
+            self._kv("images", info.get("images"))
+            if size_v is None
+            else (
+                self._kv("images", info.get("images"))
+                if info.get("images") is not None
+                else self._kv("size", size_v)
+            ),
+        ]
+        if size_v is not None and info.get("images") is not None:
+            run[2] = f"{self._kv('images', info.get('images'))}  {self._kv('size', size_v, 4)}"
+
+        cols_meta = [mid, right] + ([run] if has_run else [])
+        n_cols = 1 + len(cols_meta)
+        sep_w = 3 * (n_cols - 1)
+        usable = max(40, inner - sep_w)
+        weights = [3, 2, 2, 3][:n_cols]
+        wsum = sum(weights)
+        col_ws = [max(16, usable * w // wsum) for w in weights]
+        col_ws[-1] += usable - sum(col_ws)
+
+        # size progress bars to fit the progress column (never truncate mid-count)
+        # "epoch  [BAR]  12/100" → fixed overhead ≈ 6 + 2 + 2 + 4..7
+        left_w = col_ws[0]
+        count_room = 9  # "999/9999"
+        overhead = 6 + 2 + 2 + count_room  # label + pads + brackets space + counts
+        bar_w = max(8, min(24, left_w - overhead))
+        left = [
+            self._progress("epoch", lat.get("epoch"), info.get("epochs") or lat.get("epochs"), bar_w),
+            self._progress("step ", lat.get("step"), lat.get("steps") or info.get("steps"), bar_w),
+            "",
+        ]
+        cols = [left] + cols_meta
+
         def pad_col(rows: list[str], w: int) -> list[str]:
-            # strip ansi for width — approximate
             out = []
             for r in rows:
-                visible = _visible_len(r)
-                out.append(r + " " * max(0, w - visible))
+                vis = _visible_len(r)
+                if vis > w:
+                    out.append(_truncate(r, w))
+                else:
+                    out.append(r + " " * (w - vis))
             while len(out) < 3:
                 out.append(" " * w)
             return out
 
-        lw, mw, rw = 36, 22, 24
-        L, M, R = pad_col(left, lw), pad_col(mid, mw), pad_col(right, rw)
+        padded = [pad_col(c, col_ws[i]) for i, c in enumerate(cols)]
+        sep = f" {_DIM}|{_RESET} "
         for i in range(3):
-            lines.append(f"  {L[i]} {_DIM}|{_RESET} {M[i]} {_DIM}|{_RESET} {R[i]}")
-
-        # meta strip
-        meta_bits = []
-        for k in ("method", "family", "arch", "classes", "images", "image_size", "size"):
-            if info.get(k) is not None:
-                label = "size" if k in ("image_size", "size") else k
-                meta_bits.append(f"{label} {fmt_cell(info[k])}")
-        if meta_bits:
-            lines.append(f"  {_DIM}{'  ·  '.join(meta_bits)}{_RESET}")
+            lines.append("  " + sep.join(p[i] for p in padded))
 
         if info.get("error"):
             lines.append(f"  {_BOLD}error  {info['error']}{_RESET}")
 
-        # step table
+        # step table — stretch to full inner width
         headers = ["step", "loss", "lr", "acc", "epoch", "time"]
         rows = self.steps[-self.max_rows :]
-        grid = [headers]
+        grid: list[list[str]] = [headers]
         for s in rows:
             step_n = s.get("step")
             total = s.get("steps") or info.get("steps")
-            step_label = f"{step_n}/{total}" if total not in (None, "") and step_n is not None else fmt_cell(step_n)
+            step_label = (
+                f"{step_n}/{total}"
+                if total not in (None, "") and step_n is not None
+                else fmt_cell(step_n)
+            )
             grid.append(
                 [
                     step_label,
@@ -183,29 +226,53 @@ class TrainTui:
                     f"{int(s['elapsed_ms'])}ms" if s.get("elapsed_ms") is not None else "—",
                 ]
             )
-        widths = [0] * len(headers)
+
+        n = len(headers)
+        min_w = [0] * n
         for row in grid:
             for i, c in enumerate(row):
-                widths[i] = max(widths[i], len(str(c)))
+                min_w[i] = max(min_w[i], len(str(c)))
+
+        # gaps between columns (2 spaces each) + highlight padding (2 spaces inside bg)
+        gap = 2
+        gaps_total = gap * (n - 1)
+        # highlight adds one space each side — account so full row fits inner
+        highlight_pad = 2
+        budget = max(sum(min_w) + gaps_total, inner - highlight_pad)
+        extra = budget - (sum(min_w) + gaps_total)
+        widths = list(min_w)
+        if extra > 0:
+            # spread leftover evenly so the table fills the terminal
+            base, rem = divmod(extra, n)
+            for i in range(n):
+                widths[i] += base + (1 if i < rem else 0)
 
         def fmt_row(cells: list[str], highlight: bool = False) -> str:
             parts = []
             for i, c in enumerate(cells):
                 w = widths[i]
                 parts.append(c.rjust(w) if i else c.ljust(w))
-            body = "  ".join(parts)
+            body = (" " * gap).join(parts)
+            # pad body to exact budget so highlight spans full table width
+            vis = len(body)
+            if vis < budget:
+                body = body + " " * (budget - vis)
+            elif vis > budget:
+                body = body[:budget]
             if highlight:
-                return f"  {_MAGENTA_BG} {body} {_RESET}"
+                return f"  {_YELLOW_BG} {body} {_RESET}"
             return f"  {body}"
 
         lines.append("")
         lines.append(fmt_row(headers))
-        lines.append(f"  {_DIM}{'  '.join('─' * w for w in widths)}{_RESET}")
+        rule = (" " * gap).join("─" * w for w in widths)
+        if len(rule) < budget:
+            rule = rule + "─" * (budget - len(rule))
+        lines.append(f"  {_DIM}{rule[:budget]}{_RESET}")
         for i, row in enumerate(grid[1:]):
-            hl = i == len(grid) - 2  # last data row
+            hl = i == len(grid) - 2
             lines.append(fmt_row(row, highlight=hl))
 
-        # latest epoch line
         if self.epochs:
             e = self.epochs[-1]
             lines.append(
@@ -228,7 +295,7 @@ class TrainTui:
     def _draw(self, force: bool = False) -> None:
         now = time.perf_counter()
         if not force and now - self._last_draw < 0.05:
-            return  # ~20fps cap
+            return
         self._last_draw = now
         frame = self._frame()
         out = sys.stderr
@@ -236,10 +303,8 @@ class TrainTui:
             out.write(_HIDE)
             self._started = True
         elif self._lines > 0:
-            # move cursor up and clear below
             out.write(f"\033[{self._lines}A\033[J")
-        text = "\n".join(frame) + "\n"
-        out.write(text)
+        out.write("\n".join(frame) + "\n")
         out.flush()
         self._lines = len(frame)
 
@@ -249,7 +314,6 @@ def _visible_len(s: str) -> int:
     i = 0
     while i < len(s):
         if s[i] == "\033":
-            # skip CSI
             i += 1
             while i < len(s) and s[i] != "m":
                 i += 1
@@ -258,6 +322,28 @@ def _visible_len(s: str) -> int:
         n += 1
         i += 1
     return n
+
+
+def _truncate(s: str, w: int) -> str:
+    """Truncate to visible width w, preserving ANSI."""
+    if _visible_len(s) <= w:
+        return s + " " * (w - _visible_len(s))
+    out = []
+    n = 0
+    i = 0
+    while i < len(s) and n < w:
+        if s[i] == "\033":
+            j = i + 1
+            while j < len(s) and s[j] != "m":
+                j += 1
+            out.append(s[i : j + 1])
+            i = j + 1
+            continue
+        out.append(s[i])
+        n += 1
+        i += 1
+    out.append(_RESET)
+    return "".join(out)
 
 
 _tui: TrainTui | None = None
