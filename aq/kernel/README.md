@@ -24,6 +24,7 @@ pip install -r aq/kernel/requirements.txt
 - Unsupported: `paged_kv` (recorded; serve not paged yet). `objective: mtp` needs `n_predict >= 2`. `speculative: true` needs `draft_model:`. `formats:` exports real packs (GGUF / GPTQ / AWQ / EXL2) — see recipe docs.
 - Vision: `family: vision` / `method: cnn` — aq-owned CNNs under `neural/cnn/` (Pillow required).
 - Vision: `family: vision` / `method: vit` — aq-owned ViT / Swin / DeiT / BEiT under `neural/vit/`.
+- VLM: `family: vlm` / `method: clip|llava|flamingo` — CLIP/SigLIP aq-owned; LLaVA/Flamingo aq connectors + causal LM.
 - Devices: CUDA, MPS, ROCm, CPU.
 
 See [docs/recipe.md](../../docs/recipe.md) and [internals/COMPLETED.md](../../internals/COMPLETED.md).

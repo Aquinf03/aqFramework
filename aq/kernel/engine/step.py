@@ -69,6 +69,10 @@ def data_file(train: Path, rec: dict) -> Path:
         raise SystemExit(
             f"data path is a directory (use method: cnn|vit for ImageFolder): {rel}"
         )
+    # vlm methods need files (pairs / chat jsonl)
+    if method in ("clip", "llava", "flamingo") and not src.is_file():
+        raise SystemExit(f"vlm data.path must be a file (jsonl/csv of pairs or chat): {rel}")
+
     if not src.is_file():
         raise SystemExit(f"data path not found: {rel}")
     return src

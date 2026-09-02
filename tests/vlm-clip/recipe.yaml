@@ -1,0 +1,24 @@
+family: vlm
+method: clip
+arch: clip
+vision: vit-t/16
+image_size: 128
+embed_dim: 256
+text_width: 192
+text_heads: 3
+text_layers: 4
+context_length: 32
+max_vocab: 4096
+epochs: 3
+batch_size: 4
+lr: 1.0e-3
+weight_decay: 0.05
+val_frac: 0.2
+seed: 0
+data:
+  path: data/pairs.jsonl
+  image: image
+  text: text
+eval:
+  metric: recall@1
+  min_score: null

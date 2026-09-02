@@ -1,0 +1,406 @@
+"""Generative VLMs — LLaVA / Flamingo / GPT-4V-style (aq vision connector + HF LM)."""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import Any
+
+from backends.device import device_kind, torch_device
+from backends.deps import require_torch
+from backends.hf_lm import resolve_model_id
+from backends.recipe_opt import opt
+from backends.tok_train import load_hf_tokenizer
+from backends.vlm_data import load_image_tensor, resolve_chat, split_pairs
+from neural.vlm.factory import resolve_gen_arch
+from neural.vlm.flamingo import FlamingoForCausalLM
+from neural.vlm.llava import LLaVAForCausalLM
+from protocol import metrics as aq_metrics
+
+IMAGE_TOKEN = "<image>"
+
+
+def fit(src: Path, rec: dict) -> dict:
+    torch = require_torch()
+    from torch.utils.data import DataLoader, Dataset
+    from transformers import AutoModelForCausalLM, Trainer, TrainingArguments
+
+    train_root = Path(rec["_train"]) if rec.get("_train") else src.parent
+    arch_raw = str(opt(rec, "arch", "llava", "train", "vlm", "llava") or "llava")
+    arch_key = resolve_gen_arch(arch_raw)
+    vision_arch = str(opt(rec, "vision", "vit-b/16", "train", "vlm", "llava") or "vit-b/16")
+    image_size = int(opt(rec, "image_size", 224, "train", "vlm", "llava") or 224)
+    model_id = resolve_model_id(rec)
+    # allow train-relative local LM paths
+    local = train_root / model_id
+    if local.is_dir() and (local / "config.json").is_file():
+        model_id = str(local.resolve())
+    elif not Path(model_id).is_dir() and "/" not in model_id and not model_id.startswith("."):
+        # hub id — leave as-is
+        pass
+    elif Path(model_id).is_dir():
+        model_id = str(Path(model_id).resolve())
+
+    freeze_vision = bool(opt(rec, "freeze_vision", True, "train", "vlm", "llava"))
+    freeze_lm = bool(
+        opt(rec, "freeze_lm", arch_key == "flamingo", "train", "vlm", "llava")
+    )
+    max_len = int(opt(rec, "max_seq_len", 512, "train", "vlm", "llava") or 512)
+    batch = int(opt(rec, "batch_size", 1, "train", "vlm", "llava") or 1)
+    lr = float(opt(rec, "lr", 2e-5, "train", "vlm", "llava") or 2e-5)
+    epochs = float(opt(rec, "epochs", 1, "train", "vlm", "llava") or 1)
+    steps = opt(rec, "steps", None, "train", "vlm", "llava")
+    seed = int(opt(rec, "seed", 0, "train", "vlm", "llava") or 0)
+    val_frac = float(opt(rec, "val_frac", 0.0, "train", "vlm", "llava") or 0.0)
+    cross_every = int(opt(rec, "cross_every", 1, "train", "vlm", "llava") or 1)
+    num_latents = int(opt(rec, "num_latents", 64, "train", "vlm", "llava") or 64)
+    resampler_depth = int(opt(rec, "resampler_depth", 6, "train", "vlm", "llava") or 6)
+
+    rows = resolve_chat(src, rec)
+    train_rows, val_rows = split_pairs(rows, val_frac, seed)
+
+    slot = _ckpt_slot(train_root)
+    tok, _ = load_hf_tokenizer(model_id, None)
+    if tok.pad_token is None:
+        tok.pad_token = tok.eos_token
+    # register image token
+    if IMAGE_TOKEN not in tok.get_vocab():
+        tok.add_special_tokens({"additional_special_tokens": [IMAGE_TOKEN]})
+    image_token_id = tok.convert_tokens_to_ids(IMAGE_TOKEN)
+
+    dtype = torch.float32
+    lang = AutoModelForCausalLM.from_pretrained(model_id, torch_dtype=dtype)
+    lang.resize_token_embeddings(len(tok))
+
+    if arch_key == "flamingo":
+        model = FlamingoForCausalLM(
+            lang,
+            vision_arch=vision_arch,
+            img_size=image_size,
+            num_latents=num_latents,
+            resampler_depth=resampler_depth,
+            cross_every=cross_every,
+            freeze_vision=freeze_vision,
+            freeze_lm=freeze_lm,
+        )
+    else:
+        model = LLaVAForCausalLM(
+            lang,
+            vision_arch=vision_arch,
+            img_size=image_size,
+            freeze_vision=freeze_vision,
+            freeze_lm=freeze_lm,
+        )
+
+    device = torch_device()
+    model.to(device)
+
+    aq_metrics.event(
+        "info",
+        arch=arch_key,
+        vision=vision_arch,
+        model=model_id,
+        samples=len(rows),
+        image_size=image_size,
+        freeze_vision=freeze_vision,
+        freeze_lm=freeze_lm,
+        device=device_kind(),
+        epochs=epochs,
+    )
+
+    class ChatDS(Dataset):
+        def __init__(self, items):
+            self.items = items
+
+        def __len__(self):
+            return len(self.items)
+
+        def __getitem__(self, i):
+            row = self.items[i]
+            img = load_image_tensor(row["image"], image_size, train=True)
+            prompt_parts = []
+            answer = ""
+            for t in row["turns"]:
+                if t["role"] == "user":
+                    content = t["content"]
+                    if IMAGE_TOKEN not in content:
+                        content = IMAGE_TOKEN + "\n" + content
+                    prompt_parts.append("User: " + content)
+                else:
+                    answer = t["content"]
+            prompt = "\n".join(prompt_parts) + "\nAssistant:"
+            full = prompt + " " + answer
+            enc_full = tok(full, truncation=True, max_length=max_len, padding=False)
+            enc_prompt = tok(prompt, truncation=True, max_length=max_len, padding=False)
+            input_ids = enc_full["input_ids"]
+            labels = list(input_ids)
+            plen = len(enc_prompt["input_ids"])
+            for j in range(min(plen, len(labels))):
+                labels[j] = -100
+            return {
+                "input_ids": input_ids,
+                "attention_mask": enc_full["attention_mask"],
+                "labels": labels,
+                "images": img,
+                "image_token_id": image_token_id,
+            }
+
+    def collate(features: list[dict]) -> dict[str, Any]:
+        # For LLaVA: keep padded ids; model expands image token
+        # For Flamingo: no image-token expansion — images via cross-attn
+        pad_id = tok.pad_token_id
+        max_l = max(len(f["input_ids"]) for f in features)
+        input_ids, attention_mask, labels, images = [], [], [], []
+        for f in features:
+            n = max_l - len(f["input_ids"])
+            input_ids.append(f["input_ids"] + [pad_id] * n)
+            attention_mask.append(f["attention_mask"] + [0] * n)
+            labels.append(f["labels"] + [-100] * n)
+            images.append(f["images"])
+        batch_out = {
+            "input_ids": torch.tensor(input_ids, dtype=torch.long),
+            "attention_mask": torch.tensor(attention_mask, dtype=torch.long),
+            "labels": torch.tensor(labels, dtype=torch.long),
+            "images": torch.stack(images, 0),
+        }
+        if arch_key != "flamingo":
+            batch_out["image_token_id"] = image_token_id
+        return batch_out
+
+    train_ds = ChatDS(train_rows)
+    max_steps = int(steps) if steps is not None else -1
+    args = TrainingArguments(
+        output_dir=str(slot / "hf" / "trainer"),
+        per_device_train_batch_size=batch,
+        learning_rate=lr,
+        num_train_epochs=epochs if max_steps < 0 else 1.0,
+        max_steps=max_steps,
+        logging_steps=1,
+        save_strategy="no",
+        report_to=[],
+        remove_unused_columns=False,
+        dataloader_pin_memory=False,
+        seed=seed,
+    )
+
+    class _Callback:
+        def __init__(self):
+            self.step = 0
+
+        def on_log(self, args, state, control, logs=None, **kwargs):
+            if not logs:
+                return
+            self.step = int(state.global_step)
+            aq_metrics.step(
+                step=self.step,
+                loss=logs.get("loss"),
+                lr=logs.get("learning_rate", lr),
+                epoch=state.epoch,
+            )
+
+    # simple Trainer subclass to pass custom forward kwargs
+    class VLMTrainer(Trainer):
+        def compute_loss(self, model, inputs, return_outputs=False, **kwargs):
+            outputs = model(**inputs)
+            loss = outputs.loss
+            return (loss, outputs) if return_outputs else loss
+
+    trainer = VLMTrainer(
+        model=model,
+        args=args,
+        train_dataset=train_ds,
+        data_collator=collate,
+    )
+    # hook metrics via callback
+    from transformers import TrainerCallback
+
+    class MetricsCB(TrainerCallback):
+        def on_log(self, args, state, control, logs=None, **kwargs):
+            if logs and "loss" in logs:
+                aq_metrics.step(
+                    step=int(state.global_step),
+                    loss=logs.get("loss"),
+                    lr=logs.get("learning_rate", lr),
+                    epoch=state.epoch,
+                )
+
+    trainer.add_callback(MetricsCB())
+    trainer.train()
+
+    # save
+    lang_dir = slot / "model"
+    lang_dir.mkdir(parents=True, exist_ok=True)
+    model.lang_model.save_pretrained(lang_dir)
+    tok.save_pretrained(lang_dir)
+    connector = {
+        "vision": model.vision.state_dict(),
+        "arch_key": arch_key,
+        "vision_arch": vision_arch,
+        "image_size": image_size,
+        "image_token": IMAGE_TOKEN,
+        "freeze_vision": freeze_vision,
+        "freeze_lm": freeze_lm,
+    }
+    if arch_key == "flamingo":
+        connector["vision_proj"] = model.vision_proj.state_dict()
+        connector["resampler"] = model.resampler.state_dict()
+        connector["gated_xattn"] = model.gated_xattn.state_dict()
+        connector["num_latents"] = num_latents
+        connector["cross_every"] = cross_every
+    else:
+        connector["projector"] = model.projector.state_dict()
+    torch.save(connector, slot / "vlm_connector.pt")
+
+    last_loss = None
+    for row in reversed(trainer.state.log_history or []):
+        if row.get("loss") is not None:
+            last_loss = float(row["loss"])
+            break
+        if row.get("train_loss") is not None:
+            last_loss = float(row["train_loss"])
+            break
+    meta = {
+        "kind": arch_key,  # llava | flamingo — method loader key
+        "backend": "aq-neural+transformers",
+        "task": "multimodal-sft",
+        "family": "vlm",
+        "arch": arch_raw,
+        "arch_key": arch_key,
+        "vision_arch": vision_arch,
+        "model_id": model_id,
+        "model_path": str(lang_dir.relative_to(train_root)),
+        "connector_path": str((slot / "vlm_connector.pt").relative_to(train_root)),
+        "image_size": image_size,
+        "image_token": IMAGE_TOKEN,
+        "n_samples": len(rows),
+        "n_train": len(train_rows),
+        "n_val": len(val_rows),
+        "steps": int(trainer.state.global_step),
+        "train_loss": last_loss,
+        "lr": lr,
+        "device": device_kind(),
+        "weights_dir": str(slot.relative_to(train_root)),
+        "freeze_vision": freeze_vision,
+        "freeze_lm": freeze_lm,
+    }
+    (slot / "vlm_meta.json").write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
+    return meta
+
+
+def _ckpt_slot(train: Path) -> Path:
+    dest = train / "artifacts" / "checkpoints"
+    dest.mkdir(parents=True, exist_ok=True)
+    n = 1 + sum(1 for p in dest.glob("*.json") if p.name not in ("last.json",) and p.is_file())
+    n = max(n, 1 + sum(1 for p in dest.iterdir() if p.is_dir() and p.name.isdigit()))
+    slot = dest / str(n)
+    slot.mkdir(parents=True, exist_ok=True)
+    return slot
+
+
+def _load(train: Path, model: dict):
+    torch = require_torch()
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+
+    lang_rel = model.get("model_path")
+    conn_rel = model.get("connector_path")
+    if not lang_rel or not conn_rel:
+        raise SystemExit("checkpoint missing model_path / connector_path")
+    tok = AutoTokenizer.from_pretrained(train / str(lang_rel))
+    lang = AutoModelForCausalLM.from_pretrained(train / str(lang_rel))
+    blob = torch.load(train / str(conn_rel), map_location="cpu", weights_only=False)
+    arch_key = blob.get("arch_key") or model.get("arch_key") or "llava"
+    vision_arch = blob.get("vision_arch") or "vit-b/16"
+    image_size = int(blob.get("image_size") or 224)
+    if arch_key == "flamingo":
+        net = FlamingoForCausalLM(
+            lang,
+            vision_arch=vision_arch,
+            img_size=image_size,
+            num_latents=int(blob.get("num_latents") or 64),
+            cross_every=int(blob.get("cross_every") or 1),
+            freeze_vision=True,
+            freeze_lm=True,
+        )
+        net.vision.load_state_dict(blob["vision"])
+        net.vision_proj.load_state_dict(blob["vision_proj"])
+        net.resampler.load_state_dict(blob["resampler"])
+        net.gated_xattn.load_state_dict(blob["gated_xattn"])
+    else:
+        net = LLaVAForCausalLM(
+            lang, vision_arch=vision_arch, img_size=image_size, freeze_vision=True, freeze_lm=True
+        )
+        net.vision.load_state_dict(blob["vision"])
+        net.projector.load_state_dict(blob["projector"])
+    net.to(torch_device())
+    net.eval()
+    image_token_id = tok.convert_tokens_to_ids(blob.get("image_token") or IMAGE_TOKEN)
+    return net, tok, image_size, arch_key, image_token_id
+
+
+def evaluate(model: dict, src: Path, rec: dict) -> tuple[float, int]:
+    torch = require_torch()
+    train = Path(rec["_train"]) if rec.get("_train") else src.parent
+    net, tok, image_size, arch_key, image_token_id = _load(train, model)
+    rows = resolve_chat(src, rec)
+    device = torch_device()
+    total_loss = 0.0
+    n = 0
+    max_len = int(opt(rec, "max_seq_len", 512, "train", "vlm", "llava") or 512)
+    for row in rows:
+        img = load_image_tensor(row["image"], image_size, train=False).unsqueeze(0).to(device)
+        prompt_parts = []
+        answer = ""
+        for t in row["turns"]:
+            if t["role"] == "user":
+                content = t["content"]
+                if IMAGE_TOKEN not in content:
+                    content = IMAGE_TOKEN + "\n" + content
+                prompt_parts.append("User: " + content)
+            else:
+                answer = t["content"]
+        prompt = "\n".join(prompt_parts) + "\nAssistant:"
+        full = prompt + " " + answer
+        enc_full = tok(full, truncation=True, max_length=max_len, return_tensors="pt")
+        enc_prompt = tok(prompt, truncation=True, max_length=max_len, return_tensors="pt")
+        labels = enc_full["input_ids"].clone()
+        labels[:, : enc_prompt["input_ids"].shape[1]] = -100
+        kwargs = {
+            "input_ids": enc_full["input_ids"].to(device),
+            "attention_mask": enc_full["attention_mask"].to(device),
+            "labels": labels.to(device),
+            "images": img,
+        }
+        if arch_key != "flamingo":
+            kwargs["image_token_id"] = image_token_id
+        with torch.no_grad():
+            out = net(**kwargs)
+        total_loss += float(out.loss.item())
+        n += 1
+    metric = str((rec.get("eval") or {}).get("metric") or "loss").lower()
+    avg = total_loss / max(1, n)
+    if metric in ("loss", "nll", "ce"):
+        return avg, n
+    raise SystemExit(f"vlm generative eval metric must be loss, got {metric!r}")
+
+
+def write_inspect(train: Path, model: dict) -> str:
+    lines = [
+        "# inspect",
+        "",
+        f"backend: {model.get('backend')}",
+        f"family: {model.get('family')}",
+        f"arch: {model.get('arch')} ({model.get('arch_key')})",
+        f"vision: {model.get('vision_arch')}",
+        f"lm: {model.get('model_id')}",
+        f"task: {model.get('task')}",
+        f"samples: {model.get('n_samples')}",
+        f"train_loss: {model.get('train_loss')}",
+        f"steps: {model.get('steps')}",
+        f"device: {model.get('device')}",
+        f"model: {model.get('model_path')}",
+        f"connector: {model.get('connector_path')}",
+        "",
+    ]
+    rel = "artifacts/inspect.md"
+    (train / rel).write_text("\n".join(lines), encoding="utf-8")
+    return rel

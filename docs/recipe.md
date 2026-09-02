@@ -115,6 +115,55 @@ eval:
   metric: accuracy
 ```
 
+## Vision–language (CLIP / SigLIP / LLaVA / Flamingo)
+
+`family: vlm`. Contrastive towers are **aq-owned**. Generative VLMs use **aq vision + connector** on a HF (or local) causal LM.
+
+### CLIP / SigLIP
+
+```yaml
+family: vlm
+method: clip
+arch: clip              # or siglip
+vision: vit-b/16        # aq ViT (vit-t/s/b)
+image_size: 224
+embed_dim: 512
+# text tower (aq):
+# text_width / text_heads / text_layers / context_length / max_vocab
+# optional: text_tokenizer: openai/clip-vit-base-patch32
+epochs: 10
+batch_size: 64
+lr: 5.0e-4
+weight_decay: 0.2
+data:
+  path: data/pairs.jsonl   # {image, text} rows — not ImageFolder
+  image: image
+  text: text
+eval:
+  metric: recall@1         # or loss
+```
+
+### LLaVA / GPT-4V-style / Flamingo
+
+```yaml
+family: vlm
+method: llava              # or flamingo
+arch: llava                # llava | gpt4v-style | flamingo
+vision: vit-b/16
+model: meta-llama/…        # HF id or local causal LM dir
+image_size: 224
+freeze_vision: true
+freeze_lm: false           # flamingo defaults freeze_lm: true
+# flamingo: num_latents / cross_every / resampler_depth
+epochs: 1
+data:
+  path: data/chat.jsonl    # {image, prompt, completion} or conversations[]
+eval:
+  metric: loss
+```
+
+GPT-4V-style is an **alias** of LLaVA-class (`arch: gpt4v-style`). Flamingo uses perceiver resampler + gated cross-attn every `cross_every` LM layers.
+
 ## Transformer
 
 ```yaml

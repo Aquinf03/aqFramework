@@ -1,0 +1,20 @@
+family: vlm
+method: llava
+arch: llava
+vision: vit-t/16
+model: data/tiny-lm
+image_size: 128
+epochs: 1
+steps: 2
+batch_size: 1
+lr: 5.0e-5
+max_seq_len: 128
+freeze_vision: true
+freeze_lm: false
+seed: 0
+data:
+  path: data/chat.jsonl
+  image: image
+eval:
+  metric: loss
+  min_score: null

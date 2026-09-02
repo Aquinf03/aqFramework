@@ -1,0 +1,513 @@
+{
+  "version": "1.0",
+  "truncation": null,
+  "padding": null,
+  "added_tokens": [
+    {
+      "id": 0,
+      "content": "[PAD]",
+      "single_word": false,
+      "lstrip": false,
+      "rstrip": false,
+      "normalized": false,
+      "special": true
+    },
+    {
+      "id": 1,
+      "content": "[UNK]",
+      "single_word": false,
+      "lstrip": false,
+      "rstrip": false,
+      "normalized": false,
+      "special": true
+    },
+    {
+      "id": 2,
+      "content": "[BOS]",
+      "single_word": false,
+      "lstrip": false,
+      "rstrip": false,
+      "normalized": false,
+      "special": true
+    },
+    {
+      "id": 3,
+      "content": "[EOS]",
+      "single_word": false,
+      "lstrip": false,
+      "rstrip": false,
+      "normalized": false,
+      "special": true
+    },
+    {
+      "id": 4,
+      "content": "<image>",
+      "single_word": false,
+      "lstrip": false,
+      "rstrip": false,
+      "normalized": false,
+      "special": true
+    }
+  ],
+  "normalizer": null,
+  "pre_tokenizer": {
+    "type": "Whitespace"
+  },
+  "post_processor": {
+    "type": "TemplateProcessing",
+    "single": [
+      {
+        "Sequence": {
+          "id": "A",
+          "type_id": 0
+        }
+      }
+    ],
+    "pair": [
+      {
+        "Sequence": {
+          "id": "A",
+          "type_id": 0
+        }
+      },
+      {
+        "Sequence": {
+          "id": "B",
+          "type_id": 1
+        }
+      }
+    ],
+    "special_tokens": {}
+  },
+  "decoder": null,
+  "model": {
+    "type": "BPE",
+    "dropout": null,
+    "unk_token": "[UNK]",
+    "continuing_subword_prefix": null,
+    "end_of_word_suffix": null,
+    "fuse_unk": false,
+    "byte_fallback": false,
+    "ignore_merges": false,
+    "vocab": {
+      "[PAD]": 0,
+      "[UNK]": 1,
+      "[BOS]": 2,
+      "[EOS]": 3,
+      "<image>": 4,
+      "\"": 5,
+      ",": 6,
+      ".": 7,
+      "/": 8,
+      "0": 9,
+      "1": 10,
+      "2": 11,
+      "3": 12,
+      "4": 13,
+      "5": 14,
+      "6": 15,
+      "7": 16,
+      ":": 17,
+      "?": 18,
+      "A": 19,
+      "U": 20,
+      "W": 21,
+      "a": 22,
+      "c": 23,
+      "d": 24,
+      "e": 25,
+      "g": 26,
+      "h": 27,
+      "i": 28,
+      "l": 29,
+      "m": 30,
+      "n": 31,
+      "o": 32,
+      "p": 33,
+      "q": 34,
+      "r": 35,
+      "s": 36,
+      "t": 37,
+      "u": 38,
+      "{": 39,
+      "}": 40,
+      "ag": 41,
+      "im": 42,
+      "age": 43,
+      "image": 44,
+      "\":": 45,
+      "ha": 46,
+      "le": 47,
+      "\",": 48,
+      "mp": 49,
+      "omp": 50,
+      "ar": 51,
+      "ci": 52,
+      "cle": 53,
+      "is": 54,
+      "pe": 55,
+      "qu": 56,
+      "rcle": 57,
+      "sha": 58,
+      "squ": 59,
+      "ta": 60,
+      "are": 61,
+      "circle": 62,
+      "shape": 63,
+      "square": 64,
+      "\"}": 65,
+      "?\",": 66,
+      "Wha": 67,
+      "ata": 68,
+      "comp": 69,
+      "data": 70,
+      "he": 71,
+      "in": 72,
+      "io": 73,
+      "ng": 74,
+      "pr": 75,
+      "png": 76,
+      "the": 77,
+      "tio": 78,
+      "{\"": 79,
+      "images": 80,
+      "letio": 81,
+      "ompt": 82,
+      "What": 83,
+      "completio": 84,
+      "prompt": 85,
+      "completion": 86,
+      "circle0": 87,
+      "square0": 88,
+      "As": 89,
+      "Us": 90,
+      "er": 91,
+      "ho": 92,
+      "nt": 93,
+      "pho": 94,
+      "sis": 95,
+      "to": 96,
+      "tant": 97,
+      "circle1": 98,
+      "circle2": 99,
+      "square1": 100,
+      "square2": 101,
+      "circle03": 102,
+      "circle04": 103,
+      "circle05": 104,
+      "circle06": 105,
+      "circle07": 106,
+      "square03": 107,
+      "square04": 108,
+      "square05": 109,
+      "square06": 110,
+      "square07": 111,
+      "Assis": 112,
+      "User": 113,
+      "photo": 114,
+      "Assistant": 115
+    },
+    "merges": [
+      [
+        "a",
+        "g"
+      ],
+      [
+        "i",
+        "m"
+      ],
+      [
+        "ag",
+        "e"
+      ],
+      [
+        "im",
+        "age"
+      ],
+      [
+        "\"",
+        ":"
+      ],
+      [
+        "h",
+        "a"
+      ],
+      [
+        "l",
+        "e"
+      ],
+      [
+        "\"",
+        ","
+      ],
+      [
+        "m",
+        "p"
+      ],
+      [
+        "o",
+        "mp"
+      ],
+      [
+        "a",
+        "r"
+      ],
+      [
+        "c",
+        "i"
+      ],
+      [
+        "c",
+        "le"
+      ],
+      [
+        "i",
+        "s"
+      ],
+      [
+        "p",
+        "e"
+      ],
+      [
+        "q",
+        "u"
+      ],
+      [
+        "r",
+        "cle"
+      ],
+      [
+        "s",
+        "ha"
+      ],
+      [
+        "s",
+        "qu"
+      ],
+      [
+        "t",
+        "a"
+      ],
+      [
+        "ar",
+        "e"
+      ],
+      [
+        "ci",
+        "rcle"
+      ],
+      [
+        "sha",
+        "pe"
+      ],
+      [
+        "squ",
+        "are"
+      ],
+      [
+        "\"",
+        "}"
+      ],
+      [
+        "?",
+        "\","
+      ],
+      [
+        "W",
+        "ha"
+      ],
+      [
+        "a",
+        "ta"
+      ],
+      [
+        "c",
+        "omp"
+      ],
+      [
+        "d",
+        "ata"
+      ],
+      [
+        "h",
+        "e"
+      ],
+      [
+        "i",
+        "n"
+      ],
+      [
+        "i",
+        "o"
+      ],
+      [
+        "n",
+        "g"
+      ],
+      [
+        "p",
+        "r"
+      ],
+      [
+        "p",
+        "ng"
+      ],
+      [
+        "t",
+        "he"
+      ],
+      [
+        "t",
+        "io"
+      ],
+      [
+        "{",
+        "\""
+      ],
+      [
+        "image",
+        "s"
+      ],
+      [
+        "le",
+        "tio"
+      ],
+      [
+        "omp",
+        "t"
+      ],
+      [
+        "Wha",
+        "t"
+      ],
+      [
+        "comp",
+        "letio"
+      ],
+      [
+        "pr",
+        "ompt"
+      ],
+      [
+        "completio",
+        "n"
+      ],
+      [
+        "circle",
+        "0"
+      ],
+      [
+        "square",
+        "0"
+      ],
+      [
+        "A",
+        "s"
+      ],
+      [
+        "U",
+        "s"
+      ],
+      [
+        "e",
+        "r"
+      ],
+      [
+        "h",
+        "o"
+      ],
+      [
+        "n",
+        "t"
+      ],
+      [
+        "p",
+        "ho"
+      ],
+      [
+        "s",
+        "is"
+      ],
+      [
+        "t",
+        "o"
+      ],
+      [
+        "ta",
+        "nt"
+      ],
+      [
+        "circle",
+        "1"
+      ],
+      [
+        "circle",
+        "2"
+      ],
+      [
+        "square",
+        "1"
+      ],
+      [
+        "square",
+        "2"
+      ],
+      [
+        "circle0",
+        "3"
+      ],
+      [
+        "circle0",
+        "4"
+      ],
+      [
+        "circle0",
+        "5"
+      ],
+      [
+        "circle0",
+        "6"
+      ],
+      [
+        "circle0",
+        "7"
+      ],
+      [
+        "square0",
+        "3"
+      ],
+      [
+        "square0",
+        "4"
+      ],
+      [
+        "square0",
+        "5"
+      ],
+      [
+        "square0",
+        "6"
+      ],
+      [
+        "square0",
+        "7"
+      ],
+      [
+        "As",
+        "sis"
+      ],
+      [
+        "Us",
+        "er"
+      ],
+      [
+        "pho",
+        "to"
+      ],
+      [
+        "Assis",
+        "tant"
+      ]
+    ]
+  }
+}

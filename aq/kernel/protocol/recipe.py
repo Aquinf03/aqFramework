@@ -101,11 +101,12 @@ def load_recipe(train: Path) -> dict:
             raise SystemExit("transformer arch must be encoder, decoder, or encoder-decoder")
     elif method in ("cnn", "vit"):
         # ImageFolder directory OR table with image path + label columns
-        path = Path(str(data.get("path")))
-        # path may be relative — existence checked later in engine
         if data.get("target") or data.get("label"):
             pass  # table mode
         # directory ImageFolder: no target required
+    elif method in ("clip", "llava", "flamingo"):
+        # pairs jsonl/csv (clip) or multimodal chat jsonl (llava/flamingo)
+        pass
     elif not data.get("target"):
         raise SystemExit("recipe.yaml must set data.target")
     ev = rec.get("eval")
