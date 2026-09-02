@@ -66,10 +66,15 @@ def fit(src: Path, rec: dict) -> dict:
     model = build_cnn(arch_raw, num_classes=len(classes), in_ch=3)
     device = torch_device()
     model.to(device)
-    print(
-        f"  cnn  arch={arch_key}  classes={len(classes)}  images={len(samples)}  "
-        f"size={image_size}  device={device_kind()}",
-        file=sys.stderr,
+    epochs_n = int(epochs) if epochs is not None else None
+    aq_metrics.event(
+        "info",
+        arch=arch_key,
+        classes=len(classes),
+        images=len(samples),
+        image_size=image_size,
+        device=device_kind(),
+        epochs=epochs_n,
     )
 
     crit = torch.nn.CrossEntropyLoss()
