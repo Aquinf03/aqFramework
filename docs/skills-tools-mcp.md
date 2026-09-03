@@ -1,59 +1,40 @@
-# Skills, tools, and MCP
+# Skills, tools & MCP
 
-Extensibility is **convention over registration**: drop files in the right folder.
+Extend **one train** without changing the global CLI.
 
 ## Tools (`tools/`)
 
-User scripts the CLI and agent can run:
-
-```
-tools/
-  summarize.py
-  plot.ts
-  nudge.sh
-```
+Scripts you run with:
 
 ```bash
 aq tool                 # list
-aq tool summarize -- --limit 10
+aq tool my_script -- --flag
 ```
 
-- Resolved as `tools/<name>.{py,ts,js,sh}`  
-- cwd = train  
-- env: `AQ_TRAIN` = absolute train path  
-- Agent tool name: `tool`
+Supported: `.py`, `.ts`, `.js`, `.sh`. cwd is the train; `AQ_TRAIN` is set to its absolute path.
 
-Use tools for deterministic helpers and custom fit adapters (`tools/<method>.py` with `fit()` for `aq train`).
+### Custom training method
+
+If a built-in is not enough, add **`tools/<method>.py`** with:
+
+```python
+def fit(src, rec):
+    ...
+    return model_dict  # JSON-serializable checkpoint payload
+```
+
+Optional: `predict`, `evaluate`, `generate`, `write_inspect`. When `recipe.method` matches the filename, this `fit` **wins** over the kernel built-in for that train only.
+
+See [Custom methods](./methods/custom.md).
 
 ## Skills (`skills/`)
 
-Agent-only (no dedicated `aq skill` CLI). Layouts:
-
-```
-skills/
-  hash-first.md                 # single-file skill
-  leak-check/
-    SKILL.md                    # or README.md
-    run.py                      # optional runner
-    mcp.json                    # optional MCP server config
-```
-
-Code: `aq/src/lib/skill.ts`, `skill-runtime.ts`.
-
-Agent tools: `skills_search`, `skill_load`, `skill_run`.
-
-Loading a skill may start an MCP server; its tools appear as `mcp_<skill>_<tool>`.
+Markdown (and optional runners) the agent can load as playbooks. Keep them short and operational — “how we plot metrics here,” not essays.
 
 ## MCP
 
-Client: `aq/src/lib/mcp.ts` - stdio JSON-RPC with `Content-Length` framing (`tools/list`, `tools/call`).
+Drop an MCP config the agent understands (stdio servers) under the train’s skills/MCP conventions. The agent can call those tools in chat the same way it calls built-ins.
 
-Skills are the preferred way to attach MCP to a train: keep the server definition next to the skill that needs it. `aq doctor` can probe MCP health.
+## Memory
 
-## Memory (`~/.aq/memory/`)
-
-Like chats, memory lives **outside the train** under `~/.aq/memory/<id>/` — one thread per train path, with `entries.json` (title + markdown body + timestamp). The agent uses `memory_search`, `memory_read`, and `memory_write`. Survives chat deletion; does not fork with `aq fork` (same as chats). Old `train/memory/*.md` files migrate on first access.
-
-## Design rule
-
-If something should exist for every clone of the train, put it under the train. Agent chats and memory live in `~/.aq` (like provider keys). Account tokens live in `~/.aquin`. Do not invent a global registry of tools/skills.
+Agent memory is **global to your machine**: `~/.aq/memory/`. It is not copied by `aq fork`. Old in-train `memory/` folders migrate automatically when present.

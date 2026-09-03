@@ -1,17 +1,28 @@
 # Tabular methods
 
-All use **scikit-learn** (real estimators). `data.path` + `data.target` required.
+Classic fits on a table. You need `data.path` and `data.target` in the recipe.
 
 | Method | Notes |
 |--------|------|
-| `linear` | LinearRegression |
-| `logistic` | LogisticRegression |
-| `ridge` / `lasso` / `elasticnet` | with `lambda` / `l1_ratio` |
-| `tree` | DecisionTreeRegressor (`depth`) |
-| `forest` | RandomForestRegressor |
-| `boosting` | XGBoost → LightGBM → CatBoost → sklearn GBR (`library:` to force) |
-| `gp` | GaussianProcessRegressor |
+| `linear` | Linear regression |
+| `logistic` | Classification |
+| `ridge` / `lasso` / `elasticnet` | Use `lambda` / `l1_ratio` |
+| `tree` | Decision tree (`depth`) |
+| `forest` | Random forest |
+| `boosting` | XGBoost → LightGBM → CatBoost → sklearn; set `library:` to force |
+| `gp` | Gaussian process |
 
-Checkpoints store coefficients and/or `estimator.joblib`. Eval uses `evaluate()` with the saved estimator when present.
+```yaml
+family: tabular
+method: ridge
+lambda: 1.0
+data:
+  path: data.csv
+  target: y
+eval:
+  metric: mse
+```
 
-Manual trains: `tests/linear-regression`, `logistic-regression`, `ridge`, `lasso`, `elastic-net`, `decision-trees`, `random-forests`, `gradient-boosting`, `gaussian-processes`.
+After train, check `artifacts/inspect.md` and run `aq eval` on probes under `evals/`.
+
+Full recipe keys: [Recipe](../recipe.md).

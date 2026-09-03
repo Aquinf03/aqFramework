@@ -1,8 +1,9 @@
-# LLM and LoRA
+# LLM & LoRA
 
-Recipe-only. **`model` is required** (Hugging Face id or local path).
+Recipe-only language-model trains. **`model:` is required** (Hugging Face id or local path).
 
 ```yaml
+family: llm
 method: lora
 model: meta-llama/Llama-3.2-1B-Instruct
 objective: lora
@@ -14,23 +15,30 @@ data:
   path: data.jsonl
   prompt: prompt
   completion: completion
+eval:
+  metric: loss
 ```
 
-## Objectives that work
+## Objectives
 
 | objective | What it does |
 |-----------|----------------|
 | `next-token` | Causal LM |
-| `sft` | Causal LM; **loss on completion only** |
-| `full-ft` | Causal LM; loss on all non-pad tokens |
-| `lora` / `qlora` | PEFT LoRA; QLoRA needs CUDA+bnb |
-| `fim` | PSM FIM formatting + causal LM |
-| `mlm` | Masked LM (BERT-class `model`) |
-| `span` | Span-corrupt input + reconstruct labels |
-| `continued-pretrain` | Loads `init.checkpoint` weights, then trains |
+| `sft` | Loss on completion tokens only |
+| `full-ft` | Loss on all non-pad tokens |
+| `lora` / `qlora` | PEFT adapters (`bits: 4` → QLoRA, CUDA only) |
+| `fim` | Fill-in-the-middle |
+| `mlm` / `span` | Masked / span corruption |
+| `continued-pretrain` | Load prior aq weights via `init.checkpoint`, train more |
+| `mtp` | Multi-token prediction heads (`n_predict`) |
 
 ## Devices
 
-Detected automatically: `cuda`, `rocm` (AMD HIP), `mps` (Apple), `cpu`. Written into the checkpoint manifest as `device`.
+CUDA, MPS (Apple), ROCm (AMD), CPU. **QLoRA needs CUDA + bitsandbytes.**
 
-Implementation: `aq/kernel/backends/hf_lm.py`.
+```bash
+aq train
+aq serve "hello" --max-tokens 64
+```
+
+More knobs (`formats`, `speculative`, tokenizer): [Recipe — LLM](../recipe.md).

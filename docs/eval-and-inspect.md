@@ -1,8 +1,8 @@
-# Eval and inspect
+# Eval & inspect
 
-## User probes (`evals/`)
+## Probes (`evals/`)
 
-There is **no bundled benchmark zoo**. You place probes:
+There is **no bundled benchmark zoo**. You place the probes:
 
 ```
 evals/
@@ -11,32 +11,32 @@ evals/
 ```
 
 ```bash
-aq eval                 # all probes
+aq eval                 # every probe
 aq eval holdout         # one name
 aq eval --ckpt 3        # specific checkpoint
 ```
 
-Results: `artifacts/eval.json` plus metrics events (`eval.probe`). Pass/fail only when `recipe.eval.min_score` is set; otherwise scores are informational.
+Results land in `artifacts/eval.json` and in the metrics stream. Pass/fail only when `recipe.eval.min_score` is set; otherwise you get scores without an invented verdict.
 
-**Humans own the gate.** The agent prompt forbids inventing eval numbers. If you need a gate in CI, run `aq eval` and parse `eval.json` / exit behavior yourself.
+**You own the gate.** The agent must not invent eval numbers. For CI, run `aq eval` and parse `eval.json` yourself.
+
+On a real terminal, eval shows a **scoreboard** (metric, score, verdict, probes) — different from the train dashboard. `AQ_TUI=0` forces plain tables.
 
 ## Inspect
 
-Methods may implement `write_inspect(train, model)` → relative markdown path, usually `artifacts/inspect.md`.
+After train, many methods write `artifacts/inspect.md` — coefficients, architecture, tokenizer notes, whatever helps a human. Read it before thrashing five recipe knobs.
 
-This is the human-readable dump: coefficients, tree flowcharts, tokenizer notes, architecture. After `aq train`, read it. After a surprising eval, read it before changing five recipe knobs at once.
+## Runs, status, diff
 
-## Run records and diff
-
-Each train writes `artifacts/runs/{id}.json` (+ `.md`) with recipe/data/code hashes, metrics summary, artifact paths. `last.json` points at the newest.
+Each train/eval/serve appends `artifacts/runs/{id}.json` (and a short `.md`). `last.json` points at the newest.
 
 ```bash
+aq status               # jobs, last run, eval, recent metrics
 aq diff                 # list run ids
-aq diff <a> <b>         # compare two records (files, not screenshots)
-aq status               # jobs + last run + eval + recent metrics + schedules
+aq diff <a> <b>         # compare two records
 ```
 
-Diff is for science: what changed between two fits? Hashes and scores - not chat logs.
+Diff is for science: hashes and scores between two fits — not chat logs.
 
 ## Data hash
 
@@ -45,4 +45,4 @@ aq data hash
 aq data hash --snapshot
 ```
 
-Pins `data/revision.json` so run records can cite an exact data digest. Snapshots copy content under `data/revisions/{digest}/` for audit.
+Pins `data/revision.json` so runs can cite an exact data digest. Snapshots copy content under `data/revisions/{digest}/` for audit.

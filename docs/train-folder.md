@@ -2,40 +2,34 @@
 
 A **train** is any directory that contains both:
 
-- `experiment.md` - human intent / brief  
-- `recipe.yaml` - kernel specification (family, method, data, eval, optional guard)
+- **`experiment.md`** — human intent / brief  
+- **`recipe.yaml`** — what aq should train and how to eval  
 
-Authority: `aq/src/core/schema.ts` (`isTrain` / `assertTrain`).
+`aq init` creates a **new folder** (`aq-experiment`, or `aq-experiment-new1` if taken). It never dumps files into the current directory. Rename the folder anytime — identity is the two files inside, not the name on the outside.
 
-`aq init` creates a **new folder** (`aq-experiment`, or `aq-experiment-new1` if that exists, then `-new2`, …). `aq init my-name` does the same with your name. It never dumps files into the current directory. Rename the folder anytime — a train is identified by `experiment.md` + `recipe.yaml` inside, not by the folder name.
-
-`aq init` copies templates from `aq/templates/` and creates optional slots with `.keep` files. It refuses to initialize inside the `aq` package tree itself. `aq stage init <name>` still writes exactly under `stages/<name>/`.
-
-## Canonical layout
+## Layout
 
 ```
 my-train/
-  experiment.md            REQUIRED - what this train is for
-  recipe.yaml              REQUIRED - kernel spec (aq does not override)
+  experiment.md         required — what this train is for
+  recipe.yaml           required — family, method, data, eval
 
-  data/                    your datasets (path from recipe)
-  evals/                   user probes (.csv / .jsonl) - no bundled zoo
-  tools/                   scripts + optional custom fit (tools/<method>.py)
-  skills/                  agent skills (+ optional MCP)
-  stages/                  nested trains (each is itself a train)
-  jobs/                    SYSTEM - runs + plans/ (cron/sweep yaml)
-  artifacts/               SYSTEM - checkpoints, metrics, runs, …
+  data/                 your datasets (path from recipe)
+  evals/                user probes (.csv / .jsonl)
+  tools/                scripts + optional custom fit
+  skills/               agent skills (+ optional MCP)
+  stages/               nested trains (each is a full train)
+  jobs/                 system — runs + plans/
+  artifacts/            system — checkpoints, metrics, runs, …
 ```
 
 ## Required files
 
 ### `experiment.md`
 
-Plain markdown for humans (and the agent). Say what the train is trying to prove, what success looks like, and any constraints. Template:
+Plain markdown for humans and the agent. Say what you are trying to prove, what success looks like, and any constraints.
 
-> What this train is for… Fork the folder to try a variant.
-
-This file is part of the train identity. Forking copies it; changing it is a deliberate edit.
+Forking copies this file. Changing it is a deliberate edit.
 
 ### `recipe.yaml`
 
@@ -52,66 +46,52 @@ eval:
   min_score: null
 ```
 
-The kernel reads this. The CLI does not invent or override method hyperparameters for you.
+The kernel reads this. The CLI does not invent hyperparameters for you.
 
-## Optional slots (convention)
+## Optional slots
 
 | Slot | Who uses it | Notes |
 |------|-------------|-------|
-| `data/` | kernel | `recipe.data.path` often points here |
-| `evals/` | `aq eval` | One file per probe; gate via `eval.min_score` |
-| `tools/` | `aq tool`, `aq train`, agent | Helpers; **`tools/<method>.py` + `fit()`** overrides kernel fit |
-| `skills/` | agent only | SKILL.md / run scripts / mcp.json |
+| `data/` | train / eval | `recipe.data.path` often points here |
+| `evals/` | `aq eval` | One file per probe; gate with `eval.min_score` |
+| `tools/` | `aq tool`, train, agent | Helpers; **`tools/<method>.py` + `fit()`** overrides the built-in |
+| `skills/` | agent | Skill markdown / runners / MCP |
 | `jobs/plans/` | `aq job plan` | cron, sweep, pipeline, resume, agents |
 | `stages/` | `aq stage` | nested full trains |
-| `jobs/` | job system | runtime runs; do not hand-edit casually |
+| `jobs/` | job system | runtime; do not hand-edit casually |
 | `artifacts/` | everything | regenerable but valuable history |
 
-## What artifacts contain
+## Artifacts
 
-Everything under `artifacts/` is **system-owned output**. Forking a train **skips** `jobs/` and `artifacts/` (then recreates empty dirs) so the child starts clean.
+Everything under `artifacts/` is **system-owned**. Forking **skips** `jobs/` and `artifacts/` so the child starts clean.
 
 Typical contents after real work:
 
 ```
 artifacts/
-  request.json             last kernel request (IPC)
-  result.json              last kernel result (IPC)
-  metrics.jsonl            append-only observability stream
+  metrics.jsonl            append-only live log
   checkpoints/
-    1.json … N.json
-    last.json              always the newest fit
-    named.json             from aq checkpoint --keep
-  tokenizer.json           pinned when model carries a tokenizer
-  inspect.md               human-readable model dump (if method supports it)
-  runs/
-    {id}.json / .md
-    last.json / last.md
+    1.json                 manifest for run 1
+    last.json              pointer to latest
+    1/                     weights / adapter / …
+  runs/                    one JSON record per train/eval/serve
   eval.json                last eval summary
-  serve.json               last serve output
-  agents/<id>/             spawned worker agents
-  schedules/               schedule run logs (as implemented)
+  inspect.md               human-readable model card from the method
+  plots/                   from `aq plot`
+  serve.json               last generate
 ```
 
-Agent **chats** live in `~/.aq/chats/` (not in the train), so experiments stay lean.
-## Data revision
+## Fork, checkout, stages
 
-`aq data hash [dir] [--snapshot]` asks the kernel to hash `recipe.data.path` and write `data/revision.json`. Optional `--snapshot` copies the hashed tree under `data/revisions/{digest}/`. Run records prefer this hash when present so “what data did this checkpoint see?” is answerable from disk.
+```bash
+aq fork ../variant-b          # copy train; skip jobs/ + artifacts/
+aq checkout <job-id> recovered   # restore a detached job’s tree
+aq stage init prep            # nested train under stages/prep/
+aq stage prep                 # train that stage
+```
 
-## Fork and checkout
+Each stage is itself a train (its own `experiment.md` + `recipe.yaml`).
 
-- **`aq fork <dest>`** - copy the train, omit runtime `jobs/` and `artifacts/`, recreate empty ones. Use this to try a variant without carrying old metrics.
-- **`aq checkout <job-id>`** - restore that job’s captured `tree/` into cwd (or a new dest with the job record). This is how you time-travel a workspace that was snapshotted at enqueue.
+## Next
 
-## Nested trains (`stages/`)
-
-Each `stages/<name>/` is a full train (its own `experiment.md` + `recipe.yaml`). `aq stage init <name>` scaffolds one; `aq stage <name>` trains it; `aq stage eval <name>` evaluates it. Use stages for multi-step pipelines that still want folder isolation.
-
-## Mental tests for “is this a real train?”
-
-1. Can I `cp -R` it to another machine and run `aq status`?
-2. Can I fork, change one recipe key, and compare with `aq diff`?
-3. Can a stranger read `experiment.md` and know the gate?
-4. If `artifacts/` is deleted, can I retrain from recipe + data alone?
-
-If yes, you are using the product as designed.
+[Recipe](./recipe.md) · [Eval & inspect](./eval-and-inspect.md) · [Jobs](./jobs.md)

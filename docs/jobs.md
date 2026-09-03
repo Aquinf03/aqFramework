@@ -1,70 +1,54 @@
-# Jobs
+# Jobs & plans
 
-Local process queue **and** automation plans. Implementation: `aq/src/job/job.ts`, `plans.ts`, `resources.ts`, `job-wait.mjs`.
+Run work in the background, ask for resources, and recover the tree later. Plans (cron, sweeps, pipelines) live under the same system.
 
-## Runs (immediate work)
-
-```
-jobs/<id>/
-  spec.json       status, cmd, resources, timestamps
-  log             combined output
-  tree/           snapshot of the train at enqueue
-```
-
-`tree/` skips `jobs`, `artifacts`, `node_modules`, `.git` so checkout stays useful without copying history blobs.
-
-Status: `queued` → `starting` → `running` → `exited` | `canceled` | `error`
-
-```bash
-aq job run [dir] [--cpu N] [--ram SIZE] [--disk SIZE] [--gpu N] -- <cmd>
-aq job list [dir]
-aq job log [dir] <id>
-aq job cancel [dir] <id>
-aq job resume [dir] <id>
-aq job tree [dir] <id>
-```
-
-Examples:
+## Immediate runs
 
 ```bash
 aq job run -- aq train
 aq job run --cpu 4 --ram 8G -- python scripts/sweep.py
-aq checkout <id>            # restore that job's tree into cwd
+aq job list
+aq job log <id>
+aq job cancel <id>
+aq job resume <id>
+aq job tree <id>
+aq checkout <id> recovered-train
 ```
 
-## Plans (cron, sweep, pipeline, resume, agents)
+Each job keeps:
 
-YAML/JSON under **`jobs/plans/`** — same job system, not a separate `schedules/` folder.
+```
+jobs/<id>/
+  spec.json     status, command, resources, timestamps
+  log           combined output
+  tree/         snapshot of the train at enqueue
+```
+
+Status moves `queued` → `starting` → `running` → `exited` | `canceled` | `error`.
+
+## Plans (`jobs/plans/`)
+
+YAML/JSON plans — not a separate `schedules/` folder.
 
 ```bash
-aq job plan [dir]              # list plans
-aq job plan tick [dir]         # run due cron/resume plans
-aq job plan run [dir] <name>   # fire a plan now
+aq job plan                 # list
+aq job plan tick            # run due cron / resume plans
+aq job plan run <name>      # fire one now
+aq schedule …               # alias for aq job plan …
 ```
 
-`aq schedule …` is an alias for `aq job plan …`.
-
-Example plan (`jobs/plans/nightly.yaml`):
+Example (`jobs/plans/nightly.yaml`):
 
 ```yaml
 kind: cron
+cron: "0 2 * * *"
 run: train
-every: 60
 ```
 
-Plan kinds: **cron**, **sweep**, **resume**, **pipeline**, **agents**. Plans enqueue **job runs** (or spawn workers). State and logs: `artifacts/jobs/plans/`.
+Other kinds: **sweep**, **pipeline**, **resume**, **agents**. Keep plans small and obvious; put heavy logic in `tools/` scripts the plan calls.
 
-`jobs/plans/` **forks** with the train; runtime `jobs/<id>/` dirs do not.
+## Tips
 
-## Other consumers
-
-| Feature | How it uses jobs |
-|---------|------------------|
-| `aq spawn` | Worker agents = `aq ask -y --json …` as jobs |
-| Agent `run` tool with `detach` | Long shell work as a job |
-
-## Design notes
-
-- Jobs are Unix process management on disk, not a cloud control plane.
-- Surviving disconnects: detached waiter; `aq job list/log` reconnect to state.
-- Forking skips runtime `jobs/<id>/` but copies `jobs/plans/`.
+- Request only the resources you need (`--cpu`, `--ram`, `--disk`, `--gpu`).  
+- `checkout` restores the snapshot without dragging all of `artifacts/` history unless it was in the tree.  
+- Prefer `aq job run -- aq train` over long interactive trains on a laptop you will close.

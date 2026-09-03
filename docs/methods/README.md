@@ -1,38 +1,33 @@
 # Methods
 
-Built-in methods are thin wrappers over **real libraries**. Recipe is the API.
+Built-in methods are selected in **`recipe.yaml`**. You usually do not write Python.
 
-Install: `pip install -r aq/kernel/requirements.txt`
+| method | What you need | Notes |
+|--------|---------------|--------|
+| `linear`, `logistic`, `ridge`, `lasso`, `elasticnet`, `tree`, `forest`, `gp` | table + `data.target` | Classic sklearn-style fits |
+| `boosting` | table | Tries XGBoost → LightGBM → CatBoost → sklearn; set `library:` to force |
+| `llm`, `lora`, `qlora` | text / SFT data + **`model:`** | Hugging Face + PEFT |
+| `transformer` | text (+ labels) + **`model:`** | encoder / decoder / enc-dec |
+| `cnn` | ImageFolder or path+label | aq-owned CNNs · `family: vision` |
+| `vit` | same as CNN | aq ViT / Swin / DeiT / BEiT · `family: vision` |
+| `clip` | image–text pairs jsonl | CLIP / SigLIP · `family: vlm` |
+| `llava`, `flamingo` | chat jsonl + **`model:`** | Generative VLM · `family: vlm` |
 
-| method | Backend | Notes |
-|--------|---------|--------|
-| linear, logistic, ridge, lasso, elasticnet, tree, forest, gp | scikit-learn | |
-| boosting | XGBoost → LightGBM → CatBoost → sklearn GBR | set `library:` to force |
-| llm, lora, qlora | Hugging Face + PEFT | **`model:` required** |
-| transformer | Hugging Face | **`model:` required**; arch encoder/decoder/enc-dec |
-| cnn | **aq `neural/cnn`** | `family: vision`; arch lenet/alexnet/vgg/resnet/inception/efficientnet/convnext |
-| vit | **aq `neural/vit`** | `family: vision`; ViT / Swin / DeiT (CNN teacher) / BEiT (VQ + block MIM) |
-| clip | **aq `neural/vlm`** | `family: vlm`; CLIP / SigLIP contrastive; pairs jsonl |
-| llava / flamingo | **aq connector + HF LM** | `family: vlm`; LLaVA projector or Flamingo gated xattn; chat jsonl |
+Override any built-in: put `tools/<method>.py` with a `fit()` in **that train**.
 
-Custom override: `{train}/tools/<name>.py` with a `fit()` function wins over the kernel built-in.
+- [Tabular](./tabular.md)  
+- [Transformers](./transformers.md)  
+- [LLM & LoRA](./llm.md)  
+- [Vision & VLM](./vision.md)  
+- [Custom methods](./custom.md)  
 
-- [Tabular](./tabular.md)
-- [Transformers](./transformers.md)
-- [LLM & LoRA](./llm.md)
-- [Custom methods](./custom.md)
-
-## Honesty
+## Honesty (read once)
 
 | Claim | Reality |
 |-------|---------|
 | QLoRA | CUDA + bitsandbytes only |
-| Vision CNN | aq-owned modules (not torchvision.models); needs Pillow |
-| Vision ViT | aq-owned ViT/Swin/DeiT/BEiT; DeiT uses a warmed CNN teacher; BEiT trains a discrete VAE then blockwise MIM |
-| VLM CLIP/SigLIP | aq dual encoders; eval recall@1 |
-| VLM LLaVA/Flamingo | aq vision+connector on HF/local causal LM; GPT-4V-style = LLaVA-class |
-| GPTQ/AWQ/GGUF/EXL2 | `formats:` — see [recipe](../recipe.md) |
-| Speculative | `draft_model:` + HF assisted decode |
-| Paged KV | Recorded; serve still standard HF cache |
-| MTP heads | `objective: mtp` + `n_predict` |
-| `size:` | Label only; does not download Llama/Phi/etc. |
+| Vision / VLM towers | aq-owned nets (not silent torchvision / timm wrappers) |
+| `formats:` | Real export when the stack allows; otherwise fails closed |
+| Speculative decode | Needs `draft_model:` at serve |
+| `paged_kv` | Recorded; serve still uses a normal cache |
+| `size:` | Label only — does not fetch a model |

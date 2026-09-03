@@ -1,8 +1,10 @@
 # Recipe (`recipe.yaml`)
 
-The recipe is the **full train spec** for built-in methods. Custom fit code goes in **`tools/<name>.py`** (same folder as `aq tool` scripts).
+The recipe is the **full train API** for built-in methods. Change YAML, not the CLI. Custom fit code belongs in **`tools/<name>.py`** — see [Custom methods](./methods/custom.md).
 
-Install backends: `pip install -r aq/kernel/requirements.txt`
+Kernel packages: installed into the framework venv from `aq/kernel/requirements.txt` (you normally get this from the installer).
+
+---
 
 ## Tabular
 
@@ -14,10 +16,13 @@ data:
   target: y
 eval:
   metric: mse    # accuracy | mae | rmse | r2
-# lambda / l1_ratio / trees / depth / library (boosting: auto|xgboost|lightgbm|catboost|sklearn)
+# optional: lambda / l1_ratio / trees / depth
+# boosting: library: auto | xgboost | lightgbm | catboost | sklearn
 ```
 
-Backed by **scikit-learn**, **XGBoost**, **LightGBM**, and **CatBoost** (all installed with the kernel by default).
+Uses scikit-learn, plus XGBoost / LightGBM / CatBoost when you pick boosting.
+
+---
 
 ## LLM / LoRA / QLoRA
 
@@ -25,43 +30,47 @@ Backed by **scikit-learn**, **XGBoost**, **LightGBM**, and **CatBoost** (all ins
 family: llm
 method: lora          # or llm | qlora
 model: meta-llama/Llama-3.2-1B-Instruct   # REQUIRED
-objective: lora       # next-token | sft | full-ft | lora | qlora | fim | mlm | span | continued-pretrain
+objective: lora       # next-token | sft | full-ft | lora | qlora | fim | mlm | span | continued-pretrain | mtp
 # bits: 4             # QLoRA — CUDA + bitsandbytes only
 rank: 16
 alpha: 32
 steps: 100
 lr: 2.0e-4
-tokenizer: bpe        # optional: train a local tokenizer (bpe|unigram|wordpiece|byte)
-merges: 1000
-max_seq_len: 512
-# mixture: { web: 0.5, code: 0.5 }   # with data.source
-# prune: 0.1                         # magnitude prune after train
-# quant: int8                        # aq weight dump (not GPTQ)
+# tokenizer: bpe      # optional local tokenizer: bpe | unigram | wordpiece | byte
+# max_seq_len: 512
+# prune: 0.1          # magnitude prune after train
+# quant: int8         # aq weight dump (not GPTQ)
 data:
   path: data.jsonl
   text: text
-  # or for sft/full-ft:
+  # sft / full-ft:
   # prompt: prompt
   # completion: completion
 eval:
   metric: loss
 ```
 
-Rules:
+**Rules that save you time**
 
-- **`model:` is required.** `size:` is only a label (`llm`/`slm`/`edge`).
-- **SFT** masks prompt tokens (loss on completion only). **full-ft** trains all non-pad tokens.
-- **mlm** needs a MaskedLM-capable model for true bidirectional MLM (e.g. BERT). Causal models (Llama, GPT) also work — aq uses masked-token loss on the causal backbone.
-- **QLoRA** fails on MPS/CPU/ROCm without CUDA bitsandbytes.
-- **`objective: mtp`** — multi-token prediction; set **`n_predict: 2`** (or higher). Auxiliary heads on a causal LM.
-- **`speculative: true`** — serve-time assisted decode. Requires **`draft_model: <hub-id>`** (smaller causal LM, same tokenizer family). Train records the draft; `aq serve` / generate uses Hugging Face `assistant_model`.
-- **`formats: true`** / **`formats: [gguf]`** — post-train weight packs under the checkpoint `formats/` dir. Always writes merged **HF** weights; **GGUF** via built-in Llama-family writer (`pip install gguf`) or `AQUIN_LLAMA_CPP`; **GPTQ/AWQ** need CUDA + optional packages; **EXL2** needs `AQUIN_EXL2_CONVERT`.
-- **`paged_kv: true`** — recorded at train; `aq serve` still uses standard HF KV cache (not vLLM paged attention yet).
-- These **fail closed** when a requested format cannot actually be produced.
+| Knob | Reality |
+|------|---------|
+| `model:` | **Required.** Hub id or local path. |
+| `size:` | Label only (`llm` / `slm` / `edge`). Does not download weights. |
+| SFT | Loss on completion tokens only. |
+| full-ft | Loss on all non-pad tokens. |
+| QLoRA | CUDA + bitsandbytes only. On Mac/AMD use LoRA. |
+| `objective: mtp` | Multi-token heads; set `n_predict: 2` (or higher). |
+| `speculative: true` | Serve-time assisted decode; needs `draft_model:`. |
+| `formats: true` / `[gguf]` | Export packs after train (HF + GGUF; GPTQ/AWQ on CUDA). Prefer `[gguf]` on Mac. |
+| `paged_kv: true` | Recorded today; serve still uses a normal HF cache. |
+
+Unsupported export paths **fail closed**.
+
+---
 
 ## Vision (CNN)
 
-Aq-owned backbones (not torchvision wrappers). Folder-of-folders or a path+label table.
+Aq-owned backbones (not torchvision wrappers). ImageFolder or a path+label table.
 
 ```yaml
 family: vision
@@ -71,11 +80,11 @@ arch: resnet18    # lenet | alexnet | vgg16 | resnet18/34/50/101/152 |
 epochs: 10
 batch_size: 32
 lr: 1.0e-3
-image_size: 224   # default depends on arch (lenet→32)
+image_size: 224   # lenet defaults smaller
 val_frac: 0.1
 data:
-  path: data/images          # ImageFolder: data/images/<class>/*.jpg
-  # or a csv/jsonl:
+  path: data/images          # data/images/<class>/*.jpg
+  # or table:
   # path: data/index.csv
   # image: path
   # target: label
@@ -83,78 +92,73 @@ eval:
   metric: accuracy           # or loss
 ```
 
-Requires **Pillow**. Checkpoints store `model.pt` under `artifacts/checkpoints/<n>/`.
+Needs **Pillow**. Weights land under `artifacts/checkpoints/<n>/model.pt`.
+
+---
 
 ## Vision (ViT / Swin / DeiT / BEiT)
 
-Same data layout as CNN. Aq-owned transformers under `neural/vit/` (not timm / HF).
+Same data layout as CNN.
 
 ```yaml
 family: vision
 method: vit
 arch: vit-b/16        # vit-t/16 | vit-s/16 | vit-b/16
-                      # swin-t | swin-s | swin-b   (image_size % 32 == 0, usually 224)
-                      # deit-t | deit-s | deit-b  (CNN teacher distillation)
-                      # beit-b | beit-l           (VQ tokenizer → block MIM → classify)
+                      # swin-t | swin-s | swin-b   (image_size usually 224, % 32 == 0)
+                      # deit-t | deit-s | deit-b
+                      # beit-b | beit-l
 epochs: 10
 batch_size: 32
 lr: 1.0e-3
 weight_decay: 0.05
 image_size: 224
-# DeiT:
-# teacher: resnet50
-# teacher_epochs: 3
-# distill_alpha: 0.5
-# distill_temp: 3.0
-# BEiT:
-# vocab_size: 8192
-# vq_epochs / mim_epochs / classify_epochs / mask_ratio: 0.4
+# DeiT: teacher: resnet50 · teacher_epochs: 3 · distill_alpha / distill_temp
+# BEiT: vocab_size · vq_epochs · mim_epochs · classify_epochs · mask_ratio
 data:
   path: data/images
 eval:
   metric: accuracy
 ```
 
+---
+
 ## Vision–language (CLIP / SigLIP / LLaVA / Flamingo)
 
-`family: vlm`. Contrastive towers are **aq-owned**. Generative VLMs use **aq vision + connector** on a HF (or local) causal LM.
+`family: vlm`.
 
-### CLIP / SigLIP
+### CLIP / SigLIP (contrastive)
 
 ```yaml
 family: vlm
 method: clip
 arch: clip              # or siglip
-vision: vit-b/16        # aq ViT (vit-t/s/b)
+vision: vit-b/16
 image_size: 224
 embed_dim: 512
-# text tower (aq):
-# text_width / text_heads / text_layers / context_length / max_vocab
-# optional: text_tokenizer: openai/clip-vit-base-patch32
 epochs: 10
 batch_size: 64
 lr: 5.0e-4
-weight_decay: 0.2
 data:
-  path: data/pairs.jsonl   # {image, text} rows — not ImageFolder
+  path: data/pairs.jsonl   # {image, text} — not ImageFolder
   image: image
   text: text
 eval:
   metric: recall@1         # or loss
 ```
 
-### LLaVA / GPT-4V-style / Flamingo
+Optional: `text_tokenizer: openai/clip-vit-base-patch32` for a pretrained CLIP tokenizer; otherwise aq builds one from your captions.
+
+### LLaVA / GPT-4V-style / Flamingo (generative)
 
 ```yaml
 family: vlm
 method: llava              # or flamingo
 arch: llava                # llava | gpt4v-style | flamingo
 vision: vit-b/16
-model: meta-llama/…        # HF id or local causal LM dir
+model: meta-llama/…        # HF id or local causal LM directory
 image_size: 224
 freeze_vision: true
 freeze_lm: false           # flamingo defaults freeze_lm: true
-# flamingo: num_latents / cross_every / resampler_depth
 epochs: 1
 data:
   path: data/chat.jsonl    # {image, prompt, completion} or conversations[]
@@ -162,9 +166,11 @@ eval:
   metric: loss
 ```
 
-GPT-4V-style is an **alias** of LLaVA-class (`arch: gpt4v-style`). Flamingo uses perceiver resampler + gated cross-attn every `cross_every` LM layers.
+`gpt4v-style` is a LLaVA-class alias. Flamingo adds a perceiver + gated cross-attention into the LM.
 
-## Transformer
+---
+
+## Transformer (text)
 
 ```yaml
 method: transformer
@@ -178,14 +184,14 @@ data:
   # src / tgt for encoder-decoder
 ```
 
+---
+
 ## Guard (opt-in)
 
 ```yaml
 guard:
-  safety: true
-  leak: true
+  safety: true    # abort on exploding loss / NaNs
+  leak: true      # abort if train data overlaps eval probes
 ```
 
-## Custom methods
-
-Only if you need something not built in: `tools/<name>.py` with `fit(src, rec)`.
+See [Metrics & guard](./metrics-and-guard.md).

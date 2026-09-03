@@ -1,25 +1,16 @@
 # Aquin Framework
 
-A train is a directory. **aq** is the CLI. The Python kernel ships inside the `aq` package (`aq/kernel/`).
+A train is a directory. **aq** is the CLI. The Python kernel ships inside the `aq` package.
 
-**Full documentation:** [`docs/`](./docs/README.md) — philosophy, architecture, CLI, kernel, methods, agent, jobs, auth, install, tests, and roadmap.
+**Docs (how to use aq):** [`docs/`](./docs/README.md) — start with [Getting started](./docs/getting-started.md).
 
 ## Install
-
-**Team (R2 release on aq.aquin.app):**
 
 ```bash
 curl -fsSL https://aq.aquin.app/framework/install.sh | bash
 ```
 
-Tarballs live in Cloudflare R2; a Worker proxies `https://aq.aquin.app/releases/aq-latestv.tar.gz`. See `scripts/cloudflare/releases-worker/README.md` to set up the bucket and publish.
-
-**Download metrics** (install script + tarball counts; reads from R2, loads creds from `web/.env` automatically):
-
-```bash
-./scripts/download-metrics.sh
-./scripts/download-metrics.sh --days 7
-```
+Needs **Node ≥ 18**, **npm**, and **python3**. Then `aq help` · `aq doctor`.
 
 From a checkout:
 
@@ -29,27 +20,21 @@ cd aq && npm install && npm link
 ./install.sh
 ```
 
-**Private git remote** (SSH access to the repo):
-
-```bash
-AQUIN_REPO=git@github.com:YOUR_ORG/aqfw.git ./install.sh
-```
-
-Requires **Node ≥ 18**, **npm**, **python3**, and **curl/tar** for release install. Kernel ML deps install into `aq/kernel/.venv` via `aq/kernel/requirements.txt` (torch, transformers, peft, scikit-learn, …). Default install dir: `$HOME/.local/share/aquin-framework` (`AQUIN_INSTALL_DIR` to override).
-
-**Recipe is the train API.** For LLM/LoRA set `model:` to a hub id. QLoRA needs CUDA + bitsandbytes. See `docs/` and `internals/COMPLETED.md` for what is actually supported (unsupported knobs fail closed).
+More options: [docs/install.md](./docs/install.md).
 
 ## Use
 
 ```bash
-aq help
-aq
-aq agent
-aq init my-train
-# or: aq init  →  aq-experiment / aq-experiment-new1 …
-cd my-train
-aq train
-aq job run -- echo hello
+aq init my-train && cd my-train
+# edit recipe.yaml + data
+aq train && aq eval && aq status
 ```
 
-After CLI changes: `cd aq && npm run build`.
+Or open the agent on a TTY: `aq`
+
+**Recipe is the train API.** For LLM/LoRA set `model:` to a hub id. QLoRA needs CUDA + bitsandbytes. Unsupported knobs fail closed.
+
+## Maintainers
+
+- Publish: [`scripts/release.sh`](./scripts/release.sh) · [docs/author/release.md](./docs/author/release.md)  
+- Internals / coverage: [`docs/author/`](./docs/author/README.md) · [`internals/`](./internals/TODO.md)
