@@ -1,5 +1,6 @@
 # Local only. Not on the remote.
 internals/
+.tools/
 
 # Node
 node_modules/
