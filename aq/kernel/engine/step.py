@@ -334,6 +334,7 @@ def do_serve(
     prompt: str | None,
     max_tokens: int | None,
     temperature: float | None,
+    image: str | None = None,
 ) -> list[str]:
     rec = load_recipe(train)
     ckpt = ckpt_dir(train) / ckpt_name if ckpt_name else last_ckpt(train)
@@ -343,11 +344,16 @@ def do_serve(
     pinned = check_tokenizer(train, model)
     if pinned is not None:
         model["tokenizer"] = pinned
+    serve = rec.get("serve") if isinstance(rec.get("serve"), dict) else {}
     if not prompt:
-        serve = rec.get("serve") if isinstance(rec.get("serve"), dict) else {}
         prompt = serve.get("prompt")
-    if not prompt:
-        raise SystemExit("serve needs a prompt (argv or recipe serve.prompt)")
+    # vision / clip may serve with only --image / serve.image
+    if not prompt and not image and not (serve.get("image") or serve.get("img") or serve.get("path")):
+        if not serve.get("features"):
+            raise SystemExit(
+                "serve needs a prompt (argv or recipe serve.prompt), "
+                "and/or --image / serve.image, or serve.features for tabular"
+            )
     kind = str(model.get("kind") or rec.get("method") or "linear")
     aq_metrics.begin(
         train,
@@ -356,14 +362,20 @@ def do_serve(
         checkpoint=str(ckpt.relative_to(train)),
         max_tokens=max_tokens,
         temperature=temperature,
-        prompt_chars=len(str(prompt)),
+        prompt_chars=len(str(prompt or "")),
+        has_image=bool(image or serve.get("image") or serve.get("img")),
     )
     try:
         mod = load_method(train, kind)
         if not hasattr(mod, "generate"):
-            raise SystemExit(f"method {kind} has no generate()")
+            raise SystemExit(
+                f"method {kind} has no generate() — every built-in should. "
+                "If this is a custom tools/method, add generate(model, prompt, rec, ...)."
+            )
         rec2 = {**rec, "_train": str(train.resolve())}
-        out = mod.generate(model, str(prompt), rec2, max_tokens=max_tokens, temperature=temperature)
+        if image:
+            rec2 = {**rec2, "_serve_image": str(image)}
+        out = mod.generate(model, str(prompt or ""), rec2, max_tokens=max_tokens, temperature=temperature)
         out["checkpoint"] = str(ckpt.relative_to(train))
         write_json(train / "artifacts" / "serve.json", out)
         aq_metrics.end(
@@ -390,9 +402,14 @@ def do_serve(
             "  artifacts/metrics.jsonl",
             "  artifacts/runs/" + rid + ".json",
         ]
-        if out.get("completion") not in (None, ""):
+        if out.get("completion") not in (None, "", out.get("text")):
             lines.append("  completion: " + str(out.get("completion")))
-        lines.append("  tokens: " + str(out.get("tokens")))
+        if out.get("label") not in (None, ""):
+            lines.append("  label: " + str(out.get("label")))
+        if out.get("score") is not None:
+            lines.append("  score: " + str(out.get("score")))
+        if out.get("tokens") is not None:
+            lines.append("  tokens: " + str(out.get("tokens")))
         return lines
     except Exception as e:
         aq_metrics.event("error", error=str(e))

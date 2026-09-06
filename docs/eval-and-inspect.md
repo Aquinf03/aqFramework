@@ -26,6 +26,20 @@ On a real terminal, eval shows a **scoreboard** (metric, score, verdict, probes)
 
 After train, many methods write `artifacts/inspect.md` — coefficients, architecture, tokenizer notes, whatever helps a human. Read it before thrashing five recipe knobs.
 
+## Serve (`aq serve`)
+
+Run the last checkpoint. Every built-in method has `generate()`:
+
+| Kind | Example |
+|------|---------|
+| LLM / LoRA | `aq serve "hello" --max-tokens 64` |
+| LLaVA / Flamingo | `aq serve "what is this?" --image data/x.png` |
+| CLIP | `aq serve "a cat" --image data/x.png` |
+| CNN / ViT | `aq serve data/x.png` or `--image` |
+| Tabular | `aq serve "[1.0, 2.0, 3.0]"` |
+
+Optional recipe keys: `serve.prompt`, `serve.image`, `serve.features`, `serve.labels` (CLIP zero-shot). Output: `artifacts/serve.json`.
+
 ## Runs, status, diff
 
 Each train/eval/serve appends `artifacts/runs/{id}.json` (and a short `.md`). `last.json` points at the newest.

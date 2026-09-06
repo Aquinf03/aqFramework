@@ -418,3 +418,124 @@ def write_inspect(train: Path, model: dict) -> str:
     rel = "artifacts/inspect.md"
     (train / rel).write_text("\n".join(lines), encoding="utf-8")
     return rel
+
+
+def generate(
+    model: dict,
+    prompt: str,
+    rec: dict,
+    max_tokens: int | None = None,
+    temperature: float | None = None,
+) -> dict:
+    """Multimodal generate for LLaVA / Flamingo / GPT-4V-style."""
+    torch = require_torch()
+    from torch.nn import functional as F
+
+    train = Path(rec["_train"]) if rec.get("_train") else Path.cwd()
+    from backends.serve_io import resolve_image, result_text, serve_block
+    from backends.vlm_data import load_image_tensor
+
+    img_path, text = resolve_image(prompt, rec, image=rec.get("_serve_image"))
+    if img_path is None:
+        raise SystemExit(
+            "vlm serve needs an image: aq serve \"your question\" --image path.png "
+            "(or recipe serve.image / serve.prompt)"
+        )
+    if not text.strip():
+        text = str(serve_block(rec).get("prompt") or "Describe the image.")
+
+    net, tok, image_size, arch_key, image_token_id = _load(train, model)
+    device = torch_device()
+    img = load_image_tensor(img_path, image_size, train=False).unsqueeze(0).to(device)
+
+    content = text
+    if IMAGE_TOKEN not in content:
+        content = IMAGE_TOKEN + "\n" + content
+    prompt_str = f"User: {content}\nAssistant:"
+    enc = tok(prompt_str, return_tensors="pt")
+    input_ids = enc["input_ids"].to(device)
+    attention_mask = enc.get("attention_mask")
+    if attention_mask is not None:
+        attention_mask = attention_mask.to(device)
+
+    mt = int(max_tokens if max_tokens is not None else opt(rec, "max_tokens", 64, "serve") or 64)
+    temp = float(
+        temperature if temperature is not None else opt(rec, "temperature", 0.7, "serve") or 0.7
+    )
+    eos = tok.eos_token_id
+    pad = tok.pad_token_id if tok.pad_token_id is not None else eos
+
+    # Prefer HF generate on LLaVA via expanded embeds; Flamingo uses AR loop.
+    completion_ids: list[int] = []
+    with torch.no_grad():
+        if arch_key != "flamingo" and hasattr(net, "prepare_inputs_embeds"):
+            embeds, mask = net.prepare_inputs_embeds(
+                input_ids, img, image_token_id, attention_mask
+            )
+            gen_kw = dict(
+                inputs_embeds=embeds,
+                attention_mask=mask,
+                max_new_tokens=mt,
+                do_sample=temp > 0,
+                pad_token_id=pad,
+                eos_token_id=eos,
+                use_cache=True,
+            )
+            if temp > 0:
+                gen_kw["temperature"] = max(temp, 1e-5)
+            out_ids = net.lang_model.generate(**gen_kw)
+            # generate returns only new tokens when inputs_embeds used? usually full sequence of new
+            # HF returns prompt_len + new when input_ids; with inputs_embeds returns generated continuation length varies
+            new = out_ids[0]
+            # decode all generated token ids (embeds path often returns only new tokens)
+            text_out = tok.decode(new, skip_special_tokens=True)
+            # strip prompt echo if present
+            if text_out.startswith(prompt_str):
+                text_out = text_out[len(prompt_str) :].lstrip()
+            elif "Assistant:" in text_out:
+                text_out = text_out.split("Assistant:")[-1].lstrip()
+            return result_text(
+                completion=text_out.strip(),
+                tokens=int(new.numel()),
+                prompt=text,
+                image=str(img_path),
+                device=device_kind(),
+                arch=arch_key,
+            )
+
+        cur_ids = input_ids
+        cur_mask = attention_mask
+        for _ in range(mt):
+            kwargs = {
+                "input_ids": cur_ids,
+                "attention_mask": cur_mask,
+                "images": img,
+            }
+            if arch_key != "flamingo":
+                kwargs["image_token_id"] = image_token_id
+            out = net(**kwargs)
+            logits = out.logits[:, -1, :]
+            if temp <= 0:
+                next_id = int(logits.argmax(-1).item())
+            else:
+                probs = F.softmax(logits / max(temp, 1e-5), dim=-1)
+                next_id = int(torch.multinomial(probs, 1).item())
+            completion_ids.append(next_id)
+            if eos is not None and next_id == eos:
+                break
+            next_t = torch.tensor([[next_id]], device=device, dtype=cur_ids.dtype)
+            cur_ids = torch.cat([cur_ids, next_t], dim=1)
+            if cur_mask is not None:
+                cur_mask = torch.cat(
+                    [cur_mask, torch.ones((1, 1), device=device, dtype=cur_mask.dtype)], dim=1
+                )
+
+    text_out = tok.decode(completion_ids, skip_special_tokens=True)
+    return result_text(
+        completion=text_out.strip(),
+        tokens=len(completion_ids),
+        prompt=text,
+        image=str(img_path),
+        device=device_kind(),
+        arch=arch_key,
+    )

@@ -35,6 +35,7 @@ export type KernelReq = {
   keep?: string
   probe?: string
   prompt?: string
+  image?: string
   max_tokens?: number
   temperature?: number
   kind?: string
@@ -140,6 +141,8 @@ export async function kernelStep(step: string, argv: string[]): Promise<void> {
   rest = mt.rest
   const temp = popFlag(rest, "--temperature")
   rest = temp.rest
+  const image = popFlag(rest, "--image")
+  rest = image.rest
 
   let train: string
   let probe: string | undefined
@@ -162,7 +165,9 @@ export async function kernelStep(step: string, argv: string[]): Promise<void> {
     } else if (rest.length === 0) {
       train = assertTrain(".")
     } else {
-      throw new Error("usage: aq serve [dir] [prompt] [--ckpt name] [--max-tokens n] [--temperature t]")
+      throw new Error(
+        "usage: aq serve [dir] [prompt] [--image path] [--ckpt name] [--max-tokens n] [--temperature t]",
+      )
     }
   } else if (rest.length > 1) {
     throw new Error(`usage: aq ${step} [dir]`)
@@ -174,6 +179,7 @@ export async function kernelStep(step: string, argv: string[]): Promise<void> {
   if (keep.value) req.keep = keep.value
   if (probe) req.probe = probe
   if (prompt) req.prompt = prompt
+  if (image.value) req.image = image.value
   if (mt.value !== undefined) req.max_tokens = Number(mt.value)
   if (temp.value !== undefined) req.temperature = Number(temp.value)
   await runKernel(train, req)

@@ -421,3 +421,55 @@ def evaluate(model: dict, src: Path, rec: dict) -> tuple[float, int]:
         ss_res = sum((y[i] - p[i]) ** 2 for i in range(len(y)))
         return 1.0 - ss_res / ss_tot, len(y)
     return _mse(y, p), len(y)
+
+
+def generate(
+    model: dict,
+    prompt: str,
+    rec: dict,
+    max_tokens: int | None = None,
+    temperature: float | None = None,
+) -> dict:
+    """Tabular serve: predict one row from prompt / serve.features."""
+    del max_tokens, temperature
+    from backends.serve_io import parse_feature_row, result_text, serve_block
+
+    block = serve_block(rec)
+    feats = model.get("features") or []
+    n = len(feats) if feats else None
+    raw = prompt.strip() if prompt and prompt.strip() else None
+    if raw is None and block.get("features") is not None:
+        feat_val = block["features"]
+        if isinstance(feat_val, list):
+            row = [float(x) for x in feat_val]
+        else:
+            row = parse_feature_row(str(feat_val), n)
+    else:
+        row = parse_feature_row(raw or "", n)
+    if n is not None and len(row) != n:
+        raise SystemExit(f"expected {n} features ({feats}), got {len(row)}")
+
+    path = model.get("estimator_path")
+    train = rec.get("_train")
+    if path and train:
+        import joblib
+
+        est = joblib.load(Path(train) / path)
+        pred = est.predict([row])[0]
+        # optional proba
+        score = None
+        if hasattr(est, "predict_proba"):
+            try:
+                proba = est.predict_proba([row])[0]
+                score = float(max(proba))
+            except Exception:
+                score = None
+    else:
+        pred = predict(model, [row])[0]
+        score = None
+
+    label = str(pred)
+    out = result_text(text=label, label=label, prediction=pred, features=row)
+    if score is not None:
+        out["score"] = score
+    return out

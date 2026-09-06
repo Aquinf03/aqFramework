@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from backends.sklearn_tab import fit_estimator, predict as sk_predict, evaluate as sk_evaluate
+from backends.sklearn_tab import fit_estimator, predict as sk_predict, evaluate as sk_evaluate, generate as sk_generate
 
 
 def fit(src: Path, rec: dict) -> dict:
@@ -17,6 +17,10 @@ def predict(model: dict, X: list) -> list:
 
 def evaluate(model: dict, src: Path, rec: dict) -> tuple[float, int]:
     return sk_evaluate(model, src, rec)
+
+
+def generate(model, prompt, rec, max_tokens=None, temperature=None):
+    return sk_generate(model, prompt, rec, max_tokens=max_tokens, temperature=temperature)
 
 
 def write_inspect(train: Path, model: dict) -> str:

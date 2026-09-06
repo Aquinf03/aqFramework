@@ -23,6 +23,7 @@ REQ_KEYS = {
     "keep",
     "probe",
     "prompt",
+    "image",
     "max_tokens",
     "temperature",
     "kind",
@@ -53,6 +54,7 @@ def dispatch(train: Path, req: dict) -> list[str]:
             req.get("prompt"),
             int(mt) if mt is not None else None,
             float(temp) if temp is not None else None,
+            image=req.get("image"),
         )
     if op == "plot":
         return do_plot(train, req)

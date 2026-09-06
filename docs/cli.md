@@ -41,7 +41,7 @@ Model keys live in `~/.aq/config.json`. Aquin account tokens live in `~/.aquin/`
 | `aq train [dir]` | Fit; checkpoints + metrics |
 | `aq eval [dir] [name] [--ckpt name]` | Score `evals/` (all if name omitted) |
 | `aq checkpoint [dir] [--keep name]` | List or name a copy of `last` |
-| `aq serve [dir] [prompt] [--ckpt name] [--max-tokens n] [--temperature t]` | Generate |
+| `aq serve [dir] [prompt] [--image path] [--ckpt name] [--max-tokens n] [--temperature t]` | Run the last checkpoint |
 | `aq status [dir]` | Jobs, plans, last run, eval, recent metrics |
 | `aq diff [dir] [<a> <b>]` | List runs or diff two run records |
 | `aq plot [dir] [metrics\|jobs\|runs\|all]` | Charts → `artifacts/plots/` |
@@ -50,7 +50,7 @@ Model keys live in `~/.aq/config.json`. Aquin account tokens live in `~/.aquin/`
 
 - Opt-in watches: `guard.safety` / `guard.leak` in the recipe — see [Metrics & guard](./metrics-and-guard.md).  
 - `aq eval` is the **human gate**. With `eval.min_score` you get pass/fail; otherwise scores only.  
-- `aq serve` needs a method that can generate.  
+- `aq serve` works for **every** built-in method (LLM completion, VLM + `--image`, vision classify, CLIP score/embed, tabular predict). Writes `artifacts/serve.json`.  
 - `plot.auto: true` in the recipe charts after train.
 
 ---

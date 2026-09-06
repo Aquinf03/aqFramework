@@ -328,3 +328,86 @@ def write_inspect(train: Path, model: dict) -> str:
     rel = "artifacts/inspect.md"
     (train / rel).write_text("\n".join(lines), encoding="utf-8")
     return rel
+
+
+def generate(
+    model: dict,
+    prompt: str,
+    rec: dict,
+    max_tokens: int | None = None,
+    temperature: float | None = None,
+) -> dict:
+    """CLIP/SigLIP serve: image↔text score, or embed image/text alone."""
+    del max_tokens, temperature  # unused for contrastive
+    torch = require_torch()
+    train = Path(rec["_train"]) if rec.get("_train") else Path.cwd()
+    from backends.serve_io import resolve_image, result_text, serve_block
+    from backends.vlm_data import load_image_tensor
+
+    img_path, text = resolve_image(prompt, rec, image=rec.get("_serve_image"))
+    net, tokenizer, image_size, arch_key = _load(train, model)
+    device = torch_device()
+    block = serve_block(rec)
+
+    with torch.no_grad():
+        if img_path is not None and text.strip():
+            img = load_image_tensor(img_path, image_size, train=False).unsqueeze(0).to(device)
+            ids = torch.tensor([tokenizer.encode(text)], dtype=torch.long, device=device)
+            out = net(img, ids)
+            # diagonal / single-pair similarity
+            score = float((out["image_features"] * out["text_features"]).sum(-1).item())
+            scale = float(out["logit_scale"].item()) if "logit_scale" in out else 1.0
+            return result_text(
+                text=f"similarity={score:.4f} (logit_scale={scale:.3f})",
+                score=score,
+                logit_scale=scale,
+                prompt=text,
+                image=str(img_path),
+                device=device_kind(),
+                arch=arch_key,
+            )
+        if img_path is not None:
+            img = load_image_tensor(img_path, image_size, train=False).unsqueeze(0).to(device)
+            feats = net.encode_image(img)[0]
+            # optional zero-shot labels from serve.labels
+            labels = block.get("labels") or block.get("classes")
+            if labels:
+                labs = [str(x) for x in labels]
+                txt = torch.tensor(
+                    [tokenizer.encode(t) for t in labs], dtype=torch.long, device=device
+                )
+                tfeat = net.encode_text(txt)
+                sims = (feats.unsqueeze(0) @ tfeat.t()).squeeze(0)
+                idx = int(sims.argmax().item())
+                return result_text(
+                    text=labs[idx],
+                    label=labs[idx],
+                    score=float(sims[idx].item()),
+                    scores={labs[i]: float(sims[i].item()) for i in range(len(labs))},
+                    image=str(img_path),
+                    device=device_kind(),
+                    arch=arch_key,
+                )
+            vec = [round(float(x), 6) for x in feats.tolist()[:16]]
+            return result_text(
+                text=f"image_embed[:16]={vec} dim={int(feats.numel())}",
+                embedding_dim=int(feats.numel()),
+                image=str(img_path),
+                device=device_kind(),
+                arch=arch_key,
+            )
+        if text.strip():
+            ids = torch.tensor([tokenizer.encode(text)], dtype=torch.long, device=device)
+            feats = net.encode_text(ids)[0]
+            vec = [round(float(x), 6) for x in feats.tolist()[:16]]
+            return result_text(
+                text=f"text_embed[:16]={vec} dim={int(feats.numel())}",
+                embedding_dim=int(feats.numel()),
+                prompt=text,
+                device=device_kind(),
+                arch=arch_key,
+            )
+    raise SystemExit(
+        "clip serve needs text and/or --image "
+        '(e.g. aq serve "a cat" --image cat.png, or serve.labels for zero-shot)'
+    )

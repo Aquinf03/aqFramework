@@ -33,7 +33,7 @@ function nativeAqTools(): AgentToolDef[] {
     ["train", "Fit. If cwd is not a train, args MUST be the train folder. Writes artifacts/checkpoints/last.json."],
     ["eval", "Score evals/. If cwd is not a train, args starts with the train folder. Humans own the gate."],
     ["checkpoint", "List or keep a checkpoint. If cwd is not a train, pass the train folder in args."],
-    ["serve", "Generate from last checkpoint. If cwd is not a train, args starts with the train folder, then the prompt."],
+    ["serve", "Run last checkpoint: LLM completion, VLM (+ --image), vision classify, CLIP score, or tabular predict."],
     ["data", "Hash recipe data.path. Extra args after data."],
     ["job", "Run, list, log, cancel jobs; job plan for cron/sweeps/pipelines."],
     ["fork", "Copy this train to try a variant without mutating the original."],

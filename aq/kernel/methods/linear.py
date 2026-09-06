@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from backends.sklearn_tab import fit_estimator, load_xy, predict as sk_predict, evaluate as sk_evaluate
+from backends.sklearn_tab import fit_estimator, load_xy, predict as sk_predict, evaluate as sk_evaluate, generate as sk_generate
 
 # engine imports load_xy from methods.linear
-__all__ = ["fit", "predict", "load_xy", "write_inspect", "evaluate"]
+__all__ = ["fit", "predict", "load_xy", "write_inspect", "evaluate", "generate"]
 
 
 def fit(src: Path, rec: dict) -> dict:
@@ -20,6 +20,10 @@ def predict(model: dict, X: list) -> list:
 
 def evaluate(model: dict, src: Path, rec: dict) -> tuple[float, int]:
     return sk_evaluate(model, src, rec)
+
+
+def generate(model, prompt, rec, max_tokens=None, temperature=None):
+    return sk_generate(model, prompt, rec, max_tokens=max_tokens, temperature=temperature)
 
 
 def write_inspect(train: Path, model: dict) -> str:

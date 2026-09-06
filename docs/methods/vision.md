@@ -21,4 +21,12 @@ Full knobs: [Recipe — Vision](../recipe.md).
 
 Set `vision:` to any size you want (`vit-h/14`, `ViT-H-14`, …). Optional `vision_pretrained:` loads an OpenCLIP weight tag (`pip install open-clip-torch`). Generative VLMs also need a causal LM in `model:` (HF id or local folder).
 
+After train:
+
+```bash
+aq serve "what is in this image?" --image data/foo.png --max-tokens 64   # llava / flamingo
+aq serve "a photo of a cat" --image data/foo.png                         # clip similarity
+aq serve --image data/foo.png                                            # cnn / vit classify
+```
+
 Examples live under `tests/cnn-vision`, `tests/vit-vision`, `tests/vlm-clip`, `tests/vlm-llava` in the repo.

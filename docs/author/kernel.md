@@ -80,14 +80,14 @@ Iterative methods should call `aq_metrics.step(step=…, loss=…, lr=…)` duri
 
 ## `do_serve`
 
-Requires a prompt from argv or `serve.prompt` in the recipe. Method must implement:
+Requires a prompt from argv or `serve.prompt` (and/or `--image` / `serve.image` / `serve.features`). Method must implement:
 
 ```python
 def generate(model, prompt, rec, max_tokens=None, temperature=None):
     ...
 ```
 
-Writes `artifacts/serve.json` (completion, tokens, …).
+Built-ins cover LLM, VLM, vision classify, CLIP, and tabular. Writes `artifacts/serve.json` (completion/label/score, tokens, …).
 
 ---
 

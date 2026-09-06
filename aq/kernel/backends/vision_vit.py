@@ -635,3 +635,47 @@ def write_inspect(train: Path, model: dict) -> str:
     rel = "artifacts/inspect.md"
     (train / rel).write_text("\n".join(lines), encoding="utf-8")
     return rel
+
+
+def generate(
+    model: dict,
+    prompt: str,
+    rec: dict,
+    max_tokens: int | None = None,
+    temperature: float | None = None,
+) -> dict:
+    del max_tokens, temperature
+    torch = require_torch()
+    from torch.nn import functional as F
+
+    train = Path(rec["_train"]) if rec.get("_train") else Path.cwd()
+    from backends.serve_io import resolve_image, result_text
+    from backends.vlm_data import load_image_tensor
+
+    img_path, _ = resolve_image(prompt, rec, image=rec.get("_serve_image"))
+    if img_path is None:
+        raise SystemExit(
+            "vision serve needs an image path as prompt or --image "
+            "(e.g. aq serve data/cat.png or aq serve --image data/cat.png)"
+        )
+    net, classes, image_size = _load_model(train, model)
+    device = torch_device()
+    x = load_image_tensor(img_path, image_size, train=False).unsqueeze(0).to(device)
+    with torch.no_grad():
+        logits = net(x)[0]
+        probs = F.softmax(logits, dim=-1)
+        idx = int(probs.argmax().item())
+        conf = float(probs[idx].item())
+    label = classes[idx] if idx < len(classes) else str(idx)
+    top = sorted(
+        ((classes[i] if i < len(classes) else str(i), float(probs[i].item())) for i in range(probs.numel())),
+        key=lambda t: -t[1],
+    )[:5]
+    return result_text(
+        text=label,
+        label=label,
+        score=conf,
+        topk=[{"label": a, "score": b} for a, b in top],
+        image=str(img_path),
+        device=device_kind(),
+    )

@@ -35,7 +35,7 @@ export function help(): string {
     "                          recipe guard.safety / guard.leak = opt-in fail-closed watches",
     "  aq eval [dir] [name] [--ckpt name]  score evals/<name> (all evals/ if omitted)",
     "  aq checkpoint [dir] [--keep name]  list or copy last to name",
-    "  aq serve [dir] [prompt] [--ckpt name] [--max-tokens n] [--temperature t]",
+    "  aq serve [dir] [prompt] [--image path] [--ckpt name] [--max-tokens n] [--temperature t]",
     "  aq tool [dir] [name] [-- args]  run tools/<name>; no name lists",
     "  aq job plan [dir] | tick | run <name>  cron/sweep/pipeline plans (jobs/plans/)",
     "  aq schedule …                 alias for aq job plan …",
