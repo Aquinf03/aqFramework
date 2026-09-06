@@ -42,6 +42,8 @@ function nativeAqTools(): AgentToolDef[] {
     ["stage", "Nested trains."],
     ["plot", "Generate charts from artifacts: loss/lr (metrics), job status (jobs), run comparison (runs), or all. Writes artifacts/plots/*.png. Use when the user asks for a graph, chart, or plot."],
     ["provider", "List or set model providers."],
+    ["update", "Install the latest aq release (same as curl install.sh | bash)."],
+    ["version", "Print framework version."],
   ]
   return verbs.map(([verb, description]) => ({
     name: `aq_${verb}`,

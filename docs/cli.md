@@ -5,6 +5,7 @@ On a **TTY**, bare `aq` (or `aq agent`) opens agent chat. Without a TTY, bare `a
 ```bash
 aq help
 aq version
+aq update
 aq doctor
 ```
 
@@ -14,6 +15,7 @@ aq doctor
 
 | Command | Purpose |
 |---------|---------|
+| `aq update` | Install the latest release (same as `curl …/install.sh \| bash`) |
 | `aq login` | Open the auth portal; paste the code |
 | `aq login --token aq-…` | Install an existing CLI token |
 | `aq login --check` | Who is signed in |

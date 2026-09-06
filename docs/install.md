@@ -66,6 +66,10 @@ AQUIN_REPO=git@github.com:YOUR_ORG/aqfw.git ./install.sh
 
 ## Upgrading
 
-Re-run the install script. It replaces the framework copy cleanly so you do not keep stale CLI files from an older release.
+```bash
+aq update
+```
+
+Same as re-running the install script (`curl -fsSL https://aq.aquin.app/framework/install.sh | bash`). Replaces the framework copy under `~/.local/share/aquin-framework` so you do not keep stale CLI files. Override URL with `AQUIN_INSTALL_URL` if needed.
 
 Publishing releases (R2, wrangler) is maintainer work — see [author/release](./author/release.md).

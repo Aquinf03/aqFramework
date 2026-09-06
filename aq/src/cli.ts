@@ -19,6 +19,7 @@ import { providerCmd } from "./agent/provider.js"
 import { doctorCmd } from "./agent/doctor.js"
 import { spawnCmd } from "./agent/spawn.js"
 import { loginCmd, logoutCmd, switchCmd } from "./handle/login.js"
+import { updateCmd } from "./handle/update.js"
 import { versionReport } from "./core/version.js"
 import { InterruptedError } from "./core/python.js"
 
@@ -29,6 +30,10 @@ async function main(): Promise<void> {
     const verbose =
       cmd === "version" && (argv.includes("--verbose") || argv.includes("-V") || argv.slice(1).includes("-v"))
     console.log(versionReport(verbose))
+    return
+  }
+  if (cmd === "update") {
+    await updateCmd(argv.slice(1))
     return
   }
   if (!cmd || cmd === "agent" || cmd === "help" || cmd === "-h" || cmd === "--help") {
