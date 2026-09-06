@@ -26,7 +26,7 @@ Override any built-in: put `tools/<method>.py` with a `fit()` in **that train**.
 | Claim | Reality |
 |-------|---------|
 | QLoRA | CUDA + bitsandbytes only |
-| Vision / VLM towers | aq-owned nets (not silent torchvision / timm wrappers) |
+| Vision / VLM towers | aq ViTs (incl. H/14) · optional OpenCLIP pretrained via `vision_pretrained` |
 | `formats:` | Real export when the stack allows; otherwise fails closed |
 | Speculative decode | Needs `draft_model:` at serve |
 | `paged_kv` | Recorded; serve still uses a normal cache |

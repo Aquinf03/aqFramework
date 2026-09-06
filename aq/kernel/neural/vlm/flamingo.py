@@ -7,10 +7,8 @@ from typing import Any
 import torch
 from torch import nn
 
-from neural.vit.factory import build_vit
-from neural.vit.vit import VisionTransformer
-
 from .connectors import GatedCrossAttention, LLaVAProjector, PerceiverResampler
+from .vision_tower import build_aq_vit_backbone, load_open_clip_visual, wants_open_clip
 
 
 def _get_decoder_layers(lang_model: nn.Module) -> nn.ModuleList:
@@ -57,17 +55,24 @@ class FlamingoForCausalLM(nn.Module):
         cross_every: int = 1,
         freeze_vision: bool = True,
         freeze_lm: bool = True,
+        vision_pretrained: str | bool | None = None,
     ):
         super().__init__()
         self.lang_model = lang_model
         hidden = int(lang_model.config.hidden_size)
         heads = int(getattr(lang_model.config, "num_attention_heads", 8))
-        backbone = build_vit(vision_arch, num_classes=0, img_size=img_size)
-        if not isinstance(backbone, VisionTransformer):
-            raise SystemExit(f"Flamingo vision needs ViT arch, got {vision_arch!r}")
+        if wants_open_clip(vision_arch, vision_pretrained if isinstance(vision_pretrained, str) else None) or (
+            isinstance(vision_pretrained, str) and vision_pretrained
+        ):
+            tag = vision_pretrained if isinstance(vision_pretrained, str) else None
+            backbone, _ = load_open_clip_visual(vision_arch, pretrained=tag, img_size=img_size)
+            vis_dim = backbone.dim
+        else:
+            backbone = build_aq_vit_backbone(vision_arch, img_size=img_size)
+            vis_dim = backbone.dim
         self.vision = backbone
         # map vision dim → LM hidden before perceiver
-        self.vision_proj = LLaVAProjector(backbone.dim, hidden, mlp_depth=1)
+        self.vision_proj = LLaVAProjector(vis_dim, hidden, mlp_depth=1)
         self.resampler = PerceiverResampler(
             dim=hidden, depth=resampler_depth, heads=max(1, heads // 2) or 8, num_latents=num_latents
         )
@@ -93,7 +98,9 @@ class FlamingoForCausalLM(nn.Module):
         return self.lang_model.config
 
     def encode_media(self, images: torch.Tensor) -> torch.Tensor:
-        feats = self.vision.forward_features(images)[:, 1:, :]  # drop CLS
+        feats = self.vision.forward_features(images)
+        if feats.dim() == 3 and feats.shape[1] > 1:
+            feats = feats[:, 1:, :]  # drop CLS when present
         feats = self.vision_proj(feats)
         return self.resampler(feats)  # B, latents, H
 

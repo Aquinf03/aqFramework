@@ -27,6 +27,9 @@ def fit(src: Path, rec: dict) -> dict:
     arch_raw = str(opt(rec, "arch", "clip", "train", "vlm", "clip") or "clip")
     arch_key = resolve_clip_arch(arch_raw)
     vision_arch = str(opt(rec, "vision", "vit-b/16", "train", "vlm", "clip") or "vit-b/16")
+    vision_pretrained = opt(rec, "vision_pretrained", None, "train", "vlm", "clip")
+    if vision_pretrained is None:
+        vision_pretrained = opt(rec, "pretrained", None, "train", "vlm", "clip")
     image_size = int(opt(rec, "image_size", 224, "train", "vlm", "clip") or 224)
     embed_dim = int(opt(rec, "embed_dim", 512, "train", "vlm", "clip") or 512)
     text_width = int(opt(rec, "text_width", 512, "train", "vlm", "clip") or 512)
@@ -75,6 +78,7 @@ def fit(src: Path, rec: dict) -> dict:
         text_heads=text_heads,
         text_layers=text_layers,
         context_length=context_length,
+        vision_pretrained=vision_pretrained,
     )
     device = torch_device()
     model.to(device)
@@ -171,6 +175,7 @@ def fit(src: Path, rec: dict) -> dict:
             "arch": arch_raw,
             "arch_key": arch_key,
             "vision_arch": vision_arch,
+            "vision_pretrained": vision_pretrained,
             "image_size": image_size,
             "embed_dim": embed_dim,
             "vocab_size": vocab_size,
@@ -189,6 +194,7 @@ def fit(src: Path, rec: dict) -> dict:
         "arch": arch_raw,
         "arch_key": arch_key,
         "vision_arch": vision_arch,
+        "vision_pretrained": vision_pretrained,
         "image_size": image_size,
         "embed_dim": embed_dim,
         "vocab_size": vocab_size,
@@ -273,6 +279,7 @@ def _load(train: Path, model: dict):
         text_heads=int(blob.get("text_heads") or 8),
         text_layers=int(blob.get("text_layers") or 12),
         context_length=int(blob.get("context_length") or 77),
+        vision_pretrained=blob.get("vision_pretrained") or model.get("vision_pretrained"),
     )
     net.load_state_dict(blob["state_dict"])
     net.to(torch_device())

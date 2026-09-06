@@ -29,6 +29,9 @@ def fit(src: Path, rec: dict) -> dict:
     arch_raw = str(opt(rec, "arch", "llava", "train", "vlm", "llava") or "llava")
     arch_key = resolve_gen_arch(arch_raw)
     vision_arch = str(opt(rec, "vision", "vit-b/16", "train", "vlm", "llava") or "vit-b/16")
+    vision_pretrained = opt(rec, "vision_pretrained", None, "train", "vlm", "llava")
+    if vision_pretrained is None:
+        vision_pretrained = opt(rec, "pretrained", None, "train", "vlm", "llava")
     image_size = int(opt(rec, "image_size", 224, "train", "vlm", "llava") or 224)
     model_id = resolve_model_id(rec)
     # allow train-relative local LM paths
@@ -82,6 +85,7 @@ def fit(src: Path, rec: dict) -> dict:
             cross_every=cross_every,
             freeze_vision=freeze_vision,
             freeze_lm=freeze_lm,
+            vision_pretrained=vision_pretrained,
         )
     else:
         model = LLaVAForCausalLM(
@@ -90,6 +94,7 @@ def fit(src: Path, rec: dict) -> dict:
             img_size=image_size,
             freeze_vision=freeze_vision,
             freeze_lm=freeze_lm,
+            vision_pretrained=vision_pretrained,
         )
 
     device = torch_device()
@@ -236,6 +241,7 @@ def fit(src: Path, rec: dict) -> dict:
         "vision": model.vision.state_dict(),
         "arch_key": arch_key,
         "vision_arch": vision_arch,
+        "vision_pretrained": vision_pretrained,
         "image_size": image_size,
         "image_token": IMAGE_TOKEN,
         "freeze_vision": freeze_vision,
@@ -267,6 +273,7 @@ def fit(src: Path, rec: dict) -> dict:
         "arch": arch_raw,
         "arch_key": arch_key,
         "vision_arch": vision_arch,
+        "vision_pretrained": vision_pretrained,
         "model_id": model_id,
         "model_path": str(lang_dir.relative_to(train_root)),
         "connector_path": str((slot / "vlm_connector.pt").relative_to(train_root)),
@@ -310,6 +317,7 @@ def _load(train: Path, model: dict):
     blob = torch.load(train / str(conn_rel), map_location="cpu", weights_only=False)
     arch_key = blob.get("arch_key") or model.get("arch_key") or "llava"
     vision_arch = blob.get("vision_arch") or "vit-b/16"
+    vision_pretrained = blob.get("vision_pretrained") or model.get("vision_pretrained")
     image_size = int(blob.get("image_size") or 224)
     if arch_key == "flamingo":
         net = FlamingoForCausalLM(
@@ -320,6 +328,7 @@ def _load(train: Path, model: dict):
             cross_every=int(blob.get("cross_every") or 1),
             freeze_vision=True,
             freeze_lm=True,
+            vision_pretrained=vision_pretrained,
         )
         net.vision.load_state_dict(blob["vision"])
         net.vision_proj.load_state_dict(blob["vision_proj"])
@@ -327,7 +336,12 @@ def _load(train: Path, model: dict):
         net.gated_xattn.load_state_dict(blob["gated_xattn"])
     else:
         net = LLaVAForCausalLM(
-            lang, vision_arch=vision_arch, img_size=image_size, freeze_vision=True, freeze_lm=True
+            lang,
+            vision_arch=vision_arch,
+            img_size=image_size,
+            freeze_vision=True,
+            freeze_lm=True,
+            vision_pretrained=vision_pretrained,
         )
         net.vision.load_state_dict(blob["vision"])
         net.projector.load_state_dict(blob["projector"])

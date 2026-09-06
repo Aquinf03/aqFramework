@@ -19,6 +19,7 @@ matplotlib>=3.8.0
 pillow>=10.0.0
 gguf>=0.10.0
 # optional:
+# open-clip-torch       # OpenCLIP vision towers (ViT-H-14 + pretrained tags, etc.)
 # bitsandbytes>=0.43.0   # CUDA only, for QLoRA
 # auto-gptq / optimum    # CUDA, for formats: gptq
 # autoawq                # CUDA, for formats: awq

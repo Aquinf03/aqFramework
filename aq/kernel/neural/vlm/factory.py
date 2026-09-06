@@ -54,6 +54,7 @@ def build_clip(
     text_heads: int = 8,
     text_layers: int = 12,
     context_length: int = 77,
+    vision_pretrained: str | bool | None = None,
 ):
     kind = resolve_clip_arch(arch)
     kwargs = dict(
@@ -65,6 +66,7 @@ def build_clip(
         text_heads=text_heads,
         text_layers=text_layers,
         context_length=context_length,
+        vision_pretrained=vision_pretrained,
     )
     if kind == "siglip":
         return SigLIPModel(**kwargs)

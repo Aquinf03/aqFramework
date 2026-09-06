@@ -103,7 +103,9 @@ Same data layout as CNN.
 ```yaml
 family: vision
 method: vit
-arch: vit-b/16        # vit-t/16 | vit-s/16 | vit-b/16
+arch: vit-b/16        # vit-t/16 | vit-s/16 | vit-b/16 | vit-b/32
+                      # vit-l/14 | vit-l/16 | vit-h/14 | vit-g/14
+                      # (OpenCLIP names like ViT-H-14 also resolve)
                       # swin-t | swin-s | swin-b   (image_size usually 224, % 32 == 0)
                       # deit-t | deit-s | deit-b
                       # beit-b | beit-l
@@ -132,9 +134,10 @@ eval:
 family: vlm
 method: clip
 arch: clip              # or siglip
-vision: vit-b/16
+vision: ViT-H-14        # any size: vit-b/16, vit-h/14, ViT-L-14, …
+# vision_pretrained: laion2b_s32b_b79k   # OpenCLIP tag (needs open-clip-torch)
 image_size: 224
-embed_dim: 512
+embed_dim: 1024         # match tower / OpenCLIP embed when using pretrained
 epochs: 10
 batch_size: 64
 lr: 5.0e-4
@@ -146,6 +149,8 @@ eval:
   metric: recall@1         # or loss
 ```
 
+`vision:` accepts aq size strings (`vit-h/14`) **and** OpenCLIP ids (`ViT-H-14`). Set `vision_pretrained` (alias `pretrained`) to an OpenCLIP tag to load weights — `pip install open-clip-torch`. Without that tag, aq builds the matching ViT from scratch.
+
 Optional: `text_tokenizer: openai/clip-vit-base-patch32` for a pretrained CLIP tokenizer; otherwise aq builds one from your captions.
 
 ### LLaVA / GPT-4V-style / Flamingo (generative)
@@ -154,7 +159,8 @@ Optional: `text_tokenizer: openai/clip-vit-base-patch32` for a pretrained CLIP t
 family: vlm
 method: llava              # or flamingo
 arch: llava                # llava | gpt4v-style | flamingo
-vision: vit-b/16
+vision: ViT-H-14
+# vision_pretrained: laion2b_s32b_b79k
 model: meta-llama/…        # HF id or local causal LM directory
 image_size: 224
 freeze_vision: true
