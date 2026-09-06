@@ -592,6 +592,13 @@ def fit(src: Path, rec: dict, *, method_name: str | None = None) -> dict:
     ds = _build_dataset(torch, tok, texts, rec, obj, max_len, src=src)
     load_dtype, prec = resolve_train_precision(rec)
     cuda_alloc_hygiene()
+    from backends.device import log_plan, plan_compute
+
+    plan = plan_compute(rec, workload="llm", default_batch=batch, default_max_seq=max_len)
+    # recipe-explicit batch/seq already in plan; sync locals
+    batch = plan.batch_size
+    accum = plan.grad_accum
+    log_plan(plan)
 
     ta_kw: dict[str, Any] = dict(
         output_dir=str(slot / "hf" / "trainer"),
@@ -608,8 +615,10 @@ def fit(src: Path, rec: dict, *, method_name: str | None = None) -> dict:
         seed=seed,
         use_cpu=(device_kind() == "cpu"),
         dataloader_pin_memory=(device_kind() in ("cuda", "rocm")),
-        # Default off: dynamic padding + half weights usually fit; ckpt was a big T4 slowdown.
-        gradient_checkpointing=bool(opt(rec, "gradient_checkpointing", False, "train", "llm")),
+        # Default from machine plan when recipe omitted gradient_checkpointing
+        gradient_checkpointing=plan.gradient_checkpointing
+        if opt(rec, "gradient_checkpointing", None, "train", "llm") is None
+        else bool(opt(rec, "gradient_checkpointing", False, "train", "llm")),
         **prec,
     )
     # Prefer fused Adam on CUDA when available (fall back if Transformers rejects it).

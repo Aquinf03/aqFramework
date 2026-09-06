@@ -174,6 +174,19 @@ eval:
 
 `gpt4v-style` is a LLaVA-class alias. Flamingo adds a perceiver + gated cross-attention into the LM.
 
+### Machine / VRAM
+
+aq probes the GPU and plans dtype / batch / gradient checkpointing. On ~8GB cards VLMs load **bf16/fp16** (not float32), batch 1, checkpointing on. OOM triggers one auto-retry with a tighter plan.
+
+```yaml
+dtype: bf16                 # optional; aq picks half on accelerators by default
+# force_dtype: true         # only if you really want float32 on a small GPU
+batch_size: 1
+grad_accum: 4
+gradient_checkpointing: true
+max_seq_len: 512
+```
+
 ---
 
 ## Transformer (text)

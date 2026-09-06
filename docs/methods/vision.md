@@ -29,4 +29,6 @@ aq serve "a photo of a cat" --image data/foo.png                         # clip 
 aq serve --image data/foo.png                                            # cnn / vit classify
 ```
 
+On small GPUs (~8GB) aq auto-picks half precision + checkpointing for VLMs — you should not need `dtype: float32`.
+
 Examples live under `tests/cnn-vision`, `tests/vit-vision`, `tests/vlm-clip`, `tests/vlm-llava` in the repo.

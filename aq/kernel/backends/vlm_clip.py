@@ -80,8 +80,17 @@ def fit(src: Path, rec: dict) -> dict:
         context_length=context_length,
         vision_pretrained=vision_pretrained,
     )
+    from backends.device import log_plan, plan_compute
+
+    plan = plan_compute(rec, workload="clip", default_batch=batch)
+    log_plan(plan)
+    batch = plan.batch_size
     device = torch_device()
-    model.to(device)
+    dtype = plan.dtype
+    if device_kind() != "cpu" and dtype != torch.float32:
+        model.to(device=device, dtype=dtype)
+    else:
+        model.to(device)
 
     train_loader = make_pair_loader(
         train_p, tokenizer, image_size=image_size, batch_size=batch, shuffle=True, train=True, num_workers=workers
@@ -103,6 +112,10 @@ def fit(src: Path, rec: dict) -> dict:
         embed_dim=embed_dim,
         image_size=image_size,
         device=device_kind(),
+        dtype=str(dtype).replace("torch.", ""),
+        batch_size=batch,
+        gpu=plan.machine.name,
+        vram_gb=plan.machine.total_gb,
         epochs=int(epochs) if epochs is not None else None,
     )
 
@@ -119,6 +132,8 @@ def fit(src: Path, rec: dict) -> dict:
         n_batches = 0
         for images, text in train_loader:
             images = images.to(device)
+            if device_kind() != "cpu" and dtype != torch.float32:
+                images = images.to(dtype=dtype)
             text = text.to(device)
             optim.zero_grad(set_to_none=True)
             out = model(images, text)

@@ -10,10 +10,11 @@
     "bin",
     "dist",
     "kernel",
-    "assets"
+    "assets",
+    "scripts"
   ],
   "scripts": {
-    "build": "tsc && mkdir -p dist/job && cp src/job/job-wait.mjs dist/job/job-wait.mjs",
+    "build": "tsc && node scripts/copy-job-wait.mjs",
     "prepare": "npm run build",
     "aq": "node dist/cli.js"
   },

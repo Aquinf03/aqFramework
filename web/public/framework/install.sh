@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Install aq (CLI + bundled kernel). Use bash: curl … | bash
 # Never needs sudo — links into ~/.local (not /usr/local).
+# Works on macOS, Linux, and Windows (Git Bash / MSYS2). Never uses mkdir -p via cmd.exe.
 set -euo pipefail
 
 INSTALL_DIR="${AQUIN_INSTALL_DIR:-$HOME/.local/share/aquin-framework}"
@@ -8,6 +9,44 @@ BRANCH="${AQUIN_BRANCH:-main}"
 DEFAULT_RELEASE_URL="https://aq.aquin.app/releases/aq-latestv.tar.gz"
 # User-writable npm global prefix (avoids EACCES on /usr/local/lib/node_modules)
 NPM_PREFIX="${AQUIN_NPM_PREFIX:-$HOME/.local}"
+
+is_windows() {
+  case "$(uname -s 2>/dev/null || echo unknown)" in
+    MINGW*|MSYS*|CYGWIN*|Windows_NT) return 0 ;;
+  esac
+  case "${OS:-}" in
+    Windows_NT) return 0 ;;
+  esac
+  return 1
+}
+
+# Portable mkdir -p (bash/mkdir both fine; never invoke cmd's mkdir).
+mkd() {
+  # shellcheck disable=SC2086
+  command mkdir -p -- "$@" 2>/dev/null || command mkdir -p "$@"
+}
+
+# Prefer python3, then Windows `py -3`, then python.
+find_python() {
+  if command -v python3 >/dev/null 2>&1; then
+    command -v python3
+    return 0
+  fi
+  if command -v py >/dev/null 2>&1; then
+    if py -3 -c "import sys" >/dev/null 2>&1; then
+      echo "py -3"
+      return 0
+    fi
+  fi
+  if command -v python >/dev/null 2>&1; then
+    # reject Windows Store stub that prints an alias tip and exits
+    if python -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 9) else 1)" >/dev/null 2>&1; then
+      command -v python
+      return 0
+    fi
+  fi
+  return 1
+}
 
 # BASH_SOURCE is unset when the script is piped: curl … | bash
 script_dir() {
@@ -25,18 +64,26 @@ SCRIPT_DIR="$(script_dir || true)"
 
 command -v node >/dev/null || { echo "Node.js required (>=18)"; exit 1; }
 command -v npm >/dev/null || { echo "npm required"; exit 1; }
-command -v python3 >/dev/null || { echo "python3 required"; exit 1; }
+PYTHON_BIN="$(find_python)" || {
+  echo "Python 3 required (python3 on PATH, or Windows: py -3 / python)." >&2
+  exit 1
+}
 
 ensure_path_hint() {
   local bin="$NPM_PREFIX/bin"
-  mkdir -p "$bin"
+  mkd "$bin"
   # Bash may have cached a deleted path from a prior install.
   hash -r 2>/dev/null || true
   if ! echo ":$PATH:" | grep -q ":$bin:"; then
     echo ""
-    echo "Add this to your shell profile (~/.bashrc or ~/.zshrc):"
-    echo "  export PATH=\"$bin:\$PATH\""
-    echo "Then: hash -r && source ~/.bashrc"
+    if is_windows; then
+      echo "Add this to your PATH (User env vars, or Git Bash ~/.bashrc):"
+      echo "  export PATH=\"$bin:\$PATH\""
+    else
+      echo "Add this to your shell profile (~/.bashrc or ~/.zshrc):"
+      echo "  export PATH=\"$bin:\$PATH\""
+      echo "Then: hash -r && source ~/.bashrc"
+    fi
   fi
 }
 
@@ -49,7 +96,7 @@ link_aq() {
   local launcher="$bin_dir/aq"
   local node_bin
 
-  mkdir -p "$bin_dir" "$NPM_PREFIX/lib/node_modules"
+  mkd "$bin_dir" "$NPM_PREFIX/lib/node_modules"
   node_bin="$(command -v node)"
   if [ ! -f "$cli" ]; then
     echo "build missing: $cli (npm install / prepare should have created it)" >&2
@@ -61,22 +108,49 @@ link_aq() {
 
   # Stable launcher — survives npm link quirks and broken global bins.
   # Absolute paths so it works even if cwd / PATH change.
-  cat >"$launcher" <<EOF
+  if is_windows; then
+    # Bash + PowerShell/cmd launchers (no cmd.exe mkdir -p anywhere in the pipeline).
+    cat >"$launcher" <<EOF
 #!/usr/bin/env bash
 exec "$node_bin" "$cli" "\$@"
 EOF
-  chmod +x "$launcher"
+    chmod +x "$launcher" 2>/dev/null || true
+    local cli_win node_win
+    cli_win="$(cygpath -w "$cli" 2>/dev/null || echo "$cli")"
+    node_win="$(cygpath -w "$node_bin" 2>/dev/null || echo "$node_bin")"
+    # Escape backslashes for cmd — cygpath -w already uses backslashes.
+    cat >"${launcher}.cmd" <<EOF
+@echo off
+"$node_win" "$cli_win" %*
+EOF
+  else
+    cat >"$launcher" <<EOF
+#!/usr/bin/env bash
+exec "$node_bin" "$cli" "\$@"
+EOF
+    chmod +x "$launcher"
+  fi
 
-  if [ ! -x "$launcher" ]; then
+  if [ ! -f "$launcher" ] && [ ! -f "${launcher}.cmd" ]; then
     echo "failed to write $launcher" >&2
     exit 1
   fi
   # Smoke-check with the full path (avoids bash hash of a missing file).
-  if ! "$launcher" version >/dev/null 2>&1 && ! "$launcher" help >/dev/null 2>&1; then
-    echo "installed $launcher but it failed to run" >&2
-    exit 1
+  if is_windows; then
+    if ! node "$cli" version >/dev/null 2>&1 && ! node "$cli" help >/dev/null 2>&1; then
+      echo "installed launcher but aq failed to run via node $cli" >&2
+      exit 1
+    fi
+  else
+    if ! "$launcher" version >/dev/null 2>&1 && ! "$launcher" help >/dev/null 2>&1; then
+      echo "installed $launcher but it failed to run" >&2
+      exit 1
+    fi
   fi
   echo "linked  $launcher"
+  if [ -f "${launcher}.cmd" ]; then
+    echo "linked  ${launcher}.cmd"
+  fi
 }
 
 install_kernel_venv() {
@@ -88,8 +162,12 @@ install_kernel_venv() {
   echo "Installing kernel Python deps (venv)…"
   # Stale/partial venv (e.g. missing bin/python3) breaks pip shebangs — always recreate.
   rm -rf "$venv"
-  if ! python3 -m venv "$venv"; then
-    echo "Failed to create venv. On Debian/Ubuntu install: sudo apt-get install -y python3-venv python3-pip" >&2
+  # PYTHON_BIN may be "py -3" — word-split intentionally.
+  # shellcheck disable=SC2086
+  if ! $PYTHON_BIN -m venv "$venv"; then
+    echo "Failed to create venv with: $PYTHON_BIN -m venv" >&2
+    echo "On Debian/Ubuntu: sudo apt-get install -y python3-venv python3-pip" >&2
+    echo "On Windows: install Python 3 from python.org (enable py launcher) or Microsoft Store." >&2
     exit 1
   fi
   local py=""
@@ -97,9 +175,12 @@ install_kernel_venv() {
     py="$venv/bin/python"
   elif [ -x "$venv/bin/python3" ]; then
     py="$venv/bin/python3"
+  elif [ -f "$venv/Scripts/python.exe" ]; then
+    py="$venv/Scripts/python.exe"
+  elif [ -f "$venv/Scripts/python" ]; then
+    py="$venv/Scripts/python"
   else
-    echo "venv has no python binary at $venv/bin" >&2
-    echo "On Debian/Ubuntu: sudo apt-get install -y python3-venv" >&2
+    echo "venv has no python binary under $venv/bin or $venv/Scripts" >&2
     exit 1
   fi
   # Use python -m pip (not bin/pip) so a missing python3 symlink cannot break the shebang.
@@ -123,8 +204,8 @@ install_from_dir() {
   ensure_path_hint
   export PATH="$NPM_PREFIX/bin:$PATH"
   hash -r 2>/dev/null || true
-  if [ -x "$NPM_PREFIX/bin/aq" ]; then
-    if "$NPM_PREFIX/bin/aq" version >/dev/null 2>&1 || "$NPM_PREFIX/bin/aq" help >/dev/null 2>&1; then
+  if [ -x "$NPM_PREFIX/bin/aq" ] || [ -f "$NPM_PREFIX/bin/aq" ] || [ -f "$NPM_PREFIX/bin/aq.cmd" ]; then
+    if node "$root/aq/dist/cli.js" version >/dev/null 2>&1 || node "$root/aq/dist/cli.js" help >/dev/null 2>&1; then
       echo "OK: $NPM_PREFIX/bin/aq"
     fi
   else
@@ -159,7 +240,7 @@ install_from_release() {
   command -v curl >/dev/null || { echo "curl required." >&2; exit 1; }
   command -v tar >/dev/null || { echo "tar required." >&2; exit 1; }
 
-  mkdir -p "$INSTALL_DIR"
+  mkd "$INSTALL_DIR"
   local archive="$INSTALL_DIR/.release.tar.gz"
   echo "Installing Aquin..."
   if ! curl -fsSL "$url" -o "$archive" 2>/dev/null; then

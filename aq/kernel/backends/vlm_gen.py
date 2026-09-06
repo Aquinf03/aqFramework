@@ -3,10 +3,21 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 from typing import Any
 
-from backends.device import device_kind, torch_device
+from backends.device import (
+    apply_pretrained_dtype,
+    cuda_alloc_hygiene,
+    device_kind,
+    is_oom,
+    log_plan,
+    model_load_dtype,
+    plan_compute,
+    shrink_plan_for_oom,
+    torch_device,
+)
 from backends.deps import require_torch
 from backends.hf_lm import resolve_model_id
 from backends.recipe_opt import opt
@@ -22,7 +33,7 @@ IMAGE_TOKEN = "<image>"
 
 def fit(src: Path, rec: dict) -> dict:
     torch = require_torch()
-    from torch.utils.data import DataLoader, Dataset
+    from torch.utils.data import Dataset
     from transformers import AutoModelForCausalLM, Trainer, TrainingArguments
 
     train_root = Path(rec["_train"]) if rec.get("_train") else src.parent
@@ -34,12 +45,10 @@ def fit(src: Path, rec: dict) -> dict:
         vision_pretrained = opt(rec, "pretrained", None, "train", "vlm", "llava")
     image_size = int(opt(rec, "image_size", 224, "train", "vlm", "llava") or 224)
     model_id = resolve_model_id(rec)
-    # allow train-relative local LM paths
     local = train_root / model_id
     if local.is_dir() and (local / "config.json").is_file():
         model_id = str(local.resolve())
     elif not Path(model_id).is_dir() and "/" not in model_id and not model_id.startswith("."):
-        # hub id — leave as-is
         pass
     elif Path(model_id).is_dir():
         model_id = str(Path(model_id).resolve())
@@ -48,8 +57,6 @@ def fit(src: Path, rec: dict) -> dict:
     freeze_lm = bool(
         opt(rec, "freeze_lm", arch_key == "flamingo", "train", "vlm", "llava")
     )
-    max_len = int(opt(rec, "max_seq_len", 512, "train", "vlm", "llava") or 512)
-    batch = int(opt(rec, "batch_size", 1, "train", "vlm", "llava") or 1)
     lr = float(opt(rec, "lr", 2e-5, "train", "vlm", "llava") or 2e-5)
     epochs = float(opt(rec, "epochs", 1, "train", "vlm", "llava") or 1)
     steps = opt(rec, "steps", None, "train", "vlm", "llava")
@@ -59,6 +66,12 @@ def fit(src: Path, rec: dict) -> dict:
     num_latents = int(opt(rec, "num_latents", 64, "train", "vlm", "llava") or 64)
     resampler_depth = int(opt(rec, "resampler_depth", 6, "train", "vlm", "llava") or 6)
 
+    plan = plan_compute(rec, workload="vlm", default_batch=1, default_max_seq=512)
+    log_plan(plan)
+    max_len = int(plan.max_seq_len or 512)
+    batch = plan.batch_size
+    dtype = plan.dtype
+
     rows = resolve_chat(src, rec)
     train_rows, val_rows = split_pairs(rows, val_frac, seed)
 
@@ -66,13 +79,14 @@ def fit(src: Path, rec: dict) -> dict:
     tok, _ = load_hf_tokenizer(model_id, None)
     if tok.pad_token is None:
         tok.pad_token = tok.eos_token
-    # register image token
     if IMAGE_TOKEN not in tok.get_vocab():
         tok.add_special_tokens({"additional_special_tokens": [IMAGE_TOKEN]})
     image_token_id = tok.convert_tokens_to_ids(IMAGE_TOKEN)
 
-    dtype = torch.float32
-    lang = AutoModelForCausalLM.from_pretrained(model_id, torch_dtype=dtype)
+    cuda_alloc_hygiene()
+    load_kw: dict[str, Any] = {"low_cpu_mem_usage": True}
+    apply_pretrained_dtype(load_kw, dtype)
+    lang = AutoModelForCausalLM.from_pretrained(model_id, **load_kw)
     lang.resize_token_embeddings(len(tok))
 
     if arch_key == "flamingo":
@@ -98,7 +112,10 @@ def fit(src: Path, rec: dict) -> dict:
         )
 
     device = torch_device()
-    model.to(device)
+    if device_kind() != "cpu" and dtype != torch.float32:
+        model.to(device=device, dtype=dtype)
+    else:
+        model.to(device)
 
     aq_metrics.event(
         "info",
@@ -109,8 +126,8 @@ def fit(src: Path, rec: dict) -> dict:
         image_size=image_size,
         freeze_vision=freeze_vision,
         freeze_lm=freeze_lm,
-        device=device_kind(),
         epochs=epochs,
+        **plan.as_event(),
     )
 
     class ChatDS(Dataset):
@@ -151,8 +168,6 @@ def fit(src: Path, rec: dict) -> dict:
             }
 
     def collate(features: list[dict]) -> dict[str, Any]:
-        # For LLaVA: keep padded ids; model expands image token
-        # For Flamingo: no image-token expansion — images via cross-attn
         pad_id = tok.pad_token_id
         max_l = max(len(f["input_ids"]) for f in features)
         input_ids, attention_mask, labels, images = [], [], [], []
@@ -162,11 +177,14 @@ def fit(src: Path, rec: dict) -> dict:
             attention_mask.append(f["attention_mask"] + [0] * n)
             labels.append(f["labels"] + [-100] * n)
             images.append(f["images"])
+        imgs = torch.stack(images, 0)
+        if device_kind() != "cpu" and dtype != torch.float32:
+            imgs = imgs.to(dtype=dtype)
         batch_out = {
             "input_ids": torch.tensor(input_ids, dtype=torch.long),
             "attention_mask": torch.tensor(attention_mask, dtype=torch.long),
             "labels": torch.tensor(labels, dtype=torch.long),
-            "images": torch.stack(images, 0),
+            "images": imgs,
         }
         if arch_key != "flamingo":
             batch_out["image_token_id"] = image_token_id
@@ -174,65 +192,89 @@ def fit(src: Path, rec: dict) -> dict:
 
     train_ds = ChatDS(train_rows)
     max_steps = int(steps) if steps is not None else -1
-    args = TrainingArguments(
-        output_dir=str(slot / "hf" / "trainer"),
-        per_device_train_batch_size=batch,
-        learning_rate=lr,
-        num_train_epochs=epochs if max_steps < 0 else 1.0,
-        max_steps=max_steps,
-        logging_steps=1,
-        save_strategy="no",
-        report_to=[],
-        remove_unused_columns=False,
-        dataloader_pin_memory=False,
-        seed=seed,
-    )
 
-    class _Callback:
-        def __init__(self):
-            self.step = 0
+    def _build_trainer(p):
+        ta_kw: dict[str, Any] = dict(
+            output_dir=str(slot / "hf" / "trainer"),
+            per_device_train_batch_size=p.batch_size,
+            gradient_accumulation_steps=p.grad_accum,
+            learning_rate=lr,
+            num_train_epochs=epochs if max_steps < 0 else 1.0,
+            max_steps=max_steps,
+            logging_steps=1,
+            save_strategy="no",
+            report_to=[],
+            remove_unused_columns=False,
+            dataloader_pin_memory=(device_kind() in ("cuda", "rocm")),
+            seed=seed,
+            use_cpu=(device_kind() == "cpu"),
+            gradient_checkpointing=p.gradient_checkpointing,
+            **p.prec_flags,
+        )
+        try:
+            args = TrainingArguments(**ta_kw)
+        except (TypeError, ValueError):
+            ta_kw.pop("dataloader_pin_memory", None)
+            ta_kw.pop("use_cpu", None)
+            args = TrainingArguments(**ta_kw)
 
-        def on_log(self, args, state, control, logs=None, **kwargs):
-            if not logs:
-                return
-            self.step = int(state.global_step)
-            aq_metrics.step(
-                step=self.step,
-                loss=logs.get("loss"),
-                lr=logs.get("learning_rate", lr),
-                epoch=state.epoch,
-            )
+        class VLMTrainer(Trainer):
+            def compute_loss(self, model, inputs, return_outputs=False, **kwargs):
+                outputs = model(**inputs)
+                loss = outputs.loss
+                return (loss, outputs) if return_outputs else loss
 
-    # simple Trainer subclass to pass custom forward kwargs
-    class VLMTrainer(Trainer):
-        def compute_loss(self, model, inputs, return_outputs=False, **kwargs):
-            outputs = model(**inputs)
-            loss = outputs.loss
-            return (loss, outputs) if return_outputs else loss
+        tr = VLMTrainer(
+            model=model,
+            args=args,
+            train_dataset=train_ds,
+            data_collator=collate,
+        )
+        from transformers import TrainerCallback
 
-    trainer = VLMTrainer(
-        model=model,
-        args=args,
-        train_dataset=train_ds,
-        data_collator=collate,
-    )
-    # hook metrics via callback
-    from transformers import TrainerCallback
+        class MetricsCB(TrainerCallback):
+            def on_log(self, args, state, control, logs=None, **kwargs):
+                if logs and "loss" in logs:
+                    aq_metrics.step(
+                        step=int(state.global_step),
+                        loss=logs.get("loss"),
+                        lr=logs.get("learning_rate", lr),
+                        epoch=state.epoch,
+                    )
 
-    class MetricsCB(TrainerCallback):
-        def on_log(self, args, state, control, logs=None, **kwargs):
-            if logs and "loss" in logs:
-                aq_metrics.step(
-                    step=int(state.global_step),
-                    loss=logs.get("loss"),
-                    lr=logs.get("learning_rate", lr),
-                    epoch=state.epoch,
-                )
+        tr.add_callback(MetricsCB())
+        if p.gradient_checkpointing and hasattr(model, "gradient_checkpointing_enable"):
+            model.gradient_checkpointing_enable()
+            if hasattr(model, "enable_input_require_grads"):
+                model.enable_input_require_grads()
+        return tr
 
-    trainer.add_callback(MetricsCB())
-    trainer.train()
+    trainer = _build_trainer(plan)
+    try:
+        trainer.train()
+    except Exception as e:
+        if not is_oom(e):
+            raise
+        print(f"  oom   {e}", file=sys.stderr)
+        plan = shrink_plan_for_oom(plan)
+        log_plan(plan, prefix="  retry ")
+        cuda_alloc_hygiene()
+        batch = plan.batch_size
+        max_len = int(plan.max_seq_len or max_len)
+        try:
+            trainer = _build_trainer(plan)
+            trainer.train()
+        except Exception as e2:
+            if is_oom(e2):
+                raise SystemExit(
+                    f"{e2}\n\n"
+                    "VLM still OOM after aq auto-shrink. Try a smaller `model:`, "
+                    "`vision: vit-t/16`, `image_size: 128`, `max_seq_len: 256`, "
+                    "or `freeze_lm: true`. "
+                    f"Last plan: {plan.as_event()}"
+                ) from e2
+            raise
 
-    # save
     lang_dir = slot / "model"
     lang_dir.mkdir(parents=True, exist_ok=True)
     model.lang_model.save_pretrained(lang_dir)
@@ -246,6 +288,7 @@ def fit(src: Path, rec: dict) -> dict:
         "image_token": IMAGE_TOKEN,
         "freeze_vision": freeze_vision,
         "freeze_lm": freeze_lm,
+        "dtype": str(dtype).replace("torch.", ""),
     }
     if arch_key == "flamingo":
         connector["vision_proj"] = model.vision_proj.state_dict()
@@ -266,7 +309,7 @@ def fit(src: Path, rec: dict) -> dict:
             last_loss = float(row["train_loss"])
             break
     meta = {
-        "kind": arch_key,  # llava | flamingo — method loader key
+        "kind": arch_key,
         "backend": "aq-neural+transformers",
         "task": "multimodal-sft",
         "family": "vlm",
@@ -285,10 +328,17 @@ def fit(src: Path, rec: dict) -> dict:
         "steps": int(trainer.state.global_step),
         "train_loss": last_loss,
         "lr": lr,
+        "dtype": str(dtype).replace("torch.", ""),
+        "batch_size": batch,
+        "grad_accum": plan.grad_accum,
+        "gradient_checkpointing": plan.gradient_checkpointing,
         "device": device_kind(),
+        "gpu": plan.machine.name,
+        "vram_gb": plan.machine.total_gb,
         "weights_dir": str(slot.relative_to(train_root)),
         "freeze_vision": freeze_vision,
         "freeze_lm": freeze_lm,
+        "params": sum(p.numel() for p in model.parameters()),
     }
     (slot / "vlm_meta.json").write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
     return meta
@@ -313,7 +363,10 @@ def _load(train: Path, model: dict):
     if not lang_rel or not conn_rel:
         raise SystemExit("checkpoint missing model_path / connector_path")
     tok = AutoTokenizer.from_pretrained(train / str(lang_rel))
-    lang = AutoModelForCausalLM.from_pretrained(train / str(lang_rel))
+    dtype = model_load_dtype({})
+    load_kw: dict[str, Any] = {"low_cpu_mem_usage": True}
+    apply_pretrained_dtype(load_kw, dtype)
+    lang = AutoModelForCausalLM.from_pretrained(train / str(lang_rel), **load_kw)
     blob = torch.load(train / str(conn_rel), map_location="cpu", weights_only=False)
     arch_key = blob.get("arch_key") or model.get("arch_key") or "llava"
     vision_arch = blob.get("vision_arch") or "vit-b/16"
@@ -345,16 +398,20 @@ def _load(train: Path, model: dict):
         )
         net.vision.load_state_dict(blob["vision"])
         net.projector.load_state_dict(blob["projector"])
-    net.to(torch_device())
+    device = torch_device()
+    if device_kind() != "cpu" and dtype != torch.float32:
+        net.to(device=device, dtype=dtype)
+    else:
+        net.to(device)
     net.eval()
     image_token_id = tok.convert_tokens_to_ids(blob.get("image_token") or IMAGE_TOKEN)
-    return net, tok, image_size, arch_key, image_token_id
+    return net, tok, image_size, arch_key, image_token_id, dtype
 
 
 def evaluate(model: dict, src: Path, rec: dict) -> tuple[float, int]:
     torch = require_torch()
     train = Path(rec["_train"]) if rec.get("_train") else src.parent
-    net, tok, image_size, arch_key, image_token_id = _load(train, model)
+    net, tok, image_size, arch_key, image_token_id, dtype = _load(train, model)
     rows = resolve_chat(src, rec)
     device = torch_device()
     total_loss = 0.0
@@ -362,6 +419,8 @@ def evaluate(model: dict, src: Path, rec: dict) -> tuple[float, int]:
     max_len = int(opt(rec, "max_seq_len", 512, "train", "vlm", "llava") or 512)
     for row in rows:
         img = load_image_tensor(row["image"], image_size, train=False).unsqueeze(0).to(device)
+        if device_kind() != "cpu" and dtype != torch.float32:
+            img = img.to(dtype=dtype)
         prompt_parts = []
         answer = ""
         for t in row["turns"]:
@@ -411,6 +470,9 @@ def write_inspect(train: Path, model: dict) -> str:
         f"train_loss: {model.get('train_loss')}",
         f"steps: {model.get('steps')}",
         f"device: {model.get('device')}",
+        f"gpu: {model.get('gpu')}",
+        f"vram_gb: {model.get('vram_gb')}",
+        f"dtype: {model.get('dtype')}",
         f"model: {model.get('model_path')}",
         f"connector: {model.get('connector_path')}",
         "",
@@ -444,9 +506,11 @@ def generate(
     if not text.strip():
         text = str(serve_block(rec).get("prompt") or "Describe the image.")
 
-    net, tok, image_size, arch_key, image_token_id = _load(train, model)
+    net, tok, image_size, arch_key, image_token_id, dtype = _load(train, model)
     device = torch_device()
     img = load_image_tensor(img_path, image_size, train=False).unsqueeze(0).to(device)
+    if device_kind() != "cpu" and dtype != torch.float32:
+        img = img.to(dtype=dtype)
 
     content = text
     if IMAGE_TOKEN not in content:

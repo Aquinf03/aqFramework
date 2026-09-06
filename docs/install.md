@@ -12,8 +12,9 @@ This downloads the latest release tarball into `$HOME/.local/share/aquin-framewo
 
 - Node ≥ 18  
 - npm  
-- python3  
+- Python 3 (`python3`, or on Windows `py -3` / `python`)  
 - curl + tar  
+- **Windows:** run the installer under **Git Bash** or MSYS2 (`curl … | bash`). Do not pipe into `cmd.exe` — Windows `mkdir` does not accept `-p`.
 
 Kernel ML packages install into the framework’s `aq/kernel/.venv` from `aq/kernel/requirements.txt` (torch, transformers, peft, scikit-learn, Pillow, …).
 

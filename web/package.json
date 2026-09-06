@@ -4,7 +4,7 @@
   "private": true,
   "description": "Aquin auth portal — Supabase login, CLI tokens, desktop handoff, and SDK API",
   "scripts": {
-    "prebuild": "mkdir -p public/framework content/changelog/versions && cp ../install.sh public/framework/install.sh && cp ../changelog/*.md content/changelog/ && cp ../changelog/versions/*.md content/changelog/versions/",
+    "prebuild": "node scripts/sync-framework-content.mjs",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",

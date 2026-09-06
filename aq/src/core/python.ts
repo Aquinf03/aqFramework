@@ -16,16 +16,28 @@ export class InterruptedError extends Error {
 }
 
 export function pythonBin(): string {
-  const venvPy = path.join(kernelRoot(), ".venv", "bin", "python")
-  if (existsSync(venvPy)) return venvPy
-  for (const bin of ["python3", "python"]) {
-    const r = spawnSync(bin, ["-c", "import sys; print(sys.executable)"], {
-      encoding: "utf8",
-      timeout: 3000,
-    })
-    if (r.status === 0) return bin
+  const root = kernelRoot()
+  for (const rel of [
+    path.join(".venv", "bin", "python"),
+    path.join(".venv", "bin", "python3"),
+    path.join(".venv", "Scripts", "python.exe"),
+    path.join(".venv", "Scripts", "python"),
+  ]) {
+    const candidate = path.join(root, rel)
+    if (existsSync(candidate)) return candidate
   }
-  throw new Error("python3 not found")
+  const probes: { bin: string; args: string[] }[] = [
+    { bin: "python3", args: ["-c", "import sys; print(sys.executable)"] },
+    { bin: "py", args: ["-3", "-c", "import sys; print(sys.executable)"] },
+    { bin: "python", args: ["-c", "import sys; print(sys.executable)"] },
+  ]
+  for (const p of probes) {
+    const r = spawnSync(p.bin, p.args, { encoding: "utf8", timeout: 3000 })
+    const out = (r.stdout || "").trim()
+    if (r.status === 0 && out && existsSync(out)) return out
+    if (r.status === 0 && out) return out
+  }
+  throw new Error("python3 not found (need python3, py -3, or aq/kernel/.venv)")
 }
 
 export type KernelReq = {
