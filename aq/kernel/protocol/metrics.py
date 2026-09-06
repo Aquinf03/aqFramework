@@ -181,6 +181,7 @@ def _print_live(event: str, body: dict[str, Any]) -> None:
             "end",
             "error",
             "guard.abort",
+            "guard.warn",
         ):
             if event == "start":
                 tui.on_start(body)
@@ -192,6 +193,8 @@ def _print_live(event: str, body: dict[str, Any]) -> None:
                 tui.on_epoch(body)
             elif event == "end":
                 tui.on_end(body)
+            elif event == "guard.warn":
+                tui.on_info({"message": body.get("message") or "guard warn"})
             else:
                 tui.on_error({"error": body.get("error") or body.get("message") or event})
             return
@@ -262,6 +265,10 @@ def _print_live(event: str, body: dict[str, Any]) -> None:
             print("  " + "  ".join(c.rjust(10) for c in cells), file=sys.stderr, flush=True)
         return
 
+    if event == "guard.warn":
+        print_kv([("warn", body.get("message") or body.get("reason") or "guard")])
+        return
+
     if event == "guard.abort":
         print_kv([("abort", body.get("message") or body.get("reason") or "aborted")])
         return
@@ -305,7 +312,7 @@ def step(step: int | None = None, **fields: Any) -> None:
     watch: SafetyWatch | None = _state.get("watch")
     if watch is not None:
         try:
-            watch.check_step(step=int(step), **fields)
+            warn = watch.check_step(step=int(step), **fields)
         except GuardAbort as e:
             emit(
                 "guard.abort",
@@ -315,6 +322,14 @@ def step(step: int | None = None, **fields: Any) -> None:
                 loss=fields.get("loss"),
             )
             raise
+        if warn:
+            emit(
+                "guard.warn",
+                reason="safety",
+                step=int(step),
+                message=warn,
+                loss=fields.get("loss"),
+            )
     emit("step", step=int(step), **fields)
 
 

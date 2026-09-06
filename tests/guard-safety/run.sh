@@ -10,9 +10,12 @@ if ! command -v aq >/dev/null 2>&1; then
   exit 1
 fi
 
-mkdir -p "$HERE/good/methods" "$HERE/bad/methods"
-cp -f "$HERE/methods/watchdemo.py" "$HERE/good/methods/watchdemo.py"
-cp -f "$HERE/methods/watchdemo.py" "$HERE/bad/methods/watchdemo.py"
+mkdir -p "$HERE/good/tools" "$HERE/bad/tools"
+# Prefer shared methods/ if present; else each fixture already has tools/watchdemo.py
+if [[ -f "$HERE/methods/watchdemo.py" ]]; then
+  cp -f "$HERE/methods/watchdemo.py" "$HERE/good/tools/watchdemo.py"
+  cp -f "$HERE/methods/watchdemo.py" "$HERE/bad/tools/watchdemo.py"
+fi
 
 rm -f "$HERE/good/artifacts/metrics.jsonl" "$HERE/bad/artifacts/metrics.jsonl"
 

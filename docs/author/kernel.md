@@ -44,7 +44,7 @@ Allowed request keys (everything else stripped):
 3. `aq_metrics.begin(op="train", …)` - may print header on stderr; opens `metrics.jsonl` session.
 4. If `guard.leak`: fingerprint train vs `evals/*`; abort on overlap.
 5. `load_method` + `call_fit` - must return a **dict**; set `kind` from method name.
-6. If `guard.safety` and model has `train_loss`: one-shot finite/blowup check.
+6. If `guard.safety` and model has `train_loss`: final snapshot check (non-finite / `max_loss` only).
 7. If model has `tokenizer` dict: pin to `artifacts/tokenizer.json` (hashed).
 8. Write `artifacts/checkpoints/{n}.json` and copy to `last.json` (`n` = 1 + existing numbered files).
 9. Optional `write_inspect` → `artifacts/inspect.md`.
@@ -55,7 +55,8 @@ Iterative methods should call `aq_metrics.step(step=…, loss=…, lr=…)` duri
 
 - JSONL gets a `step` event per iteration  
 - stderr shows a live line like `step  12/40   loss  0.88   lr  0.05   690ms`  
-- `guard.safety` can abort mid-run on NaN / blow-up  
+- `guard.safety` warns on spikes; aborts mid-run only after consecutive NaN / blow-up strikes  
+
 
 ---
 
@@ -136,7 +137,7 @@ Built-ins cover LLM, VLM, vision classify, CLIP, and tabular. Writes `artifacts/
 `protocol.metrics.emit` always:
 
 1. Appends one JSON object to `artifacts/metrics.jsonl`
-2. Prints a short human line to **stderr** for `start`, `step`, `end`, `guard.abort`, `eval.probe`, `error`
+2. Prints a short human line to **stderr** for `start`, `step`, `end`, `guard.warn`, `guard.abort`, `eval.probe`, `error`
 
 Example train stream:
 

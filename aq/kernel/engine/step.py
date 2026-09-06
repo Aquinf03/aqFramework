@@ -109,7 +109,8 @@ def do_train(train: Path) -> list[str]:
             if tl is not None:
                 from protocol.guard import SafetyWatch
 
-                SafetyWatch(gcfg).check_step(step=0, loss=tl)
+                # Final snapshot only: NaN / max_loss. Mid-run spikes use patience via metrics.step.
+                SafetyWatch(gcfg).check_final(loss=tl)
         tok_hash = pin_tokenizer(train, model)
         dest = ckpt_dir(train)
         n = 1 + sum(1 for p in dest.glob("*.json") if p.name != "last.json")

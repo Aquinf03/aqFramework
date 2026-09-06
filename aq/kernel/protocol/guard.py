@@ -1,11 +1,13 @@
 """Opt-in training watches. Off unless recipe sets guard.safety / guard.leak.
 
 guard:
-  safety: true          # NaN/Inf + loss blow-up → stop the job
+  safety: true          # NaN/Inf + sustained loss blow-up → stop the job
   leak: true            # train↔eval overlap → stop before / during work
-  max_loss: null        # optional absolute loss ceiling
-  blowup_factor: 8      # stop if loss > best * factor (after warmup)
-  blowup_warmup: 2      # steps before blow-up check
+  max_loss: null        # optional absolute loss ceiling (also needs patience)
+  blowup_factor: 8      # flag if loss > best * factor (after warmup)
+  blowup_warmup: 20     # steps before blow-up check
+  blowup_patience: 3    # consecutive bad steps required before abort (spikes OK)
+  nan_patience: 2       # consecutive non-finite losses before abort
 """
 
 from __future__ import annotations
@@ -33,7 +35,9 @@ def parse_guard(rec: dict) -> dict[str, Any]:
             "leak": False,
             "max_loss": None,
             "blowup_factor": 8.0,
-            "blowup_warmup": 2,
+            "blowup_warmup": 20,
+            "blowup_patience": 3,
+            "nan_patience": 2,
         }
     mode = raw.get("mode")
     safety = _truthy(raw.get("safety")) or str(mode or "").lower() in ("safety", "critical", "safe")
@@ -44,13 +48,20 @@ def parse_guard(rec: dict) -> dict[str, Any]:
     factor = raw.get("blowup_factor")
     factor = 8.0 if factor is None else float(factor)
     warmup = raw.get("blowup_warmup")
-    warmup = 2 if warmup is None else int(warmup)
+    warmup = 20 if warmup is None else int(warmup)
+    patience = raw.get("blowup_patience")
+    # legacy: patience 1 = old hair-trigger behavior if someone wants it
+    patience = 3 if patience is None else int(patience)
+    nan_patience = raw.get("nan_patience")
+    nan_patience = 2 if nan_patience is None else int(nan_patience)
     return {
         "safety": safety,
         "leak": leak,
         "max_loss": max_loss,
         "blowup_factor": max(factor, 1.0),
         "blowup_warmup": max(warmup, 0),
+        "blowup_patience": max(patience, 1),
+        "nan_patience": max(nan_patience, 1),
     }
 
 
@@ -63,48 +74,115 @@ def _finite(x: Any) -> bool:
 
 
 class SafetyWatch:
-    """Stateful loss watcher for one train session."""
+    """Stateful loss watcher for one train session.
+
+    A single spike is a warning. Abort only after consecutive bad steps
+    (blowup_patience / nan_patience) so one weird batch does not trash the run.
+    """
 
     def __init__(self, cfg: dict[str, Any]):
         self.cfg = cfg
         self.best: float | None = None
         self.enabled = bool(cfg.get("safety"))
+        self._blow_strikes = 0
+        self._nan_strikes = 0
+        self._max_strikes = 0
 
-    def check_step(self, *, step: int, loss: Any = None, **_extra: Any) -> None:
+    def check_step(self, *, step: int, loss: Any = None, **_extra: Any) -> str | None:
+        """Raise GuardAbort when patience exhausted. Return warn message otherwise."""
         if not self.enabled:
-            return
+            return None
         if loss is None:
+            return None
+
+        if not _finite(loss):
+            self._nan_strikes += 1
+            self._blow_strikes = 0
+            self._max_strikes = 0
+            need = int(self.cfg.get("nan_patience") or 2)
+            msg = (
+                f"guard.safety: non-finite loss at step {step} ({loss!r}) "
+                f"[{self._nan_strikes}/{need}]"
+            )
+            if self._nan_strikes >= need:
+                raise GuardAbort(
+                    f"guard.safety: non-finite loss for {need} consecutive steps "
+                    f"(last at step {step}: {loss!r}). Training stopped."
+                )
+            return msg
+
+        self._nan_strikes = 0
+        v = float(loss)
+
+        # Track best only on finite losses; early lucky lows still count after warmup
+        # for the threshold, but we do not abort on a single excursion above them.
+        if self.best is None or v < self.best:
+            self.best = v
+            self._blow_strikes = 0
+            self._max_strikes = 0
+            return None
+
+        warn: str | None = None
+
+        max_loss = self.cfg.get("max_loss")
+        if max_loss is not None and v > float(max_loss):
+            self._max_strikes += 1
+            need = int(self.cfg.get("blowup_patience") or 3)
+            warn = (
+                f"guard.safety: loss {v} > max_loss {max_loss} at step {step} "
+                f"[{self._max_strikes}/{need}]"
+            )
+            if self._max_strikes >= need:
+                raise GuardAbort(
+                    f"guard.safety: loss above max_loss {max_loss} for {need} consecutive steps "
+                    f"(last={v} at step {step}). Training stopped."
+                )
+            return warn
+        self._max_strikes = 0
+
+        warmup = int(self.cfg.get("blowup_warmup") or 0)
+        if step < warmup:
+            self._blow_strikes = 0
+            return None
+
+        factor = float(self.cfg.get("blowup_factor") or 8.0)
+        blew = False
+        if self.best is not None and self.best > 0 and v > self.best * factor:
+            blew = True
+        elif self.best is not None and self.best <= 0 and v > 1.0 and v > abs(self.best) + 10.0:
+            blew = True
+
+        if not blew:
+            self._blow_strikes = 0
+            return None
+
+        self._blow_strikes += 1
+        need = int(self.cfg.get("blowup_patience") or 3)
+        warn = (
+            f"guard.safety: loss spike at step {step} "
+            f"(loss={v}, best={self.best}, factor={factor}) [{self._blow_strikes}/{need}]"
+        )
+        if self._blow_strikes >= need:
+            raise GuardAbort(
+                f"guard.safety: loss blew up for {need} consecutive steps "
+                f"(last at step {step}: loss={v}, best={self.best}, factor={factor}). "
+                "Training stopped."
+            )
+        return warn
+
+    def check_final(self, *, loss: Any = None) -> None:
+        """End-of-fit snapshot: only abort on non-finite or max_loss (no spike patience)."""
+        if not self.enabled or loss is None:
             return
         if not _finite(loss):
             raise GuardAbort(
-                f"guard.safety: non-finite loss at step {step} ({loss!r}). "
-                "Training stopped to save compute."
+                f"guard.safety: final train_loss is non-finite ({loss!r}). Training stopped."
             )
-        v = float(loss)
         max_loss = self.cfg.get("max_loss")
-        if max_loss is not None and v > float(max_loss):
+        if max_loss is not None and float(loss) > float(max_loss):
             raise GuardAbort(
-                f"guard.safety: loss {v} exceeded max_loss {max_loss} at step {step}. "
-                "Training stopped to save compute."
-            )
-        if self.best is None or v < self.best:
-            self.best = v
-            return
-        warmup = int(self.cfg.get("blowup_warmup") or 0)
-        if step < warmup:
-            return
-        factor = float(self.cfg.get("blowup_factor") or 8.0)
-        if self.best > 0 and v > self.best * factor:
-            raise GuardAbort(
-                f"guard.safety: loss blew up at step {step} "
-                f"(loss={v}, best={self.best}, factor={factor}). "
-                "Training stopped to save compute."
-            )
-        # also catch huge absolute jumps from near-zero best
-        if self.best <= 0 and v > 1.0 and v > abs(self.best) + 10.0:
-            raise GuardAbort(
-                f"guard.safety: loss blew up at step {step} "
-                f"(loss={v}, best={self.best}). Training stopped to save compute."
+                f"guard.safety: final train_loss {float(loss)} > max_loss {max_loss}. "
+                "Training stopped."
             )
 
 

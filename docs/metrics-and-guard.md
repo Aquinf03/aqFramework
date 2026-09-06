@@ -23,8 +23,22 @@ Add to `recipe.yaml` only when you want fail-closed watches:
 
 ```yaml
 guard:
-  safety: true    # exploding loss / NaNs → abort
+  safety: true    # sustained exploding loss / NaNs → abort
   leak: true      # train data overlapping eval probes → abort
 ```
 
 Off by default so a first train stays simple. Turn them on once the loop is real.
+
+### Safety behavior
+
+A **single** spike does **not** kill the run. `guard.safety` warns (`guard.warn`) and only aborts after consecutive bad steps:
+
+| knob | default | meaning |
+|------|---------|---------|
+| `blowup_factor` | `8` | flag when `loss > best * factor` |
+| `blowup_warmup` | `20` | steps before blow-up checks |
+| `blowup_patience` | `3` | consecutive spike steps before abort |
+| `nan_patience` | `2` | consecutive non-finite losses before abort |
+| `max_loss` | unset | optional absolute ceiling (same patience as blow-up) |
+
+Set `blowup_patience: 1` if you want the old hair-trigger stop on the first spike.
