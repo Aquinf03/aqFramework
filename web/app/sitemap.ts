@@ -1,20 +1,16 @@
 import type { MetadataRoute } from "next";
 import { siteConfig } from "@/lib/config";
+import { docsSitemapEntries } from "@/lib/docs/metadata";
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const base = siteConfig.url;
   return [
-    {
-      url: base,
-      lastModified: new Date(),
-      changeFrequency: "weekly",
-      priority: 1,
-    },
+    ...docsSitemapEntries(base),
     {
       url: `${base}/changelog`,
       lastModified: new Date(),
       changeFrequency: "weekly",
-      priority: 0.7,
+      priority: 0.6,
     },
   ];
 }

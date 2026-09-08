@@ -1,25 +1,25 @@
 export const siteConfig = {
   name: "Aquin Labs",
   description:
-    "Sign in to Aquin — CLI, desktop, and account management for reverse engineering intelligence with interpretability.",
-  url: process.env.NEXT_PUBLIC_APP_URL ?? "https://auth.aquin.app",
+    "Developer environment and framework for building and checking models. Train folders, aq CLI, Python kernel, and the in-train agent.",
+  url: process.env.NEXT_PUBLIC_APP_URL ?? "https://aq.aquin.app",
   keywords: [
     "Aquin",
     "Aquin Labs",
+    "aq",
     "aquin.app",
-    "CLI login",
-    "API keys",
-    "account",
-    "sign in",
+    "train folder",
+    "recipe.yaml",
+    "CLI",
     "interpretability",
     "AI research",
-    "aq CLI",
   ],
   links: {
     email: "aquin@aquin.app",
     mainSite: "https://www.aquin.app",
-    docs: "https://www.aquin.app/docs",
-    changelog: "https://www.aquin.app/changelog",
+    docs: "/docs",
+    changelog: "/changelog",
+    login: "/",
   },
 };
 

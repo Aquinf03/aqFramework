@@ -26,6 +26,11 @@ import {
 type AuthStep = "email" | "password" | "signup" | "signup-password" | "ready" | "desktop";
 type DesktopPhase = "minting" | "ready" | "error";
 
+type AuthPortalProps = {
+  /** Render inside DocsShell — no chrome header / full-page frame. */
+  embedded?: boolean;
+};
+
 const INSTALL_CMD = "curl -fsSL https://aq.aquin.app/framework/install.sh | bash";
 
 const NEXT_CMDS = [
@@ -75,7 +80,7 @@ function codeFromDeepLink(link: string): string | null {
   }
 }
 
-function AuthPortalInner() {
+function AuthPortalInner({ embedded = false }: AuthPortalProps) {
   const { user, loading: authLoading } = useAuth();
   const supabase = createClient();
   const router = useRouter();
@@ -301,21 +306,19 @@ function AuthPortalInner() {
 
   if (authLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#f5f5f3]">
-        <CircleNotch className="animate-spin h-6 w-6 text-stone-400" weight="bold" />
+      <div
+        className={cn(
+          "flex items-center justify-center bg-[#f5f5f3]",
+          embedded ? "min-h-[40vh] py-16" : "min-h-screen",
+        )}
+      >
+        <CircleNotch className="h-6 w-6 animate-spin text-stone-400" weight="bold" />
       </div>
     );
   }
 
-  return (
-    <div className="relative min-h-screen bg-[#f5f5f3]">
-      <AuthHeader
-        showProfile={Boolean(user && (step === "ready" || step === "desktop"))}
-        showCliToken={Boolean(user && step === "ready")}
-      />
-
-      <div className="flex min-h-screen items-center justify-center overflow-y-auto px-4 py-24">
-        <div className={cn("w-full", step === "ready" ? "max-w-xl" : "max-w-md")}>
+  const body = (
+        <div className={cn("w-full", step === "ready" ? "max-w-xl" : "max-w-md", embedded && "mx-auto")}>
           {step === "ready" && (
             <div className="flex flex-col items-stretch gap-8">
               <h2 className="font-host-grotesk text-center text-2xl font-semibold tracking-[-0.03em] text-stone-900">
@@ -346,9 +349,7 @@ function AuthPortalInner() {
                 <div className="pt-2">
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                     <a
-                      href="https://www.aquin.app/docs"
-                      target="_blank"
-                      rel="noopener noreferrer"
+                      href="/docs"
                       className="group inline-flex items-center gap-1.5 text-sm font-medium text-stone-800 underline decoration-stone-300 underline-offset-4 transition-colors hover:decoration-stone-800"
                     >
                       Documentation
@@ -361,9 +362,7 @@ function AuthPortalInner() {
                       ·
                     </span>
                     <a
-                      href="https://www.aquin.app/changelog"
-                      target="_blank"
-                      rel="noopener noreferrer"
+                      href="/changelog"
                       className="group inline-flex items-center gap-1.5 text-sm font-medium text-stone-800 underline decoration-stone-300 underline-offset-4 transition-colors hover:decoration-stone-800"
                     >
                       Changelog
@@ -388,7 +387,7 @@ function AuthPortalInner() {
                 <h1 className="font-host-grotesk text-2xl font-semibold tracking-[-0.03em] text-stone-900">
                   {isCli ? "Sign in for Aquin CLI" : "Sign in for CLI / desktop"}
                 </h1>
-                <p className="text-sm text-stone-500 mt-2">
+                <p className="mt-2 text-sm text-stone-500">
                   {isCli
                     ? "Copy the code and paste it into the terminal where aq login is waiting."
                     : "Copy the code for the CLI, or open the desktop app with the button below."}
@@ -397,7 +396,7 @@ function AuthPortalInner() {
 
               {desktopPhase === "minting" && (
                 <div className="flex justify-center py-2">
-                  <CircleNotch className="animate-spin h-5 w-5 text-stone-400" weight="bold" />
+                  <CircleNotch className="h-5 w-5 animate-spin text-stone-400" weight="bold" />
                 </div>
               )}
 
@@ -409,18 +408,18 @@ function AuthPortalInner() {
 
               {desktopPhase === "ready" && code && (
                 <div className="space-y-3 text-left">
-                  <p className="text-sm text-stone-500 text-center">
+                  <p className="text-center text-sm text-stone-500">
                     In the terminal where <span className="font-mono text-stone-700">aq login</span> is waiting,
                     paste the code or the full <span className="font-mono">aquin://</span> link.
                   </p>
-                  <div className="rounded-xl border border-stone-200 bg-white/80 px-3 py-2.5 space-y-2">
+                  <div className="space-y-2 rounded-xl border border-stone-200 bg-white/80 px-3 py-2.5">
                     <p className="text-[10px] font-medium uppercase tracking-wide text-stone-400">Code</p>
-                    <p className="text-[11px] font-mono text-stone-800 break-all select-all leading-relaxed">
+                    <p className="break-all font-mono text-[11px] leading-relaxed text-stone-800 select-all">
                       {code}
                     </p>
                     <button
                       type="button"
-                      className="w-full inline-flex items-center justify-center gap-1.5 rounded-lg bg-black px-3 py-1.5 text-xs font-medium text-white hover:bg-black/90"
+                      className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-black px-3 py-1.5 text-xs font-medium text-white hover:bg-black/90"
                       onClick={() => void copyText("code", code)}
                     >
                       {copied === "code" ? <Check className="h-3.5 w-3.5" weight="bold" /> : <Copy className="h-3.5 w-3.5" weight="bold" />}
@@ -428,9 +427,9 @@ function AuthPortalInner() {
                     </button>
                   </div>
                   {deepLink && (
-                    <div className="rounded-xl border border-stone-200 bg-white/80 px-3 py-2.5 space-y-2">
+                    <div className="space-y-2 rounded-xl border border-stone-200 bg-white/80 px-3 py-2.5">
                       <p className="text-[10px] font-medium uppercase tracking-wide text-stone-400">aquin:// link</p>
-                      <p className="text-[11px] font-mono text-stone-700 break-all select-all">{deepLink}</p>
+                      <p className="break-all font-mono text-[11px] text-stone-700 select-all">{deepLink}</p>
                       <button
                         type="button"
                         className={secondaryBtnCls}
@@ -457,10 +456,13 @@ function AuthPortalInner() {
                 </button>
               )}
 
-
-              <Link href="/" className="block text-xs text-stone-400 hover:text-stone-600">
-                &larr; Back to account
-              </Link>
+              <button
+                type="button"
+                onClick={() => router.replace("/")}
+                className="block w-full text-xs text-stone-400 hover:text-stone-600"
+              >
+                &larr; Back
+              </button>
             </div>
           )}
 
@@ -693,21 +695,40 @@ function AuthPortalInner() {
             </div>
           )}
         </div>
+  );
+
+  if (embedded) {
+    return <div className="py-6 sm:py-10">{body}</div>;
+  }
+
+  return (
+    <div className="relative min-h-screen bg-[#f5f5f3]">
+      <AuthHeader
+        showProfile={Boolean(user && (step === "ready" || step === "desktop"))}
+        showCliToken={Boolean(user && step === "ready")}
+      />
+      <div className="flex min-h-screen items-center justify-center overflow-y-auto px-4 py-24">
+        {body}
       </div>
     </div>
   );
 }
 
-export default function AuthPortal() {
+export default function AuthPortal({ embedded = false }: AuthPortalProps) {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen flex items-center justify-center bg-[#f5f5f3]">
-          <CircleNotch className="animate-spin h-6 w-6 text-stone-400" weight="bold" />
+        <div
+          className={cn(
+            "flex items-center justify-center bg-[#f5f5f3]",
+            embedded ? "min-h-[40vh] py-16" : "min-h-screen",
+          )}
+        >
+          <CircleNotch className="h-6 w-6 animate-spin text-stone-400" weight="bold" />
         </div>
       }
     >
-      <AuthPortalInner />
+      <AuthPortalInner embedded={embedded} />
     </Suspense>
   );
 }

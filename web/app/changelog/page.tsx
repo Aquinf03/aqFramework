@@ -19,7 +19,7 @@ export default function ChangelogPage() {
     <div className="min-h-screen bg-[#f5f5f3] text-stone-900">
       <header className="border-b border-stone-200/80 bg-[#f5f5f3]/95 px-6 py-4 backdrop-blur-sm">
         <div className="mx-auto flex max-w-2xl items-center justify-between gap-4">
-          <AquinBrand size="sm" href={siteConfig.links.mainSite} />
+          <AquinBrand size="sm" href="/" />
           <Link
             href={siteConfig.links.docs}
             className="text-sm font-medium text-stone-600 underline decoration-stone-300 underline-offset-4 hover:text-stone-900"

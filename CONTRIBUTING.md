@@ -34,7 +34,7 @@ aq doctor
 aq version
 ```
 
-Needs **Node ≥ 18**, **npm**, and **Python 3**. After TypeScript edits:
+Needs **Node ≥ 18**, **npm**, and **Python >= 3.10**. After TypeScript edits:
 
 ```bash
 cd aq && npm run build
@@ -50,7 +50,7 @@ Before you open a pull request:
 2. **Describe the why:** use the [PR description template](#pr-description-template). Vague titles like "Fixed bug" will be sent back.
 3. **Exercise the change:** for CLI/kernel behavior, run a relevant train under [`tests/`](./tests/) (see [Testing](#testing)). Say what you ran.
 4. **Discuss big changes first:** open an issue for new methods, protocol changes, or anything that reshapes the train directory contract.
-5. **Do not commit secrets:** never add `.env`, API keys, tokens, or local artifacts that contain credentials.
+5. **Do not commit secrets or junk:** never add `.env`, API keys, tokens, or local artifacts that contain credentials. Also ignore (do not commit) heavy artifacts, caches, and anything unused or unnecessary for runtime or build-time (model weights, checkpoints, `node_modules/`, `.venv/`, build outputs, train `artifacts/` from local runs, and similar).
 
 ## Core areas (higher bar)
 
@@ -152,14 +152,14 @@ All of these help. Docs and reproduction cases are as valuable as features.
 - Clear title
 - Steps to reproduce
 - Expected vs actual behavior
-- Environment: OS, `node -v`, `python3 --version`, `aq version`
+- Environment: OS, `node -v`, `python3 --version` (need >= 3.10), `aq version`
 - Logs / stack traces and a minimal train or command sequence when possible
 
 **Features:** open an issue first for anything beyond a small fix. Describe the problem, proposed approach, and alternatives. Wait for feedback before a large PR.
 
 ## Security
 
-Do **not** file public issues for vulnerabilities. See [`SECURITY.md`](./SECURITY.md) and email **aquin@aquin.app**.
+Public issues for vulnerabilities will be **closed immediately**. You must email **aquin@aquin.app**. See [`SECURITY.md`](./SECURITY.md).
 
 ## Questions
 

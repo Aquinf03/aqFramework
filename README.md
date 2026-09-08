@@ -4,15 +4,15 @@ A train is a directory. **aq** is the CLI. The Python kernel ships inside the `a
 
 **Docs (how to use aq):** [`docs/`](./docs/README.md). Start with [Getting started](./docs/getting-started.md).
 
-## Install
+## Published build install
 
 ```bash
 curl -fsSL https://aq.aquin.app/framework/install.sh | bash
 ```
 
-Needs **Node ≥ 18**, **npm**, and **python3**. Then `aq help` · `aq doctor`.
+Needs **Node ≥ 18**, **npm**, and **Python >= 3.10**. Then `aq help` · `aq doctor`.
 
-From a checkout:
+## From a checkout (dev)
 
 ```bash
 cd aq && npm install && npm link

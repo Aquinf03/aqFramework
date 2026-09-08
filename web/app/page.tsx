@@ -1,13 +1,13 @@
-import type { Metadata } from "next";
+import { DocsShell } from "@/app/docs/_components/DocsShell";
 import AuthPortal from "@/components/AuthPortal";
-import { siteConfig } from "@/lib/config";
-import { constructMetadata } from "@/lib/utils";
+import { buildDocsMetadata } from "@/lib/docs/metadata";
 
-export const metadata: Metadata = constructMetadata({
-  title: `${siteConfig.name} | Sign in`,
-  description: siteConfig.description,
-});
+export const metadata = buildDocsMetadata("/");
 
 export default function HomePage() {
-  return <AuthPortal />;
+  return (
+    <DocsShell>
+      <AuthPortal embedded />
+    </DocsShell>
+  );
 }

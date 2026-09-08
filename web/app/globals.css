@@ -190,3 +190,19 @@
     background: rgb(168 162 158 / 0.55);
   }
 }
+
+.docs-chrome-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  overflow: visible;
+  isolation: isolate;
+}
+
+:root {
+  --docs-header-h: 3.75rem;
+  --docs-content-pad-top: 2.5rem;
+  --docs-chrome-top: calc(var(--docs-header-h) + var(--docs-content-pad-top));
+}
