@@ -2,7 +2,7 @@
 
 A train is a directory. **aq** is the CLI. The Python kernel ships inside the `aq` package.
 
-**Docs (how to use aq):** [`docs/`](./docs/README.md) — start with [Getting started](./docs/getting-started.md).
+**Docs (how to use aq):** [`docs/`](./docs/README.md). Start with [Getting started](./docs/getting-started.md).
 
 ## Install
 
@@ -33,6 +33,10 @@ aq train && aq eval && aq status
 Or open the agent on a TTY: `aq`
 
 **Recipe is the train API.** For LLM/LoRA set `model:` to a hub id. QLoRA needs CUDA + bitsandbytes. Unsupported knobs fail closed.
+
+## Contribute
+
+See [`CONTRIBUTING.md`](./CONTRIBUTING.md) and [`SECURITY.md`](./SECURITY.md).
 
 ## Maintainers
 
