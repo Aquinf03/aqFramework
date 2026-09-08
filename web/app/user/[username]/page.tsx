@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { AuthHeader } from "@/components/AuthHeader";
 import { ProfileAvatar } from "@/components/account/ProfileAvatar";
 import { getSupabaseService } from "@/lib/supabase/service";
+import { constructMetadata } from "@/lib/utils";
 import { normalizeUsername, userProfileHref, validateUsername } from "@/lib/username";
 
 type PageProps = {
@@ -48,13 +49,17 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const { username: raw } = await params;
   const profile = await loadProfile(raw);
   if (!profile) {
-    return { title: "User not found · Aquin" };
+    return constructMetadata({
+      title: "User not found",
+      description: "This Aquin profile could not be found.",
+      robots: { index: false, follow: false },
+    });
   }
   const titleName = profile.name?.trim() || profile.username;
-  return {
-    title: `${titleName} · Aquin`,
+  return constructMetadata({
+    title: titleName,
     description: `Aquin profile for @${profile.username}`,
-  };
+  });
 }
 
 export default async function UserProfilePage({ params }: PageProps) {

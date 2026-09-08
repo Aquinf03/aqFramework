@@ -3,6 +3,11 @@ import { twMerge } from "tailwind-merge";
 import { siteConfig } from "./config";
 import { Metadata } from "next";
 
+/** Shared OG image for every web page (Aquin home brand art). */
+export const OG_IMAGE = "/og/home.jpg";
+export const OG_IMAGE_WIDTH = 1024;
+export const OG_IMAGE_HEIGHT = 576;
+
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
@@ -14,7 +19,7 @@ export function absoluteUrl(path: string) {
 export function constructMetadata({
   title = siteConfig.name,
   description = siteConfig.description,
-  image = "https://www.aquin.app/og.png",
+  image = OG_IMAGE,
   ...props
 }: {
   title?: string;
@@ -25,7 +30,7 @@ export function constructMetadata({
   return {
     title: {
       template: "%s | " + siteConfig.name,
-      default: siteConfig.name,
+      default: title,
     },
     description: description || siteConfig.description,
     keywords: siteConfig.keywords,
@@ -34,7 +39,14 @@ export function constructMetadata({
       description,
       url: siteConfig.url,
       siteName: siteConfig.name,
-      images: [{ url: image, width: 1200, height: 630, alt: title }],
+      images: [
+        {
+          url: image,
+          width: OG_IMAGE_WIDTH,
+          height: OG_IMAGE_HEIGHT,
+          alt: title,
+        },
+      ],
       type: "website",
       locale: "en_US",
     },
@@ -44,9 +56,22 @@ export function constructMetadata({
       description,
       images: [image],
     },
-    icons: "/favicon.ico",
+    icons: {
+      icon: [{ url: "/favicon.ico" }, { url: "/icon.png", type: "image/png" }],
+      apple: "/icon.png",
+    },
     metadataBase: new URL(siteConfig.url),
-    authors: [{ name: siteConfig.name, url: siteConfig.url }],
+    authors: [{ name: siteConfig.name, url: siteConfig.links.mainSite }],
+    creator: siteConfig.name,
+    publisher: siteConfig.name,
+    robots: {
+      index: true,
+      follow: true,
+      googleBot: {
+        index: true,
+        follow: true,
+      },
+    },
     ...props,
   };
 }

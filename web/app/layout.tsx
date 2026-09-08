@@ -25,6 +25,7 @@ const hostGrotesk = Host_Grotesk({
 
 export const metadata: Metadata = constructMetadata({
   title: `${siteConfig.name} | Account`,
+  description: siteConfig.description,
 });
 
 export const viewport: Viewport = {
