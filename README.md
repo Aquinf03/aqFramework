@@ -2,8 +2,7 @@
 
 A train is a directory. **aq** is the CLI. The Python kernel ships inside the `aq` package.
 
-**Docs:** https://aq.aquin.app — Getting started at [/docs](https://aq.aquin.app/docs).  
-Markdown source (canonical): [`web/content/docs/`](./web/content/docs/README.md).
+**Docs:** https://aq.aquin.app — Getting started at [/docs](https://aq.aquin.app/docs).
 
 ## Published build install
 
@@ -21,7 +20,7 @@ cd aq && npm install && npm link
 ./install.sh
 ```
 
-More options: [web/content/docs/install.md](./web/content/docs/install.md).
+More options: [Install](https://aq.aquin.app/docs/install).
 
 ## Use
 
@@ -37,9 +36,8 @@ aq train && aq eval && aq status
 |------|------|
 | `aq/` | CLI + Python kernel |
 | `web/` | Docs + auth app (`aq.aquin.app`) |
-| `web/content/docs/` | User + author markdown |
 | `tests/` | Train fixtures |
-| `internals/` | Builder checklists |
+| `internals/` | Builder checklists + author notes |
 
-- Publish: [`scripts/release.sh`](./scripts/release.sh) · [web/content/docs/author/release.md](./web/content/docs/author/release.md)
-- Internals / coverage: [`web/content/docs/author/`](./web/content/docs/author/README.md) · [`internals/`](./internals/TODO.md)
+- Publish: [`scripts/release.sh`](./scripts/release.sh) · [internals/author/release.md](./internals/author/release.md)
+- Internals / coverage: [`internals/author/`](./internals/author/README.md) · [`internals/`](./internals/TODO.md)

@@ -1,15 +1,6 @@
 #!/usr/bin/env node
-/** Sync install.sh, changelog, and docs markdown (canonical: web/content/docs). */
-import {
-  copyFileSync,
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  readFileSync,
-  rmSync,
-  statSync,
-  writeFileSync,
-} from "node:fs"
+/** Sync install.sh + changelog into Next public/content. */
+import { copyFileSync, existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 
@@ -28,43 +19,8 @@ function cpGlob(dir, dest, re) {
   }
 }
 
-function copyTree(src, dest, { skipDirs = [] } = {}) {
-  if (!existsSync(src)) {
-    console.warn(`sync-framework-content: skip missing ${src}`)
-    return
-  }
-  mkdirSync(dest, { recursive: true })
-  for (const name of readdirSync(src)) {
-    if (skipDirs.includes(name)) continue
-    const from = path.join(src, name)
-    const to = path.join(dest, name)
-    if (statSync(from).isDirectory()) {
-      copyTree(from, to, { skipDirs })
-    } else {
-      copyFileSync(from, to)
-    }
-  }
-}
-
-function listMarkdown(dir, prefix = "") {
-  if (!existsSync(dir)) return []
-  const out = []
-  for (const name of readdirSync(dir)) {
-    const full = path.join(dir, name)
-    const rel = prefix ? `${prefix}/${name}` : name
-    if (statSync(full).isDirectory()) {
-      if (name === "author") continue
-      out.push(...listMarkdown(full, rel))
-    } else if (name.endsWith(".md")) {
-      out.push(rel)
-    }
-  }
-  return out.sort()
-}
-
 mkdirSync(path.join(webRoot, "public", "framework"), { recursive: true })
 mkdirSync(path.join(webRoot, "content", "changelog", "versions"), { recursive: true })
-mkdirSync(path.join(webRoot, "content", "docs"), { recursive: true })
 
 const installSrc = path.join(repo, "install.sh")
 if (existsSync(installSrc)) {
@@ -80,29 +36,18 @@ cpGlob(
   /\.md$/,
 )
 
-/** Canonical docs live in web/content/docs — publish user-facing markdown (skip author/). */
-const docsSrc = path.join(webRoot, "content", "docs")
-const publicDocs = path.join(webRoot, "public", "docs")
-rmSync(publicDocs, { recursive: true, force: true })
-copyTree(docsSrc, publicDocs, { skipDirs: ["author"] })
-
 const site = (process.env.NEXT_PUBLIC_APP_URL || "https://aq.aquin.app").replace(/\/$/, "")
-const mdFiles = listMarkdown(publicDocs)
 const llms = [
   "# Aquin / aq",
   "",
   "> Developer environment and framework for building and checking models.",
-  "> Prefer these markdown sources when scraping. HTML docs mirror the same content.",
+  "> Docs are HTML pages on this site (no separate markdown tree).",
   "",
   `Home: ${site}/`,
+  `Getting started: ${site}/docs`,
   `Sitemap: ${site}/sitemap.xml`,
-  `Full dump: ${site}/llms-full.txt`,
   "",
-  "## Docs (markdown)",
-  "",
-  ...mdFiles.map((f) => `- ${site}/docs/${f}`),
-  "",
-  "## HTML",
+  "## Pages",
   "",
   `- ${site}/`,
   `- ${site}/docs`,
@@ -111,23 +56,12 @@ const llms = [
   `- ${site}/docs/recipe`,
   `- ${site}/docs/cli`,
   `- ${site}/docs/agent`,
+  `- ${site}/docs/eval`,
+  `- ${site}/docs/jobs`,
   `- ${site}/changelog`,
   "",
 ].join("\n")
 
 writeFileSync(path.join(webRoot, "public", "llms.txt"), llms)
 
-const fullParts = [
-  `# Aquin / aq — full docs dump`,
-  `# Generated for agent scrape. Source: web/content/docs`,
-  "",
-]
-for (const f of mdFiles) {
-  const body = readFileSync(path.join(publicDocs, f), "utf8")
-  fullParts.push(`\n\n---\n# ${f}\n# ${site}/docs/${f}\n---\n\n`)
-  fullParts.push(body.trimEnd())
-  fullParts.push("\n")
-}
-writeFileSync(path.join(webRoot, "public", "llms-full.txt"), fullParts.join(""))
-
-console.log(`sync-framework-content: ${mdFiles.length} docs markdown files → public/docs + llms.txt`)
+console.log("sync-framework-content: install.sh + changelog + llms.txt")

@@ -224,7 +224,7 @@ export default function DocsGettingStartedPage() {
             ["/docs/recipe", "Recipe", "tabular, transformers, LLM, guard"],
             ["/docs/cli", "CLI", "every verb"],
             ["/docs/jobs", "Jobs", "detached work with resource asks"],
-            ["/llms.txt", "llms.txt", "agent scrape index (markdown links)"],
+            ["/llms.txt", "llms.txt", "agent scrape index"],
           ].map(([href, label, blurb]) => (
             <li key={href}>
               <Link

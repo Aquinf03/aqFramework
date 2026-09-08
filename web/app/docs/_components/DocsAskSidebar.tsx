@@ -2,7 +2,7 @@
 
 /* eslint-disable @next/next/no-img-element */
 import { usePathname } from "next/navigation";
-import { buildAskPrompt, docsMarkdownHref, getDocsPageMeta } from "@/lib/docs/metadata";
+import { buildAskPrompt, getDocsPageMeta } from "@/lib/docs/metadata";
 import { ArrowUpRight, Check, Copy } from "@phosphor-icons/react";
 import { useState } from "react";
 
@@ -82,12 +82,6 @@ export function DocsAskSidebar() {
           <CopyBtn text={prompt} />
         </div>
         <p className="px-2 text-[12px] leading-relaxed text-stone-500">{page.description}</p>
-        <a
-          href={docsMarkdownHref(pathname)}
-          className="mt-3 block px-2 text-[12px] font-medium text-stone-800 underline underline-offset-2"
-        >
-          Raw markdown for agents
-        </a>
       </div>
     </aside>
   );

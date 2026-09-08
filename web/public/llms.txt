@@ -1,46 +1,13 @@
 # Aquin / aq
 
 > Developer environment and framework for building and checking models.
-> Prefer these markdown sources when scraping. HTML docs mirror the same content.
+> Docs are HTML pages on this site (no separate markdown tree).
 
 Home: https://aq.aquin.app/
+Getting started: https://aq.aquin.app/docs
 Sitemap: https://aq.aquin.app/sitemap.xml
-Full dump: https://aq.aquin.app/llms-full.txt
 
-## Docs (markdown)
-
-- https://aq.aquin.app/docs/README.md
-- https://aq.aquin.app/docs/TLDR.md
-- https://aq.aquin.app/docs/agent.md
-- https://aq.aquin.app/docs/architecture.md
-- https://aq.aquin.app/docs/auth.md
-- https://aq.aquin.app/docs/cli-reference.md
-- https://aq.aquin.app/docs/cli.md
-- https://aq.aquin.app/docs/concepts.md
-- https://aq.aquin.app/docs/coverage-roadmap.md
-- https://aq.aquin.app/docs/eval-and-inspect.md
-- https://aq.aquin.app/docs/getting-started.md
-- https://aq.aquin.app/docs/install-release.md
-- https://aq.aquin.app/docs/install.md
-- https://aq.aquin.app/docs/jobs.md
-- https://aq.aquin.app/docs/kernel.md
-- https://aq.aquin.app/docs/methods/README.md
-- https://aq.aquin.app/docs/methods/custom.md
-- https://aq.aquin.app/docs/methods/llm.md
-- https://aq.aquin.app/docs/methods/tabular.md
-- https://aq.aquin.app/docs/methods/transformers.md
-- https://aq.aquin.app/docs/methods/vision.md
-- https://aq.aquin.app/docs/metrics-and-guard.md
-- https://aq.aquin.app/docs/philosophy.md
-- https://aq.aquin.app/docs/recipe.md
-- https://aq.aquin.app/docs/schedules-stages.md
-- https://aq.aquin.app/docs/skills-tools-mcp.md
-- https://aq.aquin.app/docs/stages.md
-- https://aq.aquin.app/docs/tests-catalog.md
-- https://aq.aquin.app/docs/train-folder.md
-- https://aq.aquin.app/docs/web-auth.md
-
-## HTML
+## Pages
 
 - https://aq.aquin.app/
 - https://aq.aquin.app/docs
@@ -49,4 +16,6 @@ Full dump: https://aq.aquin.app/llms-full.txt
 - https://aq.aquin.app/docs/recipe
 - https://aq.aquin.app/docs/cli
 - https://aq.aquin.app/docs/agent
+- https://aq.aquin.app/docs/eval
+- https://aq.aquin.app/docs/jobs
 - https://aq.aquin.app/changelog

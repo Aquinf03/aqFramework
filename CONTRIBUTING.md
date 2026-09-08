@@ -40,7 +40,7 @@ Needs **Node ≥ 18**, **npm**, and **Python >= 3.10**. After TypeScript edits:
 cd aq && npm run build
 ```
 
-User docs: [`web/content/docs/`](./web/content/docs/README.md) (live at https://aq.aquin.app/docs). Author notes: [`web/content/docs/author/`](./web/content/docs/author/README.md).
+User docs: https://aq.aquin.app/docs. Author notes: [`internals/author/`](./internals/author/README.md).
 
 ## PR requirements
 
@@ -98,7 +98,7 @@ aq status
 # read artifacts/inspect.md
 ```
 
-Pick the train that proves what you changed. Catalog: [`web/content/docs/author/tests-catalog.md`](./web/content/docs/author/tests-catalog.md) and [`tests/README.md`](./tests/README.md).
+Pick the train that proves what you changed. Catalog: [`internals/author/tests-catalog.md`](./internals/author/tests-catalog.md) and [`tests/README.md`](./tests/README.md).
 
 | Change type | Expectation |
 |-------------|-------------|
@@ -139,7 +139,7 @@ Why is this needed? Link issues: Fixes #123
 ## Types of contributions
 
 **Code:** bug fixes, features, performance, refactors  
-**Docs:** user guides under `web/content/docs/`, examples, clarifications  
+**Docs:** HTML docs under `web/app/docs/` (+ `web/lib/docs/`), examples, clarifications  
 **Tests:** new or tighter trains under `tests/`  
 **Issues:** clear bug reports and focused feature proposals  
 
@@ -163,8 +163,8 @@ Public issues for vulnerabilities will be **closed immediately**. You must email
 
 ## Questions
 
-- Usage / how-to: [`web/content/docs/`](./web/content/docs/README.md) · https://aq.aquin.app/docs
-- Architecture / release: [`web/content/docs/author/`](./web/content/docs/author/README.md)
+- Usage / how-to: https://aq.aquin.app/docs
+- Architecture / release: [`internals/author/`](./internals/author/README.md)
 - Security: [`SECURITY.md`](./SECURITY.md)
 - Contact: aquin@aquin.app
 
