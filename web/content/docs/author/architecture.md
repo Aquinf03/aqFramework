@@ -56,9 +56,9 @@ aqfw/
       protocol/
       methods/
     templates/                aq init copies these
-  docs/                       this documentation
+  web/content/docs/           user + author markdown (canonical)
   tests/                      manual E2E trains
-  web/                        auth portal + SDK API
+  web/                        docs + auth app (aq.aquin.app)
   internals/                  builder notes / taxonomy / TODO
   scripts/                    release + Cloudflare worker
   install.sh

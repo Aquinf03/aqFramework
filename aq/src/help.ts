@@ -5,7 +5,7 @@ export function help(): string {
   return [
     "aq  Aquin CLI",
     "",
-    "A train is a directory. Docs: docs/ in the repo (start at docs/getting-started.md).",
+    "A train is a directory. Docs: https://aq.aquin.app/docs",
     "",
     "  aq                      agent chat (TTY)",
     "  aq agent                same",

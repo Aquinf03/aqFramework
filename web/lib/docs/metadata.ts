@@ -244,7 +244,7 @@ export function buildAskPrompt(pathname: string): string {
     page.description,
     `Prefer the markdown source at ${md} when scraping.`,
     "Explain what this section covers, how it fits into Aquin as a developer environment and framework (train folder, aq CLI, Python kernel, agent), and answer questions about these parts.",
+    `Docs live at ${SITE} (Getting started: ${SITE}/docs).`,
     `Docs index for agents: ${SITE}/llms.txt`,
-    `Getting started: ${SITE}/docs`,
   ].join(" ");
 }

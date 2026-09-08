@@ -1,11 +1,12 @@
 #!/usr/bin/env node
-/** Sync install.sh, changelog, and docs markdown into Next public/content. */
+/** Sync install.sh, changelog, and docs markdown (canonical: web/content/docs). */
 import {
   copyFileSync,
   existsSync,
   mkdirSync,
   readdirSync,
   readFileSync,
+  rmSync,
   statSync,
   writeFileSync,
 } from "node:fs"
@@ -64,7 +65,6 @@ function listMarkdown(dir, prefix = "") {
 mkdirSync(path.join(webRoot, "public", "framework"), { recursive: true })
 mkdirSync(path.join(webRoot, "content", "changelog", "versions"), { recursive: true })
 mkdirSync(path.join(webRoot, "content", "docs"), { recursive: true })
-mkdirSync(path.join(webRoot, "public", "docs"), { recursive: true })
 
 const installSrc = path.join(repo, "install.sh")
 if (existsSync(installSrc)) {
@@ -80,12 +80,14 @@ cpGlob(
   /\.md$/,
 )
 
-const docsSrc = path.join(repo, "docs")
-copyTree(docsSrc, path.join(webRoot, "content", "docs"), { skipDirs: ["author"] })
-copyTree(docsSrc, path.join(webRoot, "public", "docs"), { skipDirs: ["author"] })
+/** Canonical docs live in web/content/docs — publish user-facing markdown (skip author/). */
+const docsSrc = path.join(webRoot, "content", "docs")
+const publicDocs = path.join(webRoot, "public", "docs")
+rmSync(publicDocs, { recursive: true, force: true })
+copyTree(docsSrc, publicDocs, { skipDirs: ["author"] })
 
 const site = (process.env.NEXT_PUBLIC_APP_URL || "https://aq.aquin.app").replace(/\/$/, "")
-const mdFiles = listMarkdown(path.join(webRoot, "public", "docs"))
+const mdFiles = listMarkdown(publicDocs)
 const llms = [
   "# Aquin / aq",
   "",
@@ -117,11 +119,11 @@ writeFileSync(path.join(webRoot, "public", "llms.txt"), llms)
 
 const fullParts = [
   `# Aquin / aq — full docs dump`,
-  `# Generated for agent scrape. Source: repo docs/`,
+  `# Generated for agent scrape. Source: web/content/docs`,
   "",
 ]
 for (const f of mdFiles) {
-  const body = readFileSync(path.join(webRoot, "public", "docs", f), "utf8")
+  const body = readFileSync(path.join(publicDocs, f), "utf8")
   fullParts.push(`\n\n---\n# ${f}\n# ${site}/docs/${f}\n---\n\n`)
   fullParts.push(body.trimEnd())
   fullParts.push("\n")

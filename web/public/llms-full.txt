@@ -1,4 +1,4 @@
-# Aquin / aq — full docs dump# Generated for agent scrape. Source: repo docs/
+# Aquin / aq — full docs dump# Generated for agent scrape. Source: web/content/docs
 
 ---
 # README.md
@@ -7,7 +7,10 @@
 
 # Aquin docs
 
-**How to use `aq`.** A train is a folder. The recipe is the train API. Humans own eval.
+**How to use `aq`.** Live site: [https://aq.aquin.app/docs](https://aq.aquin.app/docs).  
+This folder (`web/content/docs/`) is the **canonical markdown** source.
+
+A train is a folder. The recipe is the train API. Humans own eval.
 
 ## Start here
 
@@ -1450,6 +1453,8 @@ Each stage is itself a train (its own `experiment.md` + `recipe.yaml`).
 ---
 
 # Web & auth
+
+Docs + account app: **https://aq.aquin.app** (former `aquin.app/docs` redirects here).
 
 → **Users:** [Login & accounts](./auth.md)  
 → **Maintainers:** [author/web-auth](./author/web-auth.md)

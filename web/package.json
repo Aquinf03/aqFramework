@@ -2,7 +2,7 @@
   "name": "web",
   "version": "0.1.0",
   "private": true,
-  "description": "Aquin auth portal — Supabase login, CLI tokens, desktop handoff, and SDK API",
+  "description": "Aquin docs + auth — aq CLI docs, Supabase login, CLI tokens, desktop handoff, and SDK API",
   "scripts": {
     "prebuild": "node scripts/sync-framework-content.mjs",
     "dev": "next dev",

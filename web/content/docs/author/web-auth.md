@@ -2,23 +2,23 @@
 
 # Web and auth
 
-Package: `web/` - Next.js **auth portal** and thin keyed **SDK API**. It is **not** the train UI. Disk remains source of truth for trains.
+Package: `web/` — Next.js **docs + auth** app at **https://aq.aquin.app**.  
+Marketing site docs at `aquin.app/docs` are gone; they redirect here.
 
-> Product description (package.json): “Aquin auth portal - Supabase login, CLI tokens, desktop handoff, and SDK API”
-
-The stock create-next-app `web/README.md` is outdated; this document is the reference.
+> Product description (package.json): “Aquin docs + auth — aq CLI docs, Supabase login, CLI tokens, desktop handoff, and SDK API”
 
 ## Surfaces
 
 | Surface | Role |
 |---------|------|
-| Home / `AuthPortal` | Email → password → signup → ready → desktop handoff |
-| Desktop/CLI handoff | `?view=desktop&client=cli` - mint code + `aquin://` deep link |
+| `/` Home / `AuthPortal` | Install commands, sign-in, signup, ready, desktop handoff |
+| `/docs` … | Getting started + full aq docs (ported from former aquin.app/docs) |
+| Desktop/CLI handoff | `/?view=desktop&client=cli` — mint code + `aquin://` deep link |
 | User profile | `/user/[username]` |
 | Auth routes | Reset password, OAuth callback |
-| Policies | Terms, Privacy, License, AUP, Security → marketing site |
+| Policies | Terms, Privacy, License, AUP, Security → marketing site (`www.aquin.app`) |
 
-Branding defaults (`web/lib/config.tsx`): **Aquin Labs**, auth URL family around `auth.aquin.app` / `aq.aquin.app`.
+Branding defaults (`web/lib/config.tsx`): **Aquin Labs**, URL **`https://aq.aquin.app`**.
 
 Framework install script is copied into `public/framework/install.sh` on `prebuild` so:
 
@@ -35,7 +35,7 @@ curl -fsSL https://aq.aquin.app/framework/install.sh | bash
 ## CLI bridge
 
 ```bash
-aq login                 # opens portal desktop/CLI view; paste code
+aq login                 # opens aq.aquin.app/?view=desktop&client=cli; paste code
 aq login --token aq-…    # existing token
 aq login --check
 aq logout / aq switch
@@ -49,4 +49,4 @@ Keyed endpoints for VM/run-style telemetry: `ping`, `whoami`, `heartbeat`, `metr
 
 ## Design alignment
 
-PLAN: “The UI is a viewer over the same directories. It does not own state.” Auth gives you identity and tokens so CLI/cloud pieces can trust who you are. It does not replace `artifacts/` or `recipe.yaml`.
+Same stone / Host Grotesk language as the marketing site. Docs chrome includes search, policies dropdown, and CLI token when signed in.

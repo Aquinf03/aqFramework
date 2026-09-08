@@ -1,6 +1,9 @@
 # Aquin docs
 
-**How to use `aq`.** A train is a folder. The recipe is the train API. Humans own eval.
+**How to use `aq`.** Live site: [https://aq.aquin.app/docs](https://aq.aquin.app/docs).  
+This folder (`web/content/docs/`) is the **canonical markdown** source.
+
+A train is a folder. The recipe is the train API. Humans own eval.
 
 ## Start here
 

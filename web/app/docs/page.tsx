@@ -62,8 +62,9 @@ export default function DocsGettingStartedPage() {
         </div>
         <p className={p}>
           Flow is always the same shape: you work in a train folder, the CLI routes verbs, the kernel
-          does the numeric work, artifacts land back on disk. Optional auth is identity and tokens
-          only. It does not own trains.{" "}
+          does the numeric work, artifacts land back on disk. Accounts and docs live at{" "}
+          <code className={codeChip}>aq.aquin.app</code>. Auth is identity and tokens only — it does
+          not own trains.{" "}
           <Link href="/" className="text-stone-800 underline underline-offset-2">
             Sign in
           </Link>

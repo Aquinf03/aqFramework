@@ -2,7 +2,7 @@
 
 # Coverage and roadmap
 
-Internal checklist: [COMPLETED.md](../internals/COMPLETED.md) (honest ticks) and [TODO.md](../internals/TODO.md).
+Internal checklist: [COMPLETED.md](../../../../internals/COMPLETED.md) (honest ticks) and [TODO.md](../../../../internals/TODO.md).
 
 ## Works today (proven)
 
@@ -16,7 +16,7 @@ Internal checklist: [COMPLETED.md](../internals/COMPLETED.md) (honest ticks) and
 
 ## Not done
 
-See [TODO.md](../internals/TODO.md) — especially **Deploy / inference / size** (MTP, GPTQ/AWQ/GGUF, speculative, paged_kv, size zoo, AdaBoost method, vision/TinyML).
+See [TODO.md](../../../../internals/TODO.md) — especially **Deploy / inference / size** (MTP, GPTQ/AWQ/GGUF, speculative, paged_kv, size zoo, AdaBoost method, vision/TinyML).
 
 ## Rule
 

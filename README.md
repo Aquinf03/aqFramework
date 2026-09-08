@@ -2,7 +2,8 @@
 
 A train is a directory. **aq** is the CLI. The Python kernel ships inside the `aq` package.
 
-**Docs (how to use aq):** [`docs/`](./docs/README.md). Start with [Getting started](./docs/getting-started.md).
+**Docs:** https://aq.aquin.app — Getting started at [/docs](https://aq.aquin.app/docs).  
+Markdown source (canonical): [`web/content/docs/`](./web/content/docs/README.md).
 
 ## Published build install
 
@@ -20,7 +21,7 @@ cd aq && npm install && npm link
 ./install.sh
 ```
 
-More options: [docs/install.md](./docs/install.md).
+More options: [web/content/docs/install.md](./web/content/docs/install.md).
 
 ## Use
 
@@ -30,15 +31,15 @@ aq init my-train && cd my-train
 aq train && aq eval && aq status
 ```
 
-Or open the agent on a TTY: `aq`
+## Layout
 
-**Recipe is the train API.** For LLM/LoRA set `model:` to a hub id. QLoRA needs CUDA + bitsandbytes. Unsupported knobs fail closed.
+| Path | Role |
+|------|------|
+| `aq/` | CLI + Python kernel |
+| `web/` | Docs + auth app (`aq.aquin.app`) |
+| `web/content/docs/` | User + author markdown |
+| `tests/` | Train fixtures |
+| `internals/` | Builder checklists |
 
-## Contribute
-
-See [`CONTRIBUTING.md`](./CONTRIBUTING.md) and [`SECURITY.md`](./SECURITY.md).
-
-## Maintainers
-
-- Publish: [`scripts/release.sh`](./scripts/release.sh) · [docs/author/release.md](./docs/author/release.md)  
-- Internals / coverage: [`docs/author/`](./docs/author/README.md) · [`internals/`](./internals/TODO.md)
+- Publish: [`scripts/release.sh`](./scripts/release.sh) · [web/content/docs/author/release.md](./web/content/docs/author/release.md)
+- Internals / coverage: [`web/content/docs/author/`](./web/content/docs/author/README.md) · [`internals/`](./internals/TODO.md)

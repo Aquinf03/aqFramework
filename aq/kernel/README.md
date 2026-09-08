@@ -27,4 +27,4 @@ pip install -r aq/kernel/requirements.txt
 - VLM: `family: vlm` / `method: clip|llava|flamingo` — CLIP/SigLIP aq-owned; LLaVA/Flamingo aq connectors + causal LM.
 - Devices: CUDA, MPS, ROCm, CPU.
 
-See [docs/recipe.md](../../docs/recipe.md) and [internals/COMPLETED.md](../../internals/COMPLETED.md).
+See [web/content/docs/recipe.md](../../web/content/docs/recipe.md) and [internals/COMPLETED.md](../../internals/COMPLETED.md).
