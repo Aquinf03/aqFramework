@@ -17,7 +17,7 @@ export const siteConfig = {
   links: {
     email: "aquin@aquin.app",
     mainSite: "https://www.aquin.app",
-    docs: "https://aq.aquin.app/docs",
+    docs: "https://aquinf03.github.io/aq",
     home: "https://aq.aquin.app",
     changelog: "https://aquin.app/changelog",
     login: "/",

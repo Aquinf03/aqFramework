@@ -36,6 +36,16 @@ const nextConfig: NextConfig = {
         destination: "https://aquin.app/changelog",
         permanent: true,
       },
+      {
+        source: "/docs",
+        destination: "https://aquinf03.github.io/aq",
+        permanent: true,
+      },
+      {
+        source: "/docs/:path*",
+        destination: "https://aquinf03.github.io/aq",
+        permanent: true,
+      },
     ];
   },
 };

@@ -22,12 +22,13 @@ import {
   primaryBtnCls,
   secondaryBtnCls,
 } from "@/lib/auth-ui";
+import { siteConfig } from "@/lib/config";
 
 type AuthStep = "email" | "password" | "signup" | "signup-password" | "ready" | "desktop";
 type DesktopPhase = "minting" | "ready" | "error";
 
 type AuthPortalProps = {
-  /** Render inside DocsShell — no chrome header / full-page frame. */
+  /** Skip full-page chrome when nested in another layout. */
   embedded?: boolean;
 };
 
@@ -349,7 +350,9 @@ function AuthPortalInner({ embedded = false }: AuthPortalProps) {
                 <div className="pt-2">
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                     <a
-                      href="/docs"
+                      href={siteConfig.links.docs}
+                      target="_blank"
+                      rel="noopener noreferrer"
                       className="group inline-flex items-center gap-1.5 text-sm font-medium text-stone-800 underline decoration-stone-300 underline-offset-4 transition-colors hover:decoration-stone-800"
                     >
                       Documentation

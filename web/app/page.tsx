@@ -1,13 +1,20 @@
-import { DocsShell } from "@/app/docs/_components/DocsShell";
+import type { Metadata } from "next";
 import AuthPortal from "@/components/AuthPortal";
-import { buildDocsMetadata } from "@/lib/docs/metadata";
+import { siteConfig } from "@/lib/config";
 
-export const metadata = buildDocsMetadata("/");
+export const metadata: Metadata = {
+  title: {
+    absolute: `${siteConfig.name} — account & install`,
+  },
+  description: siteConfig.description,
+  keywords: [...siteConfig.keywords],
+  alternates: { canonical: siteConfig.url },
+};
 
 export default function HomePage() {
   return (
-    <DocsShell>
-      <AuthPortal embedded />
-    </DocsShell>
+    <div className="min-h-screen w-full bg-[#f5f5f3] font-sans text-stone-900">
+      <AuthPortal />
+    </div>
   );
 }

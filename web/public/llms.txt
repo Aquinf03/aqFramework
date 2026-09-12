@@ -1,22 +1,14 @@
 # Aquin / aq
 
 > Developer environment and framework for building and checking models.
-> Docs are HTML pages on this site (no separate markdown tree).
 
-Home: https://aq.aquin.app/
-Getting started: https://aq.aquin.app/docs
+Home / account: https://aq.aquin.app/
+Docs: https://aquinf03.github.io/aq
 Sitemap: https://aq.aquin.app/sitemap.xml
 Changelog: https://aquin.app/changelog
 
 ## Pages
 
 - https://aq.aquin.app/
-- https://aq.aquin.app/docs
-- https://aq.aquin.app/docs/install
-- https://aq.aquin.app/docs/train
-- https://aq.aquin.app/docs/recipe
-- https://aq.aquin.app/docs/cli
-- https://aq.aquin.app/docs/agent
-- https://aq.aquin.app/docs/eval
-- https://aq.aquin.app/docs/jobs
+- https://aquinf03.github.io/aq
 - https://aquin.app/changelog

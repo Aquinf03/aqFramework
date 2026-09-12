@@ -2,7 +2,7 @@
 
 A train is a directory. **aq** is the CLI. The Python kernel ships inside the `aq` package.
 
-**Docs:** https://aq.aquin.app — Getting started at [/docs](https://aq.aquin.app/docs).
+**Docs:** https://aquinf03.github.io/aq · **Account / install:** https://aq.aquin.app
 
 ## Published build install
 
@@ -20,7 +20,7 @@ cd aq && npm install && npm link
 ./install.sh
 ```
 
-More options: [Install](https://aq.aquin.app/docs/install).
+More options: [Install](https://aquinf03.github.io/aq).
 
 ## Use
 
