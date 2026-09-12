@@ -26,6 +26,16 @@ const nextConfig: NextConfig = {
         destination: "/",
         permanent: false,
       },
+      {
+        source: "/changelog",
+        destination: "https://aquin.app/changelog",
+        permanent: true,
+      },
+      {
+        source: "/changelog/:path*",
+        destination: "https://aquin.app/changelog",
+        permanent: true,
+      },
     ];
   },
 };

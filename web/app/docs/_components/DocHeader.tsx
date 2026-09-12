@@ -70,7 +70,7 @@ function DocsMobileNav({ signedIn }: { signedIn: boolean }) {
           ["/docs/train", "Train folder"],
           ["/docs/cli", "CLI reference"],
           ["/docs/agent", "Agent"],
-          ["/changelog", "Changelog"],
+          ["https://aquin.app/changelog", "Changelog"],
           ...(signedIn ? [] : [["/", "Sign in"]]),
         ].map(([href, label]) => (
           <Link

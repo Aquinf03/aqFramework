@@ -6,6 +6,7 @@
 Home: https://aq.aquin.app/
 Getting started: https://aq.aquin.app/docs
 Sitemap: https://aq.aquin.app/sitemap.xml
+Changelog: https://aquin.app/changelog
 
 ## Pages
 
@@ -18,4 +19,4 @@ Sitemap: https://aq.aquin.app/sitemap.xml
 - https://aq.aquin.app/docs/agent
 - https://aq.aquin.app/docs/eval
 - https://aq.aquin.app/docs/jobs
-- https://aq.aquin.app/changelog
+- https://aquin.app/changelog

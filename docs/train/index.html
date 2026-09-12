@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Train folder · aq Docs</title>
+  <meta name="description" content="A train is a directory. If it has instructions.md and recipe.yaml, aq treats it as a real unit of work. aq init scaffolds the layout; disk is the source of truth." />
+  <link rel="icon" href="../assets/favicon.ico" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Host+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/docs.css" />
+</head>
+<body>
+  <header class="docs-header">
+    <div class="docs-header-inner">
+      <a class="brand" href="../" title="Aquin Labs">
+        <img src="../assets/mainlogo2.png" alt="" width="22" height="22" />
+        <span>Aquin<span class="brand-gap">Labs</span></span>
+      </a>
+      <div class="header-actions">
+        <a class="header-link" href="https://aquin.app/changelog" rel="noopener">Changelog</a>
+        <a class="header-cta" href="https://aq.aquin.app/" rel="noopener">Sign in</a>
+      </div>
+    </div>
+  </header>
+  <div class="docs-frame">
+    <aside class="docs-sidebar" aria-label="Documentation">
+      <nav><a class="nav-link" href="https://aq.aquin.app/docs" rel="noopener">Live docs</a>
+<a class="nav-link" href="../">Getting started</a>
+<a class="nav-link" href="../install/">Install</a>
+<a class="nav-link active" href="../train/">Train folder</a>
+<a class="nav-link" href="../recipe/">Recipe</a>
+<a class="nav-link" href="../cli/">CLI reference</a>
+<p class="nav-section">Methods</p>
+<a class="nav-link nested" href="../methods/tabular/">Tabular</a>
+<a class="nav-link nested" href="../methods/transformers/">Transformers</a>
+<a class="nav-link nested" href="../methods/llm/">LLM / LoRA</a>
+<a class="nav-link nested" href="../methods/custom/">Custom</a>
+<a class="nav-link" href="../eval/">Eval &amp; inspect</a>
+<a class="nav-link" href="../metrics/">Metrics &amp; guard</a>
+<a class="nav-link" href="../jobs/">Jobs</a>
+<a class="nav-link" href="../agent/">Agent</a>
+<a class="nav-link" href="../skills/">Skills, tools &amp; MCP</a>
+<a class="nav-link" href="../schedules/">Schedules &amp; stages</a></nav>
+    </aside>
+    <main class="docs-main"><h1>Train folder</h1>
+<p class="lead">A train is a directory. If it has instructions.md and recipe.yaml, aq treats it as a real unit of work. aq init scaffolds the layout; disk is the source of truth.</p>
+<div class="prereq"><span class="prereq-label">Prerequisite</span>aq installed · run aq init from a writable directory (not inside the aq package tree)</div>
+<section class="tool" id="aq-init-dir">
+  <h3 class="tool-cmd">aq init [dir]</h3>
+  
+  <p class="tool-desc">Create a skeleton train from aq/templates/. Writes instructions.md, recipe.yaml, optional train.ts, and empty slots (data, evals, methods, tools, skills, memory, sandbox, connections, schedules, stages, jobs, artifacts) with .keep files.</p>
+  <div class="table-wrap mb">
+  <table>
+    <thead><tr><th>Flag</th><th>Description</th></tr></thead>
+    <tbody><tr>
+  <td class="flag">[dir]</td>
+  <td>Target directory. Defaults to cwd.</td>
+</tr></tbody>
+  </table>
+</div>
+  <div class="codeblock" data-shell="1">
+  <div class="codeblock-bar">
+    <span>example</span>
+    <button type="button" class="copy-btn">Copy</button>
+  </div>
+  <pre><code><span class="line"><span class="prompt">$</span><span>aq init my-train</span></span></code></pre>
+</div>
+<div class="codeblock" data-shell="1">
+  <div class="codeblock-bar">
+    <span>example</span>
+    <button type="button" class="copy-btn">Copy</button>
+  </div>
+  <pre><code><span class="line"><span class="prompt">$</span><span>cd my-train</span></span></code></pre>
+</div>
+  <p class="notes">Creates instructions.md, recipe.yaml, optional train.ts, and empty slots (data, evals, methods, tools, skills, memory, sandbox, connections, schedules, stages, jobs, artifacts) with .keep files. Default template recipe is LLM LoRA. Change recipe.yaml for tabular or transformers. Refuses to init inside the aq package tree.</p>
+</section>
+<section class="tool" id="aq-fork-dest">
+  <h3 class="tool-cmd">aq fork &lt;dest&gt;</h3>
+  
+  <p class="tool-desc">Copy a train to try a variant. Skips jobs/ and artifacts/, then recreates empty ones so the child starts clean.</p>
+  <div class="table-wrap mb">
+  <table>
+    <thead><tr><th>Flag</th><th>Description</th></tr></thead>
+    <tbody><tr>
+  <td class="flag">aq fork &lt;src&gt; &lt;dest&gt;</td>
+  <td>Copy a train that is not cwd.</td>
+</tr></tbody>
+  </table>
+</div>
+  <div class="codeblock" data-shell="1">
+  <div class="codeblock-bar">
+    <span>example</span>
+    <button type="button" class="copy-btn">Copy</button>
+  </div>
+  <pre><code><span class="line"><span class="prompt">$</span><span>aq fork ../clinic-ridge</span></span></code></pre>
+</div>
+<div class="codeblock" data-shell="1">
+  <div class="codeblock-bar">
+    <span>example</span>
+    <button type="button" class="copy-btn">Copy</button>
+  </div>
+  <pre><code><span class="line"><span class="prompt">$</span><span>cd ../clinic-ridge</span></span></code></pre>
+</div>
+<div class="codeblock" data-shell="1">
+  <div class="codeblock-bar">
+    <span>example</span>
+    <button type="button" class="copy-btn">Copy</button>
+  </div>
+  <pre><code><span class="line"><span class="prompt">$</span><span>aq train</span></span></code></pre>
+</div>
+<div class="codeblock" data-shell="1">
+  <div class="codeblock-bar">
+    <span>example</span>
+    <button type="button" class="copy-btn">Copy</button>
+  </div>
+  <pre><code><span class="line"><span class="prompt">$</span><span>aq eval</span></span></code></pre>
+</div>
+  
+</section>
+<section class="tool" id="aq-checkout-id-dest">
+  <h3 class="tool-cmd">aq checkout &lt;id&gt; [dest]</h3>
+  
+  <p class="tool-desc">Restore a job's captured tree/ into cwd (or a new dest). Time-travel a workspace snapshotted at enqueue.</p>
+  
+  <div class="codeblock" data-shell="1">
+  <div class="codeblock-bar">
+    <span>example</span>
+    <button type="button" class="copy-btn">Copy</button>
+  </div>
+  <pre><code><span class="line"><span class="prompt">$</span><span>aq job run --cpu 4 --ram 8G -- aq train</span></span></code></pre>
+</div>
+<div class="codeblock" data-shell="1">
+  <div class="codeblock-bar">
+    <span>example</span>
+    <button type="button" class="copy-btn">Copy</button>
+  </div>
+  <pre><code><span class="line"><span class="prompt">$</span><span>aq checkout &lt;job-id&gt; recovered-train</span></span></code></pre>
+</div>
+  
+</section>
+<section class="tool" id="aq-data-hash---snapshot">
+  <h3 class="tool-cmd">aq data hash [--snapshot]</h3>
+  
+  <p class="tool-desc">Hash recipe.data.path into data/revision.json. Optional --snapshot copies the hashed tree under data/revisions/{digest}/ so run records can answer what data a checkpoint saw.</p>
+  <div class="table-wrap mb">
+  <table>
+    <thead><tr><th>Flag</th><th>Description</th></tr></thead>
+    <tbody><tr>
+  <td class="flag">--snapshot</td>
+  <td>Copy the hashed data tree under data/revisions/.</td>
+</tr></tbody>
+  </table>
+</div>
+  <div class="codeblock" data-shell="1">
+  <div class="codeblock-bar">
+    <span>example</span>
+    <button type="button" class="copy-btn">Copy</button>
+  </div>
+  <pre><code><span class="line"><span class="prompt">$</span><span>aq data hash --snapshot</span></span></code></pre>
+</div>
+  
+</section>
+<section class="tool" id="aq-status">
+  <h3 class="tool-cmd">aq status</h3>
+  
+  <p class="tool-desc">Show jobs, last run, last eval, recent metrics, and schedules for this train.</p>
+  
+  <div class="codeblock" data-shell="1">
+  <div class="codeblock-bar">
+    <span>example</span>
+    <button type="button" class="copy-btn">Copy</button>
+  </div>
+  <pre><code><span class="line"><span class="prompt">$</span><span>aq status</span></span></code></pre>
+</div>
+  
+</section>
+<h2>Canonical layout after aq init</h2>
+<p class="lead">aq init copies templates and creates optional slots with .keep files. A directory is a train when it has both instructions.md and recipe.yaml.</p>
+<div class="codeblock" data-shell="0">
+  <div class="codeblock-bar">
+    <span>layout</span>
+    <button type="button" class="copy-btn">Copy</button>
+  </div>
+  <pre><code><span class="line"><span>my-train/</span></span>
+<span class="line"><span>  instructions.md          REQUIRED - what this train is for</span></span>
+<span class="line"><span>  recipe.yaml              REQUIRED - kernel spec (aq does not override)</span></span>
+<span class="line"><span>  train.ts                 OPTIONAL - placeholder; aq does not read yet</span></span>
+<span class="line"><span> </span></span>
+<span class="line"><span>  data/                    your datasets (path from recipe)</span></span>
+<span class="line"><span>  evals/                   user probes (.csv / .jsonl) - no bundled zoo</span></span>
+<span class="line"><span>  methods/                 optional train-local fit adapters (override kernel)</span></span>
+<span class="line"><span>  tools/                   scripts: tools/&lt;name&gt;.{py,ts,js,sh}</span></span>
+<span class="line"><span>  skills/                  agent skills (+ optional MCP)</span></span>
+<span class="line"><span>  memory/                  agent memory markdown</span></span>
+<span class="line"><span>  sandbox/                 scratch for agent / tools</span></span>
+<span class="line"><span>  connections/             connection defs (slot)</span></span>
+<span class="line"><span>  schedules/               yaml/json schedules</span></span>
+<span class="line"><span>  stages/                  nested trains (each is itself a train)</span></span>
+<span class="line"><span>  jobs/                    SYSTEM - process queue state</span></span>
+<span class="line"><span>  artifacts/               SYSTEM - checkpoints, metrics, runs, chats, …</span></span></code></pre>
+</div>
+<h2>What each slot is for</h2>
+<div class="table-wrap mb">
+  <table class="plain">
+    <thead><tr><th>Slot</th><th>Who uses it</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">instructions.md</td><td>human / agent</td><td>Brief: what this train proves and what success looks like.</td></tr>
+<tr><td class="mono">recipe.yaml</td><td>kernel</td><td>Full train API for built-ins. CLI does not invent hyperparameters.</td></tr>
+<tr><td class="mono">data/</td><td>kernel</td><td>Datasets; recipe.data.path often points here.</td></tr>
+<tr><td class="mono">evals/</td><td>aq eval</td><td>One file per probe. Gate via eval.min_score.</td></tr>
+<tr><td class="mono">methods/</td><td>kernel loader</td><td>{name}.py wins over kernel/methods/{name}.py.</td></tr>
+<tr><td class="mono">tools/</td><td>aq tool / agent</td><td>Executable helpers with AQ_TRAIN set.</td></tr>
+<tr><td class="mono">skills/</td><td>agent</td><td>SKILL.md / run scripts / mcp.json.</td></tr>
+<tr><td class="mono">memory/</td><td>agent</td><td>Searchable markdown notes.</td></tr>
+<tr><td class="mono">schedules/</td><td>aq schedule</td><td>cron, sweep, resume, pipeline, agents.</td></tr>
+<tr><td class="mono">stages/</td><td>aq stage</td><td>Nested full trains.</td></tr>
+<tr><td class="mono">jobs/</td><td>job system</td><td>Do not hand-edit casually. Fork skips this.</td></tr>
+<tr><td class="mono">artifacts/</td><td>everything</td><td>System output. Fork skips this; regenerable but valuable.</td></tr>
+    </tbody>
+  </table>
+</div>
+<h2>Artifacts after real work</h2>
+<p class="lead">Everything under artifacts/ is system-owned output. Forking skips jobs/ and artifacts/ so the child starts clean.</p>
+<div class="codeblock" data-shell="0">
+  <div class="codeblock-bar">
+    <span>artifacts</span>
+    <button type="button" class="copy-btn">Copy</button>
+  </div>
+  <pre><code><span class="line"><span>artifacts/</span></span>
+<span class="line"><span>  request.json             last kernel request (IPC)</span></span>
+<span class="line"><span>  result.json              last kernel result (IPC)</span></span>
+<span class="line"><span>  metrics.jsonl            append-only observability stream</span></span>
+<span class="line"><span>  checkpoints/</span></span>
+<span class="line"><span>    1.json … N.json</span></span>
+<span class="line"><span>    last.json              always the newest fit</span></span>
+<span class="line"><span>    named.json             from aq checkpoint --keep</span></span>
+<span class="line"><span>  tokenizer.json           pinned when model carries a tokenizer</span></span>
+<span class="line"><span>  inspect.md               human-readable model dump (if method supports it)</span></span>
+<span class="line"><span>  runs/</span></span>
+<span class="line"><span>    {id}.json / .md</span></span>
+<span class="line"><span>    last.json / last.md</span></span>
+<span class="line"><span>  eval.json                last eval summary</span></span>
+<span class="line"><span>  serve.json               last serve output</span></span>
+<span class="line"><span>  chats/&lt;id&gt;/              agent chat sessions</span></span>
+<span class="line"><span>  agents/&lt;id&gt;/             spawned worker agents</span></span>
+<span class="line"><span>  schedules/               schedule run logs</span></span></code></pre>
+</div>
+<h2>Mental tests</h2>
+<ol class="lead-list">
+  <li>Can I copy the folder to another machine and run aq status?</li>
+  <li>Can I fork, change one recipe key, and compare with aq diff?</li>
+  <li>Can a stranger read instructions.md and know the gate?</li>
+  <li>If artifacts/ is deleted, can I retrain from recipe + data alone?</li>
+</ol></main>
+  </div>
+  <script src="../assets/docs.js"></script>
+</body>
+</html>

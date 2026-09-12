@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Agent · aq Docs</title>
+  <meta name="description" content="The aq agent lives inside the train Unix: same cwd, same files, same verbs. On a TTY, bare aq opens chat. It is not a chat toy with a private filesystem." />
+  <link rel="icon" href="../assets/favicon.ico" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Host+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/docs.css" />
+</head>
+<body>
+  <header class="docs-header">
+    <div class="docs-header-inner">
+      <a class="brand" href="../" title="Aquin Labs">
+        <img src="../assets/mainlogo2.png" alt="" width="22" height="22" />
+        <span>Aquin<span class="brand-gap">Labs</span></span>
+      </a>
+      <div class="header-actions">
+        <a class="header-link" href="https://aquin.app/changelog" rel="noopener">Changelog</a>
+        <a class="header-cta" href="https://aq.aquin.app/" rel="noopener">Sign in</a>
+      </div>
+    </div>
+  </header>
+  <div class="docs-frame">
+    <aside class="docs-sidebar" aria-label="Documentation">
+      <nav><a class="nav-link" href="https://aq.aquin.app/docs" rel="noopener">Live docs</a>
+<a class="nav-link" href="../">Getting started</a>
+<a class="nav-link" href="../install/">Install</a>
+<a class="nav-link" href="../train/">Train folder</a>
+<a class="nav-link" href="../recipe/">Recipe</a>
+<a class="nav-link" href="../cli/">CLI reference</a>
+<p class="nav-section">Methods</p>
+<a class="nav-link nested" href="../methods/tabular/">Tabular</a>
+<a class="nav-link nested" href="../methods/transformers/">Transformers</a>
+<a class="nav-link nested" href="../methods/llm/">LLM / LoRA</a>
+<a class="nav-link nested" href="../methods/custom/">Custom</a>
+<a class="nav-link" href="../eval/">Eval &amp; inspect</a>
+<a class="nav-link" href="../metrics/">Metrics &amp; guard</a>
+<a class="nav-link" href="../jobs/">Jobs</a>
+<a class="nav-link active" href="../agent/">Agent</a>
+<a class="nav-link" href="../skills/">Skills, tools &amp; MCP</a>
+<a class="nav-link" href="../schedules/">Schedules &amp; stages</a></nav>
+    </aside>
+    <main class="docs-main"><h1>Agent</h1>
+<p class="lead">The aq agent lives inside the train Unix: same cwd, same files, same verbs. On a TTY, bare aq opens chat. It is not a chat toy with a private filesystem.</p>
+<div class="prereq"><span class="prereq-label">Prerequisite</span>aq provider configured · cwd is a train folder</div>
+<section class="tool" id="aq--aq-agent">
+  <h3 class="tool-cmd">aq / aq agent</h3>
+  
+  <p class="tool-desc">Interactive agent chat (TTY). Uses tools that wrap aq verbs against this train.</p>
+  
+  <div class="codeblock" data-shell="1">
+  <div class="codeblock-bar">
+    <span>example</span>
+    <button type="button" class="copy-btn">Copy</button>
+  </div>
+  <pre><code><span class="line"><span class="prompt">$</span><span>aq</span></span></code></pre>
+</div>
+  
+</section>
+<section class="tool" id="aq-ask-prompt">
+  <h3 class="tool-cmd">aq ask &lt;prompt&gt;</h3>
+  
+  <p class="tool-desc">One-shot answer without the interactive UI.</p>
+  <div class="table-wrap mb">
+  <table>
+    <thead><tr><th>Flag</th><th>Description</th></tr></thead>
+    <tbody><tr>
+  <td class="flag">-y / --yes</td>
+  <td>Auto-approve shell run.</td>
+</tr>
+<tr>
+  <td class="flag">--json</td>
+  <td>Emit { text, tools }.</td>
+</tr></tbody>
+  </table>
+</div>
+  <div class="codeblock" data-shell="1">
+  <div class="codeblock-bar">
+    <span>example</span>
+    <button type="button" class="copy-btn">Copy</button>
+  </div>
+  <pre><code><span class="line"><span class="prompt">$</span><span>aq ask &quot;hash the data then train&quot;</span></span></code></pre>
+</div>
+<div class="codeblock" data-shell="1">
+  <div class="codeblock-bar">
+    <span>example</span>
+    <button type="button" class="copy-btn">Copy</button>
+  </div>
+  <pre><code><span class="line"><span class="prompt">$</span><span>aq ask -y &quot;run eval and summarize&quot;</span></span></code></pre>
+</div>
+<div class="codeblock" data-shell="1">
+  <div class="codeblock-bar">
+    <span>example</span>
+    <button type="button" class="copy-btn">Copy</button>
+  </div>
+  <pre><code><span class="line"><span class="prompt">$</span><span>aq ask --json &quot;what failed last run?&quot;</span></span></code></pre>
+</div>
+  
+</section>
+<section class="tool" id="aq-chat-list-last-id">
+  <h3 class="tool-cmd">aq chat list | last | &lt;id&gt;</h3>
+  
+  <p class="tool-desc">List or resume chats under artifacts/chats/.</p>
+  
+  <div class="codeblock" data-shell="1">
+  <div class="codeblock-bar">
+    <span>example</span>
+    <button type="button" class="copy-btn">Copy</button>
+  </div>
+  <pre><code><span class="line"><span class="prompt">$</span><span>aq chat list</span></span></code></pre>
+</div>
+<div class="codeblock" data-shell="1">
+  <div class="codeblock-bar">
+    <span>example</span>
+    <button type="button" class="copy-btn">Copy</button>
+  </div>
+  <pre><code><span class="line"><span class="prompt">$</span><span>aq chat last</span></span></code></pre>
+</div>
+<div class="codeblock" data-shell="1">
+  <div class="codeblock-bar">
+    <span>example</span>
+    <button type="button" class="copy-btn">Copy</button>
+  </div>
+  <pre><code><span class="line"><span class="prompt">$</span><span>aq chat &lt;id&gt;</span></span></code></pre>
+</div>
+  
+</section>
+<section class="tool" id="aq-spawn-run----prompt">
+  <h3 class="tool-cmd">aq spawn run -- &lt;prompt&gt;</h3>
+  
+  <p class="tool-desc">Background worker agent as a job. list / log / cancel manage workers under artifacts/agents/.</p>
+  
+  <div class="codeblock" data-shell="1">
+  <div class="codeblock-bar">
+    <span>example</span>
+    <button type="button" class="copy-btn">Copy</button>
+  </div>
+  <pre><code><span class="line"><span class="prompt">$</span><span>aq spawn run -- &quot;train then eval&quot;</span></span></code></pre>
+</div>
+<div class="codeblock" data-shell="1">
+  <div class="codeblock-bar">
+    <span>example</span>
+    <button type="button" class="copy-btn">Copy</button>
+  </div>
+  <pre><code><span class="line"><span class="prompt">$</span><span>aq spawn list</span></span></code></pre>
+</div>
+<div class="codeblock" data-shell="1">
+  <div class="codeblock-bar">
+    <span>example</span>
+    <button type="button" class="copy-btn">Copy</button>
+  </div>
+  <pre><code><span class="line"><span class="prompt">$</span><span>aq spawn log &lt;id&gt;</span></span></code></pre>
+</div>
+<div class="codeblock" data-shell="1">
+  <div class="codeblock-bar">
+    <span>example</span>
+    <button type="button" class="copy-btn">Copy</button>
+  </div>
+  <pre><code><span class="line"><span class="prompt">$</span><span>aq spawn cancel &lt;id&gt;</span></span></code></pre>
+</div>
+  
+</section>
+</main>
+  </div>
+  <script src="../assets/docs.js"></script>
+</body>
+</html>
